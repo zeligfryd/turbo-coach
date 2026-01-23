@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronRight, Filter, Search } from "lucide-react";
+import { ChevronDown, ChevronRight, Filter, Search, Star } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -21,6 +21,7 @@ import {
 import type { Workout, WorkoutInterval } from "@/lib/workouts/types";
 import { MiniIntensityChart } from "./mini-intensity-chart";
 import { WorkoutDetailModal } from "./workout-detail-modal";
+import { toggleWorkoutFavorite } from "@/app/workouts/actions";
 
 const CATEGORY_LABELS: Record<string, string> = {
   endurance: "Endurance",
@@ -233,6 +234,9 @@ interface WorkoutCardProps {
 }
 
 function WorkoutCard({ workout, onClick }: WorkoutCardProps) {
+  const [isFavorite, setIsFavorite] = useState(workout.is_favorite || false);
+  const [isToggling, setIsToggling] = useState(false);
+  
   const totalSeconds = calculateTotalDuration(workout.intervals);
   const totalMinutes = totalSeconds / 60;
 
@@ -243,6 +247,32 @@ function WorkoutCard({ workout, onClick }: WorkoutCardProps) {
   });
   const primaryZone = Object.entries(zoneTime).sort((a, b) => b[1] - a[1])[0]?.[0] || "Z2";
   const zoneColor = POWER_ZONES[primaryZone as keyof typeof POWER_ZONES]?.color || "#10b981";
+
+  const handleToggleFavorite = async (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card click
+    if (isToggling) return;
+    
+    // Optimistic update
+    const previousState = isFavorite;
+    setIsFavorite(!isFavorite);
+    setIsToggling(true);
+
+    try {
+      const result = await toggleWorkoutFavorite(workout.id);
+      
+      if (!result.success) {
+        // Rollback on error
+        setIsFavorite(previousState);
+        console.error("Failed to toggle favorite:", result.error);
+      }
+    } catch (error) {
+      // Rollback on error
+      setIsFavorite(previousState);
+      console.error("Error toggling favorite:", error);
+    } finally {
+      setIsToggling(false);
+    }
+  };
 
   return (
     <Card
@@ -259,6 +289,18 @@ function WorkoutCard({ workout, onClick }: WorkoutCardProps) {
             {workout.name}
           </h3>
         </div>
+        <button
+          onClick={handleToggleFavorite}
+          disabled={isToggling}
+          className="flex-shrink-0 p-1 rounded hover:bg-accent transition-colors"
+          title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+        >
+          <Star
+            className={`w-4 h-4 transition-colors ${
+              isFavorite ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"
+            }`}
+          />
+        </button>
       </div>
 
       <div className="mb-3">

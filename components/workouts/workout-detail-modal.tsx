@@ -1,7 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useState } from "react";
+import { Star } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import type { Workout } from "@/lib/workouts/types";
 import {
   calculateAverageIntensity,
@@ -12,6 +15,7 @@ import {
   getZoneForIntensity,
   POWER_ZONES,
 } from "@/lib/workouts/utils";
+import { toggleWorkoutFavorite } from "@/app/workouts/actions";
 
 const IntensityBarChart = dynamic(
   () => import("./intensity-bar-chart").then((mod) => ({ default: mod.IntensityBarChart })),
@@ -32,6 +36,9 @@ interface WorkoutDetailModalProps {
 }
 
 export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailModalProps) {
+  const [isFavorite, setIsFavorite] = useState(workout?.is_favorite || false);
+  const [isToggling, setIsToggling] = useState(false);
+
   if (!workout) return null;
 
   const ftpWatts = userFtp ?? 250; // Use user's FTP or default to 250
@@ -45,6 +52,31 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
     zonePercentages[zone] = (seconds / totalSeconds) * 100;
   });
 
+  const handleToggleFavorite = async () => {
+    if (isToggling) return;
+    
+    // Optimistic update
+    const previousState = isFavorite;
+    setIsFavorite(!isFavorite);
+    setIsToggling(true);
+
+    try {
+      const result = await toggleWorkoutFavorite(workout.id);
+      
+      if (!result.success) {
+        // Rollback on error
+        setIsFavorite(previousState);
+        console.error("Failed to toggle favorite:", result.error);
+      }
+    } catch (error) {
+      // Rollback on error
+      setIsFavorite(previousState);
+      console.error("Error toggling favorite:", error);
+    } finally {
+      setIsToggling(false);
+    }
+  };
+
   return (
     <Dialog open={!!workout} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
@@ -53,12 +85,26 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
             <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
               <span className="text-primary text-lg">🚴</span>
             </div>
-            <div>
+            <div className="flex-1">
               <DialogTitle className="text-xl">{workout.name}</DialogTitle>
               <p className="text-sm text-muted-foreground mt-1">
                 Duration {formatDuration(totalMinutes)} • Intensity {avgIntensity}%
               </p>
             </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleToggleFavorite}
+              disabled={isToggling}
+              className="flex-shrink-0"
+              title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+            >
+              <Star
+                className={`w-5 h-5 transition-colors ${
+                  isFavorite ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"
+                }`}
+              />
+            </Button>
           </div>
         </DialogHeader>
 

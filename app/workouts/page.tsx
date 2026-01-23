@@ -2,6 +2,8 @@ import { WorkoutLibraryClient } from "@/components/workouts/workout-library-clie
 import { createClient } from "@/lib/supabase/server";
 import type { Workout } from "@/lib/workouts/types";
 
+export const dynamic = 'force-dynamic';
+
 export default async function WorkoutsPage() {
   const supabase = await createClient();
 

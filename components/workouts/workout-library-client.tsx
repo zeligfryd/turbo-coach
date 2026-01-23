@@ -35,9 +35,10 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 interface WorkoutLibraryClientProps {
   workouts: Workout[];
+  userFtp: number | null;
 }
 
-export function WorkoutLibraryClient({ workouts }: WorkoutLibraryClientProps) {
+export function WorkoutLibraryClient({ workouts, userFtp }: WorkoutLibraryClientProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
@@ -220,7 +221,7 @@ export function WorkoutLibraryClient({ workouts }: WorkoutLibraryClientProps) {
 
       {/* Detail Modal */}
       {selectedWorkout && (
-        <WorkoutDetailModal workout={selectedWorkout} onClose={() => setSelectedWorkout(null)} />
+        <WorkoutDetailModal workout={selectedWorkout} onClose={() => setSelectedWorkout(null)} userFtp={userFtp} />
       )}
     </div>
   );

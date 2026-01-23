@@ -28,12 +28,13 @@ const IntensityBarChart = dynamic(
 interface WorkoutDetailModalProps {
   workout: Workout | null;
   onClose: () => void;
+  userFtp: number | null;
 }
 
-export function WorkoutDetailModal({ workout, onClose }: WorkoutDetailModalProps) {
+export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailModalProps) {
   if (!workout) return null;
 
-  const ftpWatts = 250; // Default FTP
+  const ftpWatts = userFtp ?? 250; // Use user's FTP or default to 250
   const zoneTime = calculateZoneTime(workout.intervals);
   const totalSeconds = calculateTotalDuration(workout.intervals);
   const totalMinutes = totalSeconds / 60;

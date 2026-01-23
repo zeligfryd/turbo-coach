@@ -7,6 +7,7 @@ export const dynamic = 'force-dynamic';
 export default async function WorkoutsPage() {
   const supabase = await createClient();
 
+  // Fetch workouts
   const { data: workouts, error } = await supabase
     .from("workouts")
     .select("*")
@@ -24,9 +25,23 @@ export default async function WorkoutsPage() {
     );
   }
 
+  // Fetch user profile for FTP
+  const { data: userData } = await supabase.auth.getUser();
+  let userFtp: number | null = null;
+
+  if (userData?.user) {
+    const { data: profile } = await supabase
+      .from("users")
+      .select("ftp")
+      .eq("id", userData.user.id)
+      .single();
+    
+    userFtp = profile?.ftp ?? null;
+  }
+
   return (
     <div className="w-full">
-      <WorkoutLibraryClient workouts={(workouts as Workout[]) || []} />
+      <WorkoutLibraryClient workouts={(workouts as Workout[]) || []} userFtp={userFtp} />
     </div>
   );
 }

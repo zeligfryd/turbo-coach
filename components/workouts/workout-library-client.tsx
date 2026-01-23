@@ -23,15 +23,26 @@ import { MiniIntensityChart } from "./mini-intensity-chart";
 import { WorkoutDetailModal } from "./workout-detail-modal";
 import { toggleWorkoutFavorite } from "@/app/workouts/actions";
 
+const CATEGORY_ORDER = [
+  "recovery",
+  "endurance",
+  "tempo",
+  "sweet_spot",
+  "vo2max",
+  "sprint",
+  "threshold",
+  "anaerobic",
+];
+
 const CATEGORY_LABELS: Record<string, string> = {
-  endurance: "Endurance",
-  sweet_spot: "Sweet Spot",
-  threshold: "Threshold",
-  vo2max: "VO2 Max",
-  tempo: "Tempo",
-  sprint: "Sprint",
-  anaerobic: "Anaerobic",
   recovery: "Recovery",
+  endurance: "Endurance",
+  tempo: "Tempo",
+  sweet_spot: "Sweet Spot",
+  vo2max: "VO2 Max",
+  sprint: "Sprint",
+  threshold: "Threshold",
+  anaerobic: "Anaerobic",
 };
 
 interface WorkoutLibraryClientProps {
@@ -116,7 +127,18 @@ export function WorkoutLibraryClient({ workouts, userFtp }: WorkoutLibraryClient
   }, [workouts, selectedCategory, searchQuery]);
 
   const categories = useMemo(() => {
-    return Array.from(new Set(workouts.map((w) => w.category))).sort();
+    const uniqueCategories = Array.from(new Set(workouts.map((w) => w.category)));
+    return uniqueCategories.sort((a, b) => {
+      const indexA = CATEGORY_ORDER.indexOf(a);
+      const indexB = CATEGORY_ORDER.indexOf(b);
+      
+      // If category is not in the order list, put it at the end
+      if (indexA === -1 && indexB === -1) return a.localeCompare(b);
+      if (indexA === -1) return 1;
+      if (indexB === -1) return -1;
+      
+      return indexA - indexB;
+    });
   }, [workouts]);
 
   return (

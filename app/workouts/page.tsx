@@ -15,7 +15,7 @@ export default async function WorkoutsPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center py-20">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-foreground mb-2">Error loading workouts</h1>
           <p className="text-muted-foreground">{error.message}</p>
@@ -25,12 +25,8 @@ export default async function WorkoutsPage() {
   }
 
   return (
-    <main className="min-h-screen flex flex-col items-center">
-      <div className="flex-1 w-full flex flex-col items-center">
-        <div className="w-full max-w-7xl p-5">
-          <WorkoutLibraryClient workouts={(workouts as Workout[]) || []} />
-        </div>
-      </div>
-    </main>
+    <div className="w-full">
+      <WorkoutLibraryClient workouts={(workouts as Workout[]) || []} />
+    </div>
   );
 }

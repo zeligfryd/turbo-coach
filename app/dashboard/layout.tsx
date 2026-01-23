@@ -1,13 +1,18 @@
-import { Sidebar } from "./sidebar";
-import { ThemeSwitcher } from "./theme-switcher";
-import { AuthButton } from "./auth-button";
+import { Sidebar } from "@/components/sidebar";
+import { ThemeSwitcher } from "@/components/theme-switcher";
+import { AuthButton } from "@/components/auth-button";
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 
-interface PageLayoutProps {
-  children: React.ReactNode;
-}
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getUser();
 
-export function PageLayout({ children }: PageLayoutProps) {
+  if (!data?.user) {
+    redirect("/auth/login");
+  }
+
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Left Sidebar */}

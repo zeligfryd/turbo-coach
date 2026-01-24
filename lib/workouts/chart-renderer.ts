@@ -30,6 +30,73 @@ export interface CalculateChartElementsOptions {
 }
 
 /**
+ * Split a ramp interval into segments at zone boundaries
+ * Returns array of segments with their zone colors and time positions
+ */
+function splitRampIntoZoneSegments(
+  startIntensity: number,
+  endIntensity: number,
+  intervalDuration: number
+): Array<{
+  startIntensity: number;
+  endIntensity: number;
+  startTime: number;
+  endTime: number;
+  zone: keyof typeof POWER_ZONES;
+}> {
+  // Determine direction (ascending or descending)
+  const isAscending = endIntensity > startIntensity;
+  const intensityRange = endIntensity - startIntensity;
+
+  // Get all zone boundaries between start and end
+  const zoneBoundaries = [55, 75, 90, 105, 120, 150];
+  const crossedBoundaries = zoneBoundaries.filter((boundary) => {
+    return isAscending
+      ? boundary > startIntensity && boundary < endIntensity
+      : boundary < startIntensity && boundary > endIntensity;
+  });
+
+  // Sort boundaries based on direction
+  if (!isAscending) {
+    crossedBoundaries.sort((a, b) => b - a);
+  }
+
+  // Build segments
+  const segments = [];
+  let currentIntensity = startIntensity;
+  let currentTime = 0;
+
+  for (const boundary of crossedBoundaries) {
+    // Calculate time when boundary is crossed using linear interpolation
+    const intensityDelta = boundary - startIntensity;
+    const timeFraction = intensityDelta / intensityRange;
+    const boundaryTime = timeFraction * intervalDuration;
+
+    segments.push({
+      startIntensity: currentIntensity,
+      endIntensity: boundary,
+      startTime: currentTime,
+      endTime: boundaryTime,
+      zone: getZoneForIntensity((currentIntensity + boundary) / 2),
+    });
+
+    currentIntensity = boundary;
+    currentTime = boundaryTime;
+  }
+
+  // Add final segment
+  segments.push({
+    startIntensity: currentIntensity,
+    endIntensity: endIntensity,
+    startTime: currentTime,
+    endTime: intervalDuration,
+    zone: getZoneForIntensity((currentIntensity + endIntensity) / 2),
+  });
+
+  return segments;
+}
+
+/**
  * Calculate chart elements (rectangles and polygons) for workout intervals
  * This shared function is used by both mini and full charts
  */
@@ -119,28 +186,68 @@ export function calculateChartElements(
     const isRamp = isRampInterval(interval);
 
     if (isRamp) {
-      // For ramps, draw a polygon with slanted top
-      const startHeight = intensityToHeight(interval.intensityPercentStart);
-      const endHeight = intensityToHeight(interval.intensityPercentEnd!);
-      const yStart = heightToY(startHeight);
-      const yEnd = heightToY(endHeight);
-      const yBottom = plotArea.top + plotArea.height;
+      const startZone = getZoneForIntensity(interval.intensityPercentStart);
+      const endZone = getZoneForIntensity(interval.intensityPercentEnd!);
 
-      // Polygon points: bottom-left, top-left, top-right, bottom-right
-      const points = [
-        `${x},${yBottom}`,
-        `${x},${yStart}`,
-        `${x + intervalWidth},${yEnd}`,
-        `${x + intervalWidth},${yBottom}`,
-      ].join(" ");
+      if (startZone === endZone) {
+        // Single zone ramp - render as before
+        const startHeight = intensityToHeight(interval.intensityPercentStart);
+        const endHeight = intensityToHeight(interval.intensityPercentEnd!);
+        const yStart = heightToY(startHeight);
+        const yEnd = heightToY(endHeight);
+        const yBottom = plotArea.top + plotArea.height;
 
-      elements.push({
-        type: "polygon",
-        color: zoneColor,
-        points,
-        interval,
-        intervalIndex: index,
-      });
+        const points = [
+          `${x},${yBottom}`,
+          `${x},${yStart}`,
+          `${x + intervalWidth},${yEnd}`,
+          `${x + intervalWidth},${yBottom}`,
+        ].join(" ");
+
+        elements.push({
+          type: "polygon",
+          color: POWER_ZONES[startZone].color,
+          points,
+          interval,
+          intervalIndex: index,
+        });
+      } else {
+        // Multi-zone ramp - split at boundaries
+        const segments = splitRampIntoZoneSegments(
+          interval.intensityPercentStart,
+          interval.intensityPercentEnd!,
+          interval.durationSeconds
+        );
+
+        segments.forEach((segment) => {
+          const segmentStartTime = currentTime + segment.startTime;
+          const segmentEndTime = currentTime + segment.endTime;
+          const segmentWidth =
+            ((segmentEndTime - segmentStartTime) / totalDuration) * plotArea.width;
+          const segmentX = timeToX(segmentStartTime);
+
+          const startHeight = intensityToHeight(segment.startIntensity);
+          const endHeight = intensityToHeight(segment.endIntensity);
+          const yStart = heightToY(startHeight);
+          const yEnd = heightToY(endHeight);
+          const yBottom = plotArea.top + plotArea.height;
+
+          const points = [
+            `${segmentX},${yBottom}`,
+            `${segmentX},${yStart}`,
+            `${segmentX + segmentWidth},${yEnd}`,
+            `${segmentX + segmentWidth},${yBottom}`,
+          ].join(" ");
+
+          elements.push({
+            type: "polygon",
+            color: POWER_ZONES[segment.zone].color,
+            points,
+            interval,
+            intervalIndex: index,
+          });
+        });
+      }
     } else {
       // For constant intervals, draw a rectangle
       const barHeight = intensityToHeight(interval.intensityPercentStart);

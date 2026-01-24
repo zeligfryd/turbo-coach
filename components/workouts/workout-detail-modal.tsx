@@ -15,6 +15,7 @@ import {
   getZoneForIntensity,
   getIntervalAverageIntensity,
   isRampInterval,
+  isFreeRideInterval,
   POWER_ZONES,
 } from "@/lib/workouts/utils";
 import { toggleWorkoutFavorite } from "@/app/workouts/actions";
@@ -204,18 +205,21 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
             <h3 className="text-sm font-medium text-foreground mb-3">Workout Segments</h3>
             <div className="space-y-1 max-h-48 overflow-y-auto">
               {workout.intervals.map((interval, index) => {
+                const isFreeRide = isFreeRideInterval(interval);
                 const isRamp = isRampInterval(interval);
                 const avgIntensity = getIntervalAverageIntensity(interval);
                 const zone = getZoneForIntensity(avgIntensity);
                 const zoneColor = POWER_ZONES[zone].color;
 
                 let displayText: string;
-                if (isRamp) {
-                  const startWatts = Math.round((interval.intensityPercentStart / 100) * ftpWatts);
+                if (isFreeRide) {
+                  displayText = `${formatDurationSeconds(interval.durationSeconds)} - Free Ride`;
+                } else if (isRamp) {
+                  const startWatts = Math.round((interval.intensityPercentStart! / 100) * ftpWatts);
                   const endWatts = Math.round((interval.intensityPercentEnd! / 100) * ftpWatts);
                   displayText = `${formatDurationSeconds(interval.durationSeconds)} @ ${interval.intensityPercentStart}% → ${interval.intensityPercentEnd}% (${startWatts}W → ${endWatts}W)`;
                 } else {
-                  const watts = Math.round((interval.intensityPercentStart / 100) * ftpWatts);
+                  const watts = Math.round((interval.intensityPercentStart! / 100) * ftpWatts);
                   displayText = `${formatDurationSeconds(interval.durationSeconds)} @ ${interval.intensityPercentStart}% (${watts}W)`;
                 }
 

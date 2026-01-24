@@ -5,6 +5,7 @@ import type { WorkoutInterval } from "@/lib/workouts/types";
 import { calculateChartElements } from "@/lib/workouts/chart-renderer";
 import {
   isRampInterval,
+  isFreeRideInterval,
   formatDurationSeconds,
 } from "@/lib/workouts/utils";
 
@@ -62,7 +63,10 @@ export function IntensityBarChart({
   // Calculate max power
   const maxPower = Math.max(
     ...intervals.map((interval) => {
-      const start = (interval.intensityPercentStart / 100) * ftpWatts;
+      if (isFreeRideInterval(interval)) {
+        return (50 / 100) * ftpWatts; // Free rides count as 50%
+      }
+      const start = (interval.intensityPercentStart! / 100) * ftpWatts;
       const end = interval.intensityPercentEnd
         ? (interval.intensityPercentEnd / 100) * ftpWatts
         : start;
@@ -250,19 +254,24 @@ export function IntensityBarChart({
     if (!hoveredInterval) return null;
 
     const { interval, mouseX, mouseY } = hoveredInterval;
+    const isFreeRide = isFreeRideInterval(interval);
     const isRamp = isRampInterval(interval);
 
-    const powerStart = Math.round((interval.intensityPercentStart / 100) * ftpWatts);
-    const powerEnd = interval.intensityPercentEnd
+    const powerStart = isFreeRide ? 0 : Math.round((interval.intensityPercentStart! / 100) * ftpWatts);
+    const powerEnd = isFreeRide ? 0 : (interval.intensityPercentEnd
       ? Math.round((interval.intensityPercentEnd / 100) * ftpWatts)
-      : powerStart;
+      : powerStart);
 
     // Build tooltip text
-    const line1 = `${formatDurationSeconds(interval.durationSeconds)} @ ${isRamp
-      ? `${interval.intensityPercentStart}% → ${interval.intensityPercentEnd}%`
-      : `${interval.intensityPercentStart}%`
-      }`;
-    const line2 = isRamp ? `${powerStart}W → ${powerEnd}W` : `${powerStart}W`;
+    const line1 = isFreeRide
+      ? `${formatDurationSeconds(interval.durationSeconds)} - Free Ride`
+      : `${formatDurationSeconds(interval.durationSeconds)} @ ${isRamp
+          ? `${interval.intensityPercentStart}% → ${interval.intensityPercentEnd}%`
+          : `${interval.intensityPercentStart}%`
+        }`;
+    const line2 = isFreeRide 
+      ? 'Ride at any power' 
+      : (isRamp ? `${powerStart}W → ${powerEnd}W` : `${powerStart}W`);
 
     // Calculate dynamic width based on content (approximate 7px per character for 12px font)
     const line1Width = line1.length * 7;
@@ -343,7 +352,14 @@ export function IntensityBarChart({
 
         {/* Interval shapes */}
         {chartElements.map((element, index) =>
-          element.type === "polygon" ? (
+          element.type === "path" ? (
+            <path
+              key={index}
+              d={element.path}
+              fill={element.color}
+              fillOpacity={0.8}
+            />
+          ) : element.type === "polygon" ? (
             <polygon
               key={index}
               points={element.points}

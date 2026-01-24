@@ -45,7 +45,16 @@ export function MiniIntensityChart({
       style={{ display: "block" }}
     >
       {chartData.map((element, index) => {
-        if (element.type === "polygon") {
+        if (element.type === "path") {
+          return (
+            <path
+              key={index}
+              d={element.path}
+              fill={element.color}
+              fillOpacity={0.8}
+            />
+          );
+        } else if (element.type === "polygon") {
           return (
             <polygon
               key={index}

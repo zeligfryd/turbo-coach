@@ -1,14 +1,15 @@
 import type { WorkoutInterval } from "./types";
-import { getZoneForIntensity, isRampInterval, getIntervalAverageIntensity, POWER_ZONES } from "./utils";
+import { getZoneForIntensity, isRampInterval, isFreeRideInterval, getIntervalAverageIntensity, POWER_ZONES } from "./utils";
 
 export type ChartElement = {
-  type: "rect" | "polygon";
+  type: "rect" | "polygon" | "path";
   color: string;
   x?: number;
   y?: number;
   width?: number;
   height?: number;
   points?: string;
+  path?: string;
   interval: WorkoutInterval;
   intervalIndex: number;
 };
@@ -27,6 +28,46 @@ export interface ChartDimensions {
 export interface CalculateChartElementsOptions {
   useAbsolutePower?: boolean;
   ftpWatts?: number;
+}
+
+/**
+ * Generate a wavy area path for free ride intervals
+ * Creates a filled polygon with sine wave on top
+ * Rounds coordinates to 2 decimal places for consistency between SSR and client
+ */
+function generateWavyPath(
+  startX: number,
+  y: number,
+  width: number,
+  yBottom: number,
+  amplitude: number = 8,
+  frequency: number = 0.05
+): string {
+  const points: string[] = [];
+  const steps = Math.max(50, Math.floor(width / 5)); // At least 50 points
+
+  // Helper to round to 2 decimal places for consistent SSR/client rendering
+  const round = (n: number) => Math.round(n * 100) / 100;
+
+  // Draw the wavy top edge from left to right
+  for (let i = 0; i <= steps; i++) {
+    const progress = i / steps;
+    const x = round(startX + progress * width);
+    const waveY = round(y + Math.sin(progress * width * frequency) * amplitude);
+
+    if (i === 0) {
+      points.push(`M ${x},${waveY}`);
+    } else {
+      points.push(`L ${x},${waveY}`);
+    }
+  }
+
+  // Close the path by drawing the bottom edge and back to start
+  points.push(`L ${round(startX + width)},${round(yBottom)}`);
+  points.push(`L ${round(startX)},${round(yBottom)}`);
+  points.push(`Z`); // Close path
+
+  return points.join(" ");
 }
 
 /**
@@ -118,10 +159,21 @@ export function calculateChartElements(
   let maxIntensity: number;
   let intensityRange: number;
 
+  // Wave amplitude as a percentage (accounts for peaks above/below the 50% line)
+  // Use a larger buffer to ensure waves don't get clipped in small charts
+  const waveAmplitudePercent = 8; // ~8% above and below for wave peaks
+
   if (useAbsolutePower) {
     // For full chart: use absolute power scale from 0 to max
     const allPowers = intervals.flatMap((i) => {
-      const start = (i.intensityPercentStart / 100) * ftpWatts;
+      if (isFreeRideInterval(i)) {
+        // Account for wave amplitude - free rides oscillate around 50%
+        return [
+          ((50 - waveAmplitudePercent) / 100) * ftpWatts,
+          ((50 + waveAmplitudePercent) / 100) * ftpWatts
+        ];
+      }
+      const start = (i.intensityPercentStart! / 100) * ftpWatts;
       const values = [start];
       if (i.intensityPercentEnd !== undefined) {
         values.push((i.intensityPercentEnd / 100) * ftpWatts);
@@ -132,15 +184,23 @@ export function calculateChartElements(
     maxIntensity = Math.max(...allPowers);
     intensityRange = maxIntensity;
   } else {
-    // For mini chart: normalize to min-max range for better visualization
+    // For mini chart: normalize to min-max range, but ensure 0 is included if there are free rides
     const allIntensities = intervals.flatMap((i) => {
-      const values = [i.intensityPercentStart];
+      if (isFreeRideInterval(i)) {
+        // Account for wave amplitude - free rides oscillate around 50%
+        return [50 - waveAmplitudePercent, 50 + waveAmplitudePercent];
+      }
+      const values = [i.intensityPercentStart!];
       if (i.intensityPercentEnd !== undefined) {
         values.push(i.intensityPercentEnd);
       }
       return values;
     });
-    minIntensity = Math.min(...allIntensities);
+    
+    // Check if any interval is a free ride
+    const hasFreeRide = intervals.some(isFreeRideInterval);
+    
+    minIntensity = hasFreeRide ? 0 : Math.min(...allIntensities);
     maxIntensity = Math.max(...allIntensities);
     intensityRange = maxIntensity - minIntensity || 1;
   }
@@ -183,15 +243,34 @@ export function calculateChartElements(
 
     const intervalWidth = (interval.durationSeconds / totalDuration) * plotArea.width;
     const x = timeToX(currentTime);
+    const isFreeRide = isFreeRideInterval(interval);
     const isRamp = isRampInterval(interval);
 
-    if (isRamp) {
-      const startZone = getZoneForIntensity(interval.intensityPercentStart);
+    if (isFreeRide) {
+      // Free ride: wavy area at 50% intensity
+      const baseHeight = intensityToHeight(50);
+      const y = heightToY(baseHeight);
+      const yBottom = plotArea.top + plotArea.height;
+      
+      // Make amplitude proportional to chart height (smaller for mini charts)
+      const amplitude = Math.min(8, plotArea.height * 0.10);
+      
+      const path = generateWavyPath(x, y, intervalWidth, yBottom, amplitude);
+
+      elements.push({
+        type: "path",
+        color: "#ffc0cb", // Light pink for free ride
+        path,
+        interval,
+        intervalIndex: index,
+      });
+    } else if (isRamp) {
+      const startZone = getZoneForIntensity(interval.intensityPercentStart!);
       const endZone = getZoneForIntensity(interval.intensityPercentEnd!);
 
       if (startZone === endZone) {
         // Single zone ramp - render as before
-        const startHeight = intensityToHeight(interval.intensityPercentStart);
+        const startHeight = intensityToHeight(interval.intensityPercentStart!);
         const endHeight = intensityToHeight(interval.intensityPercentEnd!);
         const yStart = heightToY(startHeight);
         const yEnd = heightToY(endHeight);
@@ -214,7 +293,7 @@ export function calculateChartElements(
       } else {
         // Multi-zone ramp - split at boundaries
         const segments = splitRampIntoZoneSegments(
-          interval.intensityPercentStart,
+          interval.intensityPercentStart!,
           interval.intensityPercentEnd!,
           interval.durationSeconds
         );
@@ -250,7 +329,7 @@ export function calculateChartElements(
       }
     } else {
       // For constant intervals, draw a rectangle
-      const barHeight = intensityToHeight(interval.intensityPercentStart);
+      const barHeight = intensityToHeight(interval.intensityPercentStart!);
       const y = heightToY(barHeight);
 
       elements.push({

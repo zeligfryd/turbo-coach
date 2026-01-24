@@ -24,11 +24,20 @@ export function getZoneForIntensity(intensityPercent: number): keyof typeof POWE
 }
 
 /**
+ * Check if an interval is a free ride (no power target)
+ */
+export function isFreeRideInterval(interval: WorkoutInterval): boolean {
+  return interval.intensityPercentStart === undefined || 
+         interval.intensityPercentStart === null;
+}
+
+/**
  * Check if an interval is a ramp (has different start and end intensities)
  */
 export function isRampInterval(interval: WorkoutInterval): boolean {
+  if (isFreeRideInterval(interval)) return false;
   return interval.intensityPercentEnd !== undefined &&
-    interval.intensityPercentEnd !== interval.intensityPercentStart;
+    interval.intensityPercentEnd !== interval.intensityPercentStart!;
 }
 
 /**
@@ -38,24 +47,30 @@ export function isRampInterval(interval: WorkoutInterval): boolean {
  * @returns Intensity percent at that time point
  */
 export function getIntervalIntensityAtTime(interval: WorkoutInterval, elapsedSeconds: number): number {
+  if (isFreeRideInterval(interval)) {
+    return 50; // Free rides count as 50% for calculations
+  }
   if (!isRampInterval(interval)) {
-    return interval.intensityPercentStart;
+    return interval.intensityPercentStart!;
   }
 
   // Linear interpolation for ramps
   const progress = Math.min(1, Math.max(0, elapsedSeconds / interval.durationSeconds));
   const intensityEnd = interval.intensityPercentEnd!;
-  return interval.intensityPercentStart + (intensityEnd - interval.intensityPercentStart) * progress;
+  return interval.intensityPercentStart! + (intensityEnd - interval.intensityPercentStart!) * progress;
 }
 
 /**
- * Get average intensity for an interval (accounts for ramps)
+ * Get average intensity for an interval (accounts for ramps and free rides)
  */
 export function getIntervalAverageIntensity(interval: WorkoutInterval): number {
-  if (isRampInterval(interval)) {
-    return (interval.intensityPercentStart + interval.intensityPercentEnd!) / 2;
+  if (isFreeRideInterval(interval)) {
+    return 50; // Free rides count as 50% for calculations
   }
-  return interval.intensityPercentStart;
+  if (isRampInterval(interval)) {
+    return (interval.intensityPercentStart! + interval.intensityPercentEnd!) / 2;
+  }
+  return interval.intensityPercentStart!;
 }
 
 /**

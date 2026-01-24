@@ -1,10 +1,10 @@
 import { z } from "zod";
 
-// Zod schema for workout intervals with ramp support
+// Zod schema for workout intervals with ramp and free ride support
 export const WorkoutIntervalSchema = z.object({
   name: z.string(),
   durationSeconds: z.number().positive(),
-  intensityPercentStart: z.number().min(0),
+  intensityPercentStart: z.number().min(0).optional(),
   intensityPercentEnd: z.number().min(0).optional(),
 });
 

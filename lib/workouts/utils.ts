@@ -24,13 +24,51 @@ export function getZoneForIntensity(intensityPercent: number): keyof typeof POWE
 }
 
 /**
+ * Check if an interval is a ramp (has different start and end intensities)
+ */
+export function isRampInterval(interval: WorkoutInterval): boolean {
+  return interval.intensityPercentEnd !== undefined &&
+    interval.intensityPercentEnd !== interval.intensityPercentStart;
+}
+
+/**
+ * Get intensity at a specific time point within an interval
+ * @param interval The workout interval
+ * @param elapsedSeconds Time elapsed within the interval (0 to durationSeconds)
+ * @returns Intensity percent at that time point
+ */
+export function getIntervalIntensityAtTime(interval: WorkoutInterval, elapsedSeconds: number): number {
+  if (!isRampInterval(interval)) {
+    return interval.intensityPercentStart;
+  }
+
+  // Linear interpolation for ramps
+  const progress = Math.min(1, Math.max(0, elapsedSeconds / interval.durationSeconds));
+  const intensityEnd = interval.intensityPercentEnd!;
+  return interval.intensityPercentStart + (intensityEnd - interval.intensityPercentStart) * progress;
+}
+
+/**
+ * Get average intensity for an interval (accounts for ramps)
+ */
+export function getIntervalAverageIntensity(interval: WorkoutInterval): number {
+  if (isRampInterval(interval)) {
+    return (interval.intensityPercentStart + interval.intensityPercentEnd!) / 2;
+  }
+  return interval.intensityPercentStart;
+}
+
+/**
  * Calculate time spent in each zone
+ * Note: For ramp intervals, this uses the average intensity to determine the zone.
+ * This is a simplification - a more accurate calculation would split ramps that cross zone boundaries.
  */
 export function calculateZoneTime(intervals: WorkoutInterval[]) {
   const zoneTime: Record<string, number> = {};
 
   intervals.forEach((interval) => {
-    const zone = getZoneForIntensity(interval.intensityPercent);
+    const avgIntensity = getIntervalAverageIntensity(interval);
+    const zone = getZoneForIntensity(avgIntensity);
     zoneTime[zone] = (zoneTime[zone] || 0) + interval.durationSeconds;
   });
 
@@ -66,7 +104,7 @@ export function formatDurationSeconds(seconds: number): string {
 }
 
 /**
- * Calculate average intensity across intervals
+ * Calculate average intensity across intervals (handles both constant and ramp intervals)
  */
 export function calculateAverageIntensity(intervals: WorkoutInterval[]): number {
   if (intervals.length === 0) return 0;
@@ -75,7 +113,8 @@ export function calculateAverageIntensity(intervals: WorkoutInterval[]): number 
   let totalDuration = 0;
 
   intervals.forEach((interval) => {
-    totalWeightedIntensity += interval.intensityPercent * interval.durationSeconds;
+    const avgIntensity = getIntervalAverageIntensity(interval);
+    totalWeightedIntensity += avgIntensity * interval.durationSeconds;
     totalDuration += interval.durationSeconds;
   });
 

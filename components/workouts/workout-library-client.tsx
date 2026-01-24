@@ -16,6 +16,7 @@ import {
   calculateTotalDuration,
   formatDuration,
   getZoneForIntensity,
+  getIntervalAverageIntensity,
   POWER_ZONES,
 } from "@/lib/workouts/utils";
 import type { Workout, WorkoutInterval } from "@/lib/workouts/types";
@@ -131,12 +132,12 @@ export function WorkoutLibraryClient({ workouts, userFtp }: WorkoutLibraryClient
     return uniqueCategories.sort((a, b) => {
       const indexA = CATEGORY_ORDER.indexOf(a);
       const indexB = CATEGORY_ORDER.indexOf(b);
-      
+
       // If category is not in the order list, put it at the end
       if (indexA === -1 && indexB === -1) return a.localeCompare(b);
       if (indexA === -1) return 1;
       if (indexB === -1) return -1;
-      
+
       return indexA - indexB;
     });
   }, [workouts]);
@@ -258,13 +259,14 @@ interface WorkoutCardProps {
 function WorkoutCard({ workout, onClick }: WorkoutCardProps) {
   const [isFavorite, setIsFavorite] = useState(workout.is_favorite || false);
   const [isToggling, setIsToggling] = useState(false);
-  
+
   const totalSeconds = calculateTotalDuration(workout.intervals);
   const totalMinutes = totalSeconds / 60;
 
   const zoneTime: Record<string, number> = {};
   workout.intervals.forEach((interval: WorkoutInterval) => {
-    const zone = getZoneForIntensity(interval.intensityPercent);
+    const avgIntensity = getIntervalAverageIntensity(interval);
+    const zone = getZoneForIntensity(avgIntensity);
     zoneTime[zone] = (zoneTime[zone] || 0) + interval.durationSeconds;
   });
   const primaryZone = Object.entries(zoneTime).sort((a, b) => b[1] - a[1])[0]?.[0] || "Z2";
@@ -273,7 +275,7 @@ function WorkoutCard({ workout, onClick }: WorkoutCardProps) {
   const handleToggleFavorite = async (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent card click
     if (isToggling) return;
-    
+
     // Optimistic update
     const previousState = isFavorite;
     setIsFavorite(!isFavorite);
@@ -281,7 +283,7 @@ function WorkoutCard({ workout, onClick }: WorkoutCardProps) {
 
     try {
       const result = await toggleWorkoutFavorite(workout.id);
-      
+
       if (!result.success) {
         // Rollback on error
         setIsFavorite(previousState);
@@ -318,9 +320,8 @@ function WorkoutCard({ workout, onClick }: WorkoutCardProps) {
           title={isFavorite ? "Remove from favorites" : "Add to favorites"}
         >
           <Star
-            className={`w-4 h-4 transition-colors ${
-              isFavorite ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"
-            }`}
+            className={`w-4 h-4 transition-colors ${isFavorite ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"
+              }`}
           />
         </button>
       </div>

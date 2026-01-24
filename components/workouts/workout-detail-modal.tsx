@@ -13,6 +13,8 @@ import {
   formatDuration,
   formatDurationSeconds,
   getZoneForIntensity,
+  getIntervalAverageIntensity,
+  isRampInterval,
   POWER_ZONES,
 } from "@/lib/workouts/utils";
 import { toggleWorkoutFavorite } from "@/app/workouts/actions";
@@ -54,7 +56,7 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
 
   const handleToggleFavorite = async () => {
     if (isToggling) return;
-    
+
     // Optimistic update
     const previousState = isFavorite;
     setIsFavorite(!isFavorite);
@@ -62,7 +64,7 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
 
     try {
       const result = await toggleWorkoutFavorite(workout.id);
-      
+
       if (!result.success) {
         // Rollback on error
         setIsFavorite(previousState);
@@ -100,9 +102,8 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
               title={isFavorite ? "Remove from favorites" : "Add to favorites"}
             >
               <Star
-                className={`w-5 h-5 transition-colors ${
-                  isFavorite ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"
-                }`}
+                className={`w-5 h-5 transition-colors ${isFavorite ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"
+                  }`}
               />
             </Button>
           </div>
@@ -203,9 +204,20 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
             <h3 className="text-sm font-medium text-foreground mb-3">Workout Segments</h3>
             <div className="space-y-1 max-h-48 overflow-y-auto">
               {workout.intervals.map((interval, index) => {
-                const watts = Math.round((interval.intensityPercent / 100) * ftpWatts);
-                const zone = getZoneForIntensity(interval.intensityPercent);
+                const isRamp = isRampInterval(interval);
+                const avgIntensity = getIntervalAverageIntensity(interval);
+                const zone = getZoneForIntensity(avgIntensity);
                 const zoneColor = POWER_ZONES[zone].color;
+
+                let displayText: string;
+                if (isRamp) {
+                  const startWatts = Math.round((interval.intensityPercentStart / 100) * ftpWatts);
+                  const endWatts = Math.round((interval.intensityPercentEnd! / 100) * ftpWatts);
+                  displayText = `${formatDurationSeconds(interval.durationSeconds)} @ ${interval.intensityPercentStart}% → ${interval.intensityPercentEnd}% (${startWatts}W → ${endWatts}W)`;
+                } else {
+                  const watts = Math.round((interval.intensityPercentStart / 100) * ftpWatts);
+                  displayText = `${formatDurationSeconds(interval.durationSeconds)} @ ${interval.intensityPercentStart}% (${watts}W)`;
+                }
 
                 return (
                   <div
@@ -219,8 +231,7 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
                     <div className="flex-1">
                       <span className="text-foreground">{interval.name}</span>
                       <span className="text-muted-foreground ml-2">
-                        {formatDurationSeconds(interval.durationSeconds)} @{" "}
-                        {interval.intensityPercent}% ({watts}W)
+                        {displayText}
                       </span>
                     </div>
                   </div>

@@ -1,6 +1,7 @@
 import { WorkoutLibraryClient } from "@/components/workouts/workout-library-client";
 import { WorkoutTabs } from "@/components/workouts/workout-tabs";
 import { createClient } from "@/lib/supabase/server";
+import { validateWorkouts } from "@/lib/workouts/types";
 import type { Workout } from "@/lib/workouts/types";
 
 export const dynamic = 'force-dynamic';
@@ -44,6 +45,15 @@ export default async function PresetsPage() {
     user_favorite_workouts: undefined, // Remove the join data
   })) || [];
 
+  // Validate workouts and filter out invalid ones
+  const validatedWorkouts = validateWorkouts(workoutsWithFavorites);
+  
+  if (validatedWorkouts.length < workoutsWithFavorites.length) {
+    console.warn(
+      `Filtered out ${workoutsWithFavorites.length - validatedWorkouts.length} invalid workout(s)`
+    );
+  }
+
   // Fetch user profile for FTP
   let userFtp: number | null = null;
 
@@ -60,7 +70,7 @@ export default async function PresetsPage() {
   return (
     <div className="w-full">
       <WorkoutTabs />
-      <WorkoutLibraryClient workouts={workoutsWithFavorites as Workout[]} userFtp={userFtp} />
+      <WorkoutLibraryClient workouts={validatedWorkouts} userFtp={userFtp} />
     </div>
   );
 }

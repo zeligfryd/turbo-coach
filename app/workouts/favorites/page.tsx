@@ -1,6 +1,7 @@
 import { WorkoutLibraryClient } from "@/components/workouts/workout-library-client";
 import { WorkoutTabs } from "@/components/workouts/workout-tabs";
 import { createClient } from "@/lib/supabase/server";
+import { validateWorkouts } from "@/lib/workouts/types";
 import type { Workout } from "@/lib/workouts/types";
 import { Star } from "lucide-react";
 
@@ -50,19 +51,30 @@ export default async function FavoritesPage() {
   }
 
   // Extract workouts from the join and add is_favorite flag
-  const workouts: Workout[] = favorites
+  const rawWorkouts = favorites
     ?.map((fav: any) => ({
       ...fav.workouts,
       is_favorite: true,
     }))
-    .filter((w: any) => w.id) // Filter out any null workouts
-    .sort((a: Workout, b: Workout) => {
-      // Sort by category first, then by name
-      if (a.category !== b.category) {
-        return a.category.localeCompare(b.category);
-      }
-      return a.name.localeCompare(b.name);
-    }) || [];
+    .filter((w: any) => w.id) || []; // Filter out any null workouts
+
+  // Validate workouts and filter out invalid ones
+  const validatedWorkouts = validateWorkouts(rawWorkouts);
+  
+  if (validatedWorkouts.length < rawWorkouts.length) {
+    console.warn(
+      `Filtered out ${rawWorkouts.length - validatedWorkouts.length} invalid workout(s) from favorites`
+    );
+  }
+
+  // Sort workouts
+  const workouts = validatedWorkouts.sort((a, b) => {
+    // Sort by category first, then by name
+    if (a.category !== b.category) {
+      return a.category.localeCompare(b.category);
+    }
+    return a.name.localeCompare(b.name);
+  });
 
   // Fetch user profile for FTP
   let userFtp: number | null = null;

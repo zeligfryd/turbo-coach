@@ -20,7 +20,17 @@ import { RepeatGroupEditor, type RepeatGroupData } from "@/components/workouts/r
 import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 import type { Workout, BuilderItem, WorkoutInterval } from "@/lib/workouts/types";
-import { flattenBuilderItems } from "@/lib/workouts/utils";
+import {
+  flattenBuilderItems,
+  calculateAveragePower,
+  calculateWork,
+  calculateTSS,
+  formatWork,
+  calculateTotalDurationFromItems,
+  calculateAverageIntensityFromItems,
+  formatDuration,
+  DEFAULT_FTP_WATTS,
+} from "@/lib/workouts/utils";
 import {
   DndContext,
   closestCenter,
@@ -397,6 +407,7 @@ function WorkoutBuilderContent() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = React.useState(false);
   const [showUnsavedDialog, setShowUnsavedDialog] = React.useState(false);
   const [pendingNavigation, setPendingNavigation] = React.useState<(() => void) | null>(null);
+  const [userFtp, setUserFtp] = React.useState<number>(DEFAULT_FTP_WATTS);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -462,6 +473,25 @@ function WorkoutBuilderContent() {
       setHasUnsavedChanges(hasContent);
     }
   }, [state, initialState, mode]);
+
+  // Fetch user's FTP
+  useEffect(() => {
+    const fetchUserFtp = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from("users")
+          .select("ftp")
+          .eq("id", user.id)
+          .single();
+        if (profile?.ftp) {
+          setUserFtp(profile.ftp);
+        }
+      }
+    };
+    fetchUserFtp();
+  }, []);
 
   // Warn on browser close/refresh
   useEffect(() => {
@@ -700,6 +730,22 @@ function WorkoutBuilderContent() {
     ...interval,
   }));
 
+  // Calculate metrics from current state
+  const durationSeconds = calculateTotalDurationFromItems(state.items);
+  const avgIntensityPercent = calculateAverageIntensityFromItems(state.items);
+
+  const avgPowerWatts = avgIntensityPercent > 0
+    ? calculateAveragePower(avgIntensityPercent, userFtp)
+    : null;
+
+  const workKJ = avgIntensityPercent > 0 && durationSeconds > 0
+    ? calculateWork(avgIntensityPercent, durationSeconds, userFtp)
+    : null;
+
+  const tss = avgIntensityPercent > 0 && durationSeconds > 0
+    ? calculateTSS(avgIntensityPercent, durationSeconds)
+    : null;
+
   return (
     <div className="max-w-6xl mx-auto pb-12">
       {/* Header */}
@@ -748,12 +794,45 @@ function WorkoutBuilderContent() {
         />
       </div>
 
+      {/* Workout Metrics */}
+      {state.items.length > 0 && (
+        <div className="mb-6 p-6 border border-border rounded-lg bg-card">
+          <h2 className="text-lg font-semibold mb-4">Workout Metrics</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">Duration</div>
+              <div className="text-lg font-semibold text-foreground">
+                {formatDuration(durationSeconds / 60)}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">Avg Power</div>
+              <div className="text-lg font-semibold text-foreground">
+                {avgPowerWatts !== null ? `${avgPowerWatts}W` : "—"}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">Work</div>
+              <div className="text-lg font-semibold text-foreground">
+                {workKJ !== null ? formatWork(workKJ) : "—"}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground mb-1">TSS</div>
+              <div className="text-lg font-semibold text-foreground">
+                {tss !== null ? tss : "—"}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Live Preview Chart */}
       <div className="mb-6 p-6 border border-border rounded-lg bg-card">
         <h2 className="text-lg font-semibold mb-4">Preview</h2>
         <div className="h-[300px]">
           {state.items.length > 0 ? (
-            <IntensityBarChart intervals={chartIntervals} ftpWatts={250} height={300} />
+            <IntensityBarChart intervals={chartIntervals} ftpWatts={userFtp} height={300} />
           ) : (
             <div className="h-full flex items-center justify-center text-muted-foreground bg-muted/30 rounded-lg">
               Add intervals to see the workout preview

@@ -1,5 +1,5 @@
 import type { WorkoutInterval } from "./types";
-import { getZoneForIntensity, isRampInterval, isFreeRideInterval, getIntervalAverageIntensity, POWER_ZONES } from "./utils";
+import { getZoneForIntensity, isRampInterval, isFreeRideInterval, getIntervalAverageIntensity, POWER_ZONES, DEFAULT_FTP_WATTS } from "./utils";
 
 export type ChartElement = {
   type: "rect" | "polygon" | "path";
@@ -152,7 +152,7 @@ export function calculateChartElements(
   if (totalDuration === 0) return [];
 
   const { plotArea } = dimensions;
-  const { useAbsolutePower = false, ftpWatts = 250 } = options;
+  const { useAbsolutePower = false, ftpWatts = DEFAULT_FTP_WATTS } = options;
 
   // Calculate intensity range
   let minIntensity: number;

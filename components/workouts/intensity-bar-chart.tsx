@@ -7,6 +7,7 @@ import {
   isRampInterval,
   isFreeRideInterval,
   formatDurationSeconds,
+  DEFAULT_FTP_WATTS,
 } from "@/lib/workouts/utils";
 
 interface IntensityBarChartProps {
@@ -24,7 +25,7 @@ const CHART_PADDING = {
 
 export function IntensityBarChart({
   intervals,
-  ftpWatts = 250,
+  ftpWatts = DEFAULT_FTP_WATTS,
   height = 200,
 }: IntensityBarChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);

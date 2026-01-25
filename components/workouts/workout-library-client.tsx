@@ -66,8 +66,11 @@ export function WorkoutLibraryClient({ workouts, userFtp }: WorkoutLibraryClient
 
     Object.keys(grouped).forEach((category) => {
       grouped[category].sort((a, b) => {
-        const durationA = calculateTotalDuration(flattenBuilderItems(a.intervals));
-        const durationB = calculateTotalDuration(flattenBuilderItems(b.intervals));
+        // Use stored duration_seconds if available, fallback to calculation
+        const durationA = a.duration_seconds ?? 
+          calculateTotalDuration(flattenBuilderItems(a.intervals));
+        const durationB = b.duration_seconds ?? 
+          calculateTotalDuration(flattenBuilderItems(b.intervals));
 
         if (durationA !== durationB) {
           return durationA - durationB;
@@ -191,6 +194,7 @@ export function WorkoutLibraryClient({ workouts, userFtp }: WorkoutLibraryClient
                   key={workout.id}
                   workout={workout}
                   onClick={() => setSelectedWorkout(workout)}
+                  userFtp={userFtp}
                 />
               ))}
             </div>
@@ -228,6 +232,7 @@ export function WorkoutLibraryClient({ workouts, userFtp }: WorkoutLibraryClient
                           key={workout.id}
                           workout={workout}
                           onClick={() => setSelectedWorkout(workout)}
+                          userFtp={userFtp}
                         />
                       ))}
                     </div>

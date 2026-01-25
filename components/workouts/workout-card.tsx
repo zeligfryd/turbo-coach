@@ -19,6 +19,11 @@ import {
   getIntervalAverageIntensity,
   POWER_ZONES,
   flattenBuilderItems,
+  calculateAveragePower,
+  calculateWork,
+  calculateTSS,
+  formatWork,
+  DEFAULT_FTP_WATTS,
 } from "@/lib/workouts/utils";
 import type { Workout, WorkoutInterval } from "@/lib/workouts/types";
 import { MiniIntensityChart } from "./mini-intensity-chart";
@@ -28,9 +33,10 @@ interface WorkoutCardProps {
   workout: Workout;
   onClick: () => void;
   isCustom?: boolean;
+  userFtp: number | null;
 }
 
-export function WorkoutCard({ workout, onClick, isCustom }: WorkoutCardProps) {
+export function WorkoutCard({ workout, onClick, isCustom, userFtp }: WorkoutCardProps) {
   const router = useRouter();
   const [isFavorite, setIsFavorite] = useState(workout.is_favorite || false);
   const [isToggling, setIsToggling] = useState(false);
@@ -55,6 +61,20 @@ export function WorkoutCard({ workout, onClick, isCustom }: WorkoutCardProps) {
   });
   const primaryZone = Object.entries(zoneTime).sort((a, b) => b[1] - a[1])[0]?.[0] || "Z2";
   const zoneColor = POWER_ZONES[primaryZone as keyof typeof POWER_ZONES]?.color || "#10b981";
+
+  // Calculate metrics using stored values (if available)
+  const ftpWatts = userFtp ?? DEFAULT_FTP_WATTS;
+  const avgPowerWatts = workout.avg_intensity_percent 
+    ? calculateAveragePower(workout.avg_intensity_percent, ftpWatts)
+    : null;
+
+  const workKJ = workout.avg_intensity_percent && workout.duration_seconds
+    ? calculateWork(workout.avg_intensity_percent, workout.duration_seconds, ftpWatts)
+    : null;
+
+  const tss = workout.avg_intensity_percent && workout.duration_seconds
+    ? calculateTSS(workout.avg_intensity_percent, workout.duration_seconds)
+    : null;
 
   const handleToggleFavorite = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -174,10 +194,19 @@ export function WorkoutCard({ workout, onClick, isCustom }: WorkoutCardProps) {
         <MiniIntensityChart intervals={intervals} width={280} height={30} />
       </div>
 
-      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
         <span>{formatDuration(totalMinutes)}</span>
         <span>•</span>
-        <span>{avgIntensity.toFixed(0)}% avg</span>
+        <span>
+          {avgIntensity.toFixed(0)}% avg
+          {avgPowerWatts !== null && ` (${avgPowerWatts}W)`}
+        </span>
+        {tss !== null && (
+          <>
+            <span>•</span>
+            <span>TSS {tss}</span>
+          </>
+        )}
       </div>
     </Card>
   );

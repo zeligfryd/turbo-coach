@@ -22,6 +22,7 @@ export function CustomWorkoutsClient({ workouts, userFtp }: CustomWorkoutsClient
             workout={workout}
             onClick={() => setSelectedWorkout(workout)}
             isCustom={true}
+            userFtp={userFtp}
           />
         ))}
       </div>

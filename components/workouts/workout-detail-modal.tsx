@@ -25,6 +25,11 @@ import {
   isFreeRideInterval,
   POWER_ZONES,
   flattenBuilderItems,
+  calculateAveragePower,
+  calculateWork,
+  calculateTSS,
+  formatWork,
+  DEFAULT_FTP_WATTS,
 } from "@/lib/workouts/utils";
 import { toggleWorkoutFavorite, deleteWorkout } from "@/app/workouts/actions";
 import { downloadWorkout } from "@/lib/workouts/export";
@@ -61,7 +66,7 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
   // Flatten BuilderItems to intervals
   const intervals = flattenBuilderItems(workout.intervals);
 
-  const ftpWatts = userFtp ?? 250; // Use user's FTP or default to 250
+  const ftpWatts = userFtp ?? DEFAULT_FTP_WATTS;
   const zoneTime = calculateZoneTime(intervals);
   const totalSeconds = calculateTotalDuration(intervals);
   const totalMinutes = totalSeconds / 60;
@@ -71,6 +76,19 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
   Object.entries(zoneTime).forEach(([zone, seconds]) => {
     zonePercentages[zone] = (seconds / totalSeconds) * 100;
   });
+
+  // Calculate metrics using stored values (if available) or fallback to calculated values
+  const avgPowerWatts = workout.avg_intensity_percent 
+    ? calculateAveragePower(workout.avg_intensity_percent, ftpWatts)
+    : null;
+
+  const workKJ = workout.avg_intensity_percent && workout.duration_seconds
+    ? calculateWork(workout.avg_intensity_percent, workout.duration_seconds, ftpWatts)
+    : null;
+
+  const tss = workout.avg_intensity_percent && workout.duration_seconds
+    ? calculateTSS(workout.avg_intensity_percent, workout.duration_seconds)
+    : null;
 
   const handleToggleFavorite = async () => {
     if (isToggling) return;
@@ -198,32 +216,41 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
           {/* Performance Metrics */}
           <div>
             {/* <h3 className="text-sm font-medium text-foreground mb-3">Performance Metrics</h3> */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <div>
-                <div className="text-xs text-muted-foreground mb-1">Duration</div>
-                <div className="text-lg font-semibold text-foreground">
-                  {formatDuration(totalMinutes)}
+            <div className="space-y-3">
+              {/* Line 1: Duration - Intensity - TSS */}
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Duration</div>
+                  <div className="text-lg font-semibold text-foreground">
+                    {formatDuration(totalMinutes)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Intensity</div>
+                  <div className="text-lg font-semibold text-foreground">{avgIntensity}% FTP</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">TSS</div>
+                  <div className="text-lg font-semibold text-foreground">
+                    {tss !== null ? tss : "—"}
+                  </div>
                 </div>
               </div>
-              <div>
-                <div className="text-xs text-muted-foreground mb-1">Average Power</div>
-                <div className="text-sm text-muted-foreground">Coming soon</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground mb-1">Normalized Power</div>
-                <div className="text-sm text-muted-foreground">Coming soon</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground mb-1">Work</div>
-                <div className="text-sm text-muted-foreground">Coming soon</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground mb-1">TSS</div>
-                <div className="text-sm text-muted-foreground">Coming soon</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground mb-1">Intensity</div>
-                <div className="text-lg font-semibold text-foreground">{avgIntensity}% FTP</div>
+              {/* Line 2: Average Power - Work */}
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Average Power</div>
+                  <div className="text-lg font-semibold text-foreground">
+                    {avgPowerWatts !== null ? `${avgPowerWatts}W` : "—"}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground mb-1">Work</div>
+                  <div className="text-lg font-semibold text-foreground">
+                    {workKJ !== null ? formatWork(workKJ) : "—"}
+                  </div>
+                </div>
+                <div></div>
               </div>
             </div>
           </div>

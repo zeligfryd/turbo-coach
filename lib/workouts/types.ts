@@ -40,6 +40,9 @@ export const WorkoutSchema = z.object({
   user_id: z.string().uuid().nullable().optional(),
   is_public: z.boolean().optional(),
   is_preset: z.boolean().optional(),
+  // Metrics (optional for backwards compatibility during migration)
+  duration_seconds: z.number().int().optional(),
+  avg_intensity_percent: z.number().int().optional(),
 });
 
 // Infer TypeScript types from Zod schemas

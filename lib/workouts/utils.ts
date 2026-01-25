@@ -1,6 +1,11 @@
 import type { WorkoutInterval, BuilderItem } from "./types";
 
 /**
+ * Default FTP value in watts when user hasn't set their FTP
+ */
+export const DEFAULT_FTP_WATTS = 250;
+
+/**
  * Power zones based on % FTP
  */
 export const POWER_ZONES = {
@@ -183,19 +188,51 @@ export function calculateZoneTimeFromItems(items: BuilderItem[]) {
   return calculateZoneTime(intervals);
 }
 
-// Stub functions for future implementation
-export function calculateTSS(_intervals: WorkoutInterval[], _ftpWatts: number): null {
-  return null; // Coming soon
+/**
+ * Calculate average power in watts
+ * @param avgIntensityPercent Weighted average intensity as % of FTP
+ * @param ftpWatts User's FTP in watts
+ */
+export function calculateAveragePower(
+  avgIntensityPercent: number,
+  ftpWatts: number
+): number {
+  return Math.round((avgIntensityPercent / 100) * ftpWatts);
 }
 
-export function calculateNormalizedPower(_intervals: WorkoutInterval[], _ftpWatts: number): null {
-  return null; // Coming soon
+/**
+ * Calculate total work in kilojoules
+ * @param avgIntensityPercent Weighted average intensity as % of FTP
+ * @param durationSeconds Total duration in seconds
+ * @param ftpWatts User's FTP in watts
+ */
+export function calculateWork(
+  avgIntensityPercent: number,
+  durationSeconds: number,
+  ftpWatts: number
+): number {
+  const avgPowerWatts = (avgIntensityPercent / 100) * ftpWatts;
+  return Math.round((avgPowerWatts * durationSeconds) / 1000);
 }
 
-export function calculateAveragePower(_intervals: WorkoutInterval[], _ftpWatts: number): null {
-  return null; // Coming soon
+/**
+ * Calculate Training Stress Score (TSS)
+ * @param avgIntensityPercent Weighted average intensity as % of FTP
+ * @param durationSeconds Total duration in seconds
+ */
+export function calculateTSS(
+  avgIntensityPercent: number,
+  durationSeconds: number
+): number {
+  const intensityFactor = avgIntensityPercent / 100;
+  return Math.round(
+    (durationSeconds * Math.pow(intensityFactor, 2) * 100) / 3600
+  );
 }
 
-export function calculateWork(_intervals: WorkoutInterval[], _ftpWatts: number): null {
-  return null; // Coming soon
+/**
+ * Format work value for display
+ */
+export function formatWork(workKJ: number): string {
+  return `${workKJ} kJ`;
 }

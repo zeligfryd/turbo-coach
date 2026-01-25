@@ -4,6 +4,16 @@ import React, { useReducer, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { WorkoutMetadata } from "@/components/workouts/workout-metadata";
 import { IntervalEditor, type BuilderInterval } from "@/components/workouts/interval-editor";
 import dynamic from "next/dynamic";
@@ -187,6 +197,8 @@ function WorkoutBuilderContent() {
   const [isLoading, setIsLoading] = React.useState(false);
   const [initialState, setInitialState] = React.useState<string>("");
   const [hasUnsavedChanges, setHasUnsavedChanges] = React.useState(false);
+  const [showUnsavedDialog, setShowUnsavedDialog] = React.useState(false);
+  const [pendingNavigation, setPendingNavigation] = React.useState<(() => void) | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -283,11 +295,24 @@ function WorkoutBuilderContent() {
 
   const handleBack = () => {
     if (hasUnsavedChanges) {
-      if (!confirm("You have unsaved changes. Are you sure you want to leave?")) {
-        return;
-      }
+      setPendingNavigation(() => () => router.back());
+      setShowUnsavedDialog(true);
+      return;
     }
     router.back();
+  };
+
+  const handleConfirmLeave = () => {
+    setShowUnsavedDialog(false);
+    if (pendingNavigation) {
+      pendingNavigation();
+      setPendingNavigation(null);
+    }
+  };
+
+  const handleCancelLeave = () => {
+    setShowUnsavedDialog(false);
+    setPendingNavigation(null);
   };
 
   const handleSave = async () => {
@@ -517,6 +542,22 @@ function WorkoutBuilderContent() {
           </DndContext>
         )}
       </div>
+
+      {/* Unsaved Changes Dialog */}
+      <AlertDialog open={showUnsavedDialog} onOpenChange={setShowUnsavedDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved changes. Are you sure you want to leave? Your changes will be lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelLeave}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmLeave}>Leave</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

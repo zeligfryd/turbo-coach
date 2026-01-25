@@ -1,4 +1,4 @@
-import type { WorkoutInterval } from "./types";
+import type { WorkoutInterval, BuilderItem } from "./types";
 
 /**
  * Power zones based on % FTP
@@ -134,6 +134,53 @@ export function calculateAverageIntensity(intervals: WorkoutInterval[]): number 
   });
 
   return totalDuration > 0 ? Math.round(totalWeightedIntensity / totalDuration) : 0;
+}
+
+/**
+ * Flatten BuilderItems to intervals for calculations
+ * Expands repeat groups into individual intervals
+ */
+export function flattenBuilderItems(items: BuilderItem[]): WorkoutInterval[] {
+  const result: WorkoutInterval[] = [];
+  
+  items.forEach(item => {
+    if (item.type === "interval") {
+      result.push(item.data);
+    } else if (item.type === "repeat") {
+      // Expand repeat group
+      for (let i = 0; i < item.data.count; i++) {
+        item.data.intervals.forEach(interval => {
+          result.push(interval);
+        });
+      }
+    }
+  });
+  
+  return result;
+}
+
+/**
+ * Calculate total duration from BuilderItems
+ */
+export function calculateTotalDurationFromItems(items: BuilderItem[]): number {
+  const intervals = flattenBuilderItems(items);
+  return calculateTotalDuration(intervals);
+}
+
+/**
+ * Calculate average intensity from BuilderItems
+ */
+export function calculateAverageIntensityFromItems(items: BuilderItem[]): number {
+  const intervals = flattenBuilderItems(items);
+  return calculateAverageIntensity(intervals);
+}
+
+/**
+ * Calculate zone time from BuilderItems
+ */
+export function calculateZoneTimeFromItems(items: BuilderItem[]) {
+  const intervals = flattenBuilderItems(items);
+  return calculateZoneTime(intervals);
 }
 
 // Stub functions for future implementation

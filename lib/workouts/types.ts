@@ -8,6 +8,24 @@ export const WorkoutIntervalSchema = z.object({
   intensityPercentEnd: z.number().min(0).optional(),
 });
 
+// New: Repeat group schema
+export const RepeatGroupDataSchema = z.object({
+  count: z.number().int().min(1).max(999),
+  intervals: z.array(WorkoutIntervalSchema).min(1),
+});
+
+// New: Discriminated union for builder items
+export const BuilderItemSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("interval"),
+    data: WorkoutIntervalSchema,
+  }),
+  z.object({
+    type: z.literal("repeat"),
+    data: RepeatGroupDataSchema,
+  }),
+]);
+
 // Zod schema for workouts
 export const WorkoutSchema = z.object({
   id: z.string().uuid(),
@@ -15,7 +33,7 @@ export const WorkoutSchema = z.object({
   category: z.string(),
   description: z.string().nullable(),
   tags: z.array(z.string()),
-  intervals: z.array(WorkoutIntervalSchema),
+  intervals: z.array(BuilderItemSchema), // Changed from WorkoutIntervalSchema
   created_at: z.string().optional(),
   updated_at: z.string().optional(),
   is_favorite: z.boolean().optional(),
@@ -26,6 +44,8 @@ export const WorkoutSchema = z.object({
 
 // Infer TypeScript types from Zod schemas
 export type WorkoutInterval = z.infer<typeof WorkoutIntervalSchema>;
+export type RepeatGroupData = z.infer<typeof RepeatGroupDataSchema>;
+export type BuilderItem = z.infer<typeof BuilderItemSchema>;
 export type Workout = z.infer<typeof WorkoutSchema>;
 
 // Validation helper function

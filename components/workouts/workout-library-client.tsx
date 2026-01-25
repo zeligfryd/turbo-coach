@@ -14,6 +14,7 @@ import {
 import {
   calculateTotalDuration,
   formatDuration,
+  flattenBuilderItems,
 } from "@/lib/workouts/utils";
 import type { Workout } from "@/lib/workouts/types";
 import { WorkoutCard } from "./workout-card";
@@ -65,8 +66,8 @@ export function WorkoutLibraryClient({ workouts, userFtp }: WorkoutLibraryClient
 
     Object.keys(grouped).forEach((category) => {
       grouped[category].sort((a, b) => {
-        const durationA = calculateTotalDuration(a.intervals);
-        const durationB = calculateTotalDuration(b.intervals);
+        const durationA = calculateTotalDuration(flattenBuilderItems(a.intervals));
+        const durationB = calculateTotalDuration(flattenBuilderItems(b.intervals));
 
         if (durationA !== durationB) {
           return durationA - durationB;
@@ -109,8 +110,8 @@ export function WorkoutLibraryClient({ workouts, userFtp }: WorkoutLibraryClient
     }
 
     filtered.sort((a, b) => {
-      const durationA = calculateTotalDuration(a.intervals);
-      const durationB = calculateTotalDuration(b.intervals);
+      const durationA = calculateTotalDuration(flattenBuilderItems(a.intervals));
+      const durationB = calculateTotalDuration(flattenBuilderItems(b.intervals));
 
       if (durationA !== durationB) {
         return durationA - durationB;

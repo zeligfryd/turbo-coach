@@ -24,6 +24,7 @@ import {
   isRampInterval,
   isFreeRideInterval,
   POWER_ZONES,
+  flattenBuilderItems,
 } from "@/lib/workouts/utils";
 import { toggleWorkoutFavorite, deleteWorkout } from "@/app/workouts/actions";
 
@@ -56,11 +57,14 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
   const isPreset = (workout as any).is_preset === true;
   const isCustom = !isPreset;
 
+  // Flatten BuilderItems to intervals
+  const intervals = flattenBuilderItems(workout.intervals);
+
   const ftpWatts = userFtp ?? 250; // Use user's FTP or default to 250
-  const zoneTime = calculateZoneTime(workout.intervals);
-  const totalSeconds = calculateTotalDuration(workout.intervals);
+  const zoneTime = calculateZoneTime(intervals);
+  const totalSeconds = calculateTotalDuration(intervals);
   const totalMinutes = totalSeconds / 60;
-  const avgIntensity = calculateAverageIntensity(workout.intervals);
+  const avgIntensity = calculateAverageIntensity(intervals);
 
   const zonePercentages: Record<string, number> = {};
   Object.entries(zoneTime).forEach(([zone, seconds]) => {
@@ -219,7 +223,7 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
           <div>
             {/* <h3 className="text-sm font-medium text-foreground mb-3">Intensity Profile</h3> */}
             <div className="bg-muted/50 rounded-lg p-4">
-              <IntensityBarChart intervals={workout.intervals} ftpWatts={ftpWatts} height={200} />
+              <IntensityBarChart intervals={intervals} ftpWatts={ftpWatts} height={200} />
             </div>
           </div>
 
@@ -275,7 +279,7 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
           <div>
             <h3 className="text-sm font-medium text-foreground mb-3">Workout Segments</h3>
             <div className="space-y-1 max-h-48 overflow-y-auto">
-              {workout.intervals.map((interval, index) => {
+              {intervals.map((interval, index) => {
                 const isFreeRide = isFreeRideInterval(interval);
                 const isRamp = isRampInterval(interval);
                 const avgIntensity = getIntervalAverageIntensity(interval);

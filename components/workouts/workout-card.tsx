@@ -18,6 +18,7 @@ import {
   getZoneForIntensity,
   getIntervalAverageIntensity,
   POWER_ZONES,
+  flattenBuilderItems,
 } from "@/lib/workouts/utils";
 import type { Workout, WorkoutInterval } from "@/lib/workouts/types";
 import { MiniIntensityChart } from "./mini-intensity-chart";
@@ -35,16 +36,19 @@ export function WorkoutCard({ workout, onClick, isCustom }: WorkoutCardProps) {
   const [isToggling, setIsToggling] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const totalSeconds = calculateTotalDuration(workout.intervals);
+  // Flatten BuilderItems to intervals
+  const intervals = flattenBuilderItems(workout.intervals);
+
+  const totalSeconds = calculateTotalDuration(intervals);
   const totalMinutes = totalSeconds / 60;
-  const avgIntensity = calculateAverageIntensity(workout.intervals);
+  const avgIntensity = calculateAverageIntensity(intervals);
   const isPublic = (workout as any).is_public === true;
   
   // Auto-detect if custom based on is_preset field if not explicitly provided
   const isCustomWorkout = isCustom !== undefined ? isCustom : !(workout as any).is_preset;
 
   const zoneTime: Record<string, number> = {};
-  workout.intervals.forEach((interval: WorkoutInterval) => {
+  intervals.forEach((interval: WorkoutInterval) => {
     const avgIntensity = getIntervalAverageIntensity(interval);
     const zone = getZoneForIntensity(avgIntensity);
     zoneTime[zone] = (zoneTime[zone] || 0) + interval.durationSeconds;
@@ -167,7 +171,7 @@ export function WorkoutCard({ workout, onClick, isCustom }: WorkoutCardProps) {
       </div>
 
       <div className="mb-3">
-        <MiniIntensityChart intervals={workout.intervals} width={280} height={30} />
+        <MiniIntensityChart intervals={intervals} width={280} height={30} />
       </div>
 
       <div className="flex items-center gap-4 text-sm text-muted-foreground">

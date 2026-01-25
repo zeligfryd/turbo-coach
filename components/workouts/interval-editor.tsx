@@ -22,6 +22,7 @@ interface IntervalEditorProps {
   onDelete: (index: number) => void;
   onDuplicate: (index: number) => void;
   dragHandleProps?: any;
+  isNested?: boolean; // When true, apply nested styling
 }
 
 function formatSecondsToMMSS(seconds: number): string {
@@ -61,6 +62,7 @@ export function IntervalEditor({
   onDelete,
   onDuplicate,
   dragHandleProps,
+  isNested = false,
 }: IntervalEditorProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [durationInput, setDurationInput] = useState(formatSecondsToMMSS(interval.durationSeconds));
@@ -128,7 +130,11 @@ export function IntervalEditor({
   }
 
   return (
-    <div className={cn("border border-border rounded-lg bg-card", hasError && "border-destructive")}>
+    <div className={cn(
+      "border border-border rounded-lg",
+      isNested ? "bg-background" : "bg-card",
+      hasError && "border-destructive"
+    )}>
       {/* MOBILE LAYOUT - Expandable/Collapsible */}
       <div className="md:hidden">
         <div className="flex items-center gap-1.5 p-2">

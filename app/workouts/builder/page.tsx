@@ -16,9 +16,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { WorkoutMetadata } from "@/components/workouts/workout-metadata";
 import { IntervalEditor, type BuilderInterval } from "@/components/workouts/interval-editor";
+import { RepeatGroupEditor, type RepeatGroupData } from "@/components/workouts/repeat-group-editor";
 import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
-import type { Workout } from "@/lib/workouts/types";
+import type { Workout, BuilderItem, WorkoutInterval } from "@/lib/workouts/types";
+import { flattenBuilderItems } from "@/lib/workouts/utils";
 import {
   DndContext,
   closestCenter,
@@ -55,16 +57,26 @@ type BuilderState = {
   description: string;
   tags: string[];
   isPublic: boolean;
-  intervals: BuilderInterval[];
+  items: BuilderItem[]; // Changed from intervals
   workoutId?: string;
   mode: "create" | "edit" | "copy";
 };
 
 type BuilderAction =
   | { type: "ADD_INTERVAL" }
+  | { type: "ADD_REPEAT_GROUP" }
+  | { type: "UPDATE_ITEM"; index: number; item: Partial<BuilderItem> }
   | { type: "UPDATE_INTERVAL"; index: number; interval: Partial<BuilderInterval> }
+  | { type: "UPDATE_REPEAT_COUNT"; groupIndex: number; count: number }
+  | { type: "UPDATE_INTERVAL_IN_GROUP"; groupIndex: number; intervalIndex: number; interval: Partial<BuilderInterval> }
+  | { type: "ADD_INTERVAL_TO_GROUP"; groupIndex: number }
+  | { type: "DELETE_INTERVAL_FROM_GROUP"; groupIndex: number; intervalIndex: number }
+  | { type: "DUPLICATE_INTERVAL_IN_GROUP"; groupIndex: number; intervalIndex: number }
+  | { type: "DELETE_ITEM"; index: number }
   | { type: "DELETE_INTERVAL"; index: number }
+  | { type: "DUPLICATE_ITEM"; index: number }
   | { type: "DUPLICATE_INTERVAL"; index: number }
+  | { type: "REORDER_ITEMS"; oldIndex: number; newIndex: number }
   | { type: "REORDER_INTERVALS"; oldIndex: number; newIndex: number }
   | { type: "SET_METADATA"; field: string; value: any }
   | { type: "LOAD_WORKOUT"; workout: Workout; mode: "edit" | "copy" };
@@ -74,41 +86,155 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
     case "ADD_INTERVAL":
       return {
         ...state,
-        intervals: [
-          ...state.intervals,
-          { durationSeconds: 300, intensityPercentStart: 50 },
+        items: [
+          ...state.items,
+          {
+            type: "interval",
+            data: { durationSeconds: 300, intensityPercentStart: 50 },
+          },
+        ],
+      };
+
+    case "ADD_REPEAT_GROUP":
+      return {
+        ...state,
+        items: [
+          ...state.items,
+          {
+            type: "repeat",
+            data: {
+              count: 5,
+              intervals: [{ durationSeconds: 300, intensityPercentStart: 50 }],
+            },
+          },
         ],
       };
 
     case "UPDATE_INTERVAL":
+      // Legacy action for backward compatibility with interval-only items
       return {
         ...state,
-        intervals: state.intervals.map((interval, i) =>
-          i === action.index ? { ...interval, ...action.interval } : interval
+        items: state.items.map((item, i) =>
+          i === action.index && item.type === "interval"
+            ? { ...item, data: { ...item.data, ...action.interval } }
+            : item
         ),
       };
 
+    case "UPDATE_REPEAT_COUNT":
+      return {
+        ...state,
+        items: state.items.map((item, i) =>
+          i === action.groupIndex && item.type === "repeat"
+            ? { ...item, data: { ...item.data, count: action.count } }
+            : item
+        ),
+      };
+
+    case "UPDATE_INTERVAL_IN_GROUP":
+      return {
+        ...state,
+        items: state.items.map((item, i) =>
+          i === action.groupIndex && item.type === "repeat"
+            ? {
+                ...item,
+                data: {
+                  ...item.data,
+                  intervals: item.data.intervals.map((interval, j) =>
+                    j === action.intervalIndex
+                      ? { ...interval, ...action.interval }
+                      : interval
+                  ),
+                },
+              }
+            : item
+        ),
+      };
+
+    case "ADD_INTERVAL_TO_GROUP":
+      return {
+        ...state,
+        items: state.items.map((item, i) =>
+          i === action.groupIndex && item.type === "repeat"
+            ? {
+                ...item,
+                data: {
+                  ...item.data,
+                  intervals: [
+                    ...item.data.intervals,
+                    { durationSeconds: 300, intensityPercentStart: 50 },
+                  ],
+                },
+              }
+            : item
+        ),
+      };
+
+    case "DELETE_INTERVAL_FROM_GROUP":
+      return {
+        ...state,
+        items: state.items.map((item, i) => {
+          if (i === action.groupIndex && item.type === "repeat") {
+            const newIntervals = item.data.intervals.filter(
+              (_, j) => j !== action.intervalIndex
+            );
+            // If group would be empty after delete, remove the whole group
+            if (newIntervals.length === 0) {
+              return null;
+            }
+            return {
+              ...item,
+              data: { ...item.data, intervals: newIntervals },
+            };
+          }
+          return item;
+        }).filter((item): item is BuilderItem => item !== null),
+      };
+
+    case "DUPLICATE_INTERVAL_IN_GROUP":
+      return {
+        ...state,
+        items: state.items.map((item, i) =>
+          i === action.groupIndex && item.type === "repeat"
+            ? {
+                ...item,
+                data: {
+                  ...item.data,
+                  intervals: [
+                    ...item.data.intervals.slice(0, action.intervalIndex + 1),
+                    { ...item.data.intervals[action.intervalIndex] },
+                    ...item.data.intervals.slice(action.intervalIndex + 1),
+                  ],
+                },
+              }
+            : item
+        ),
+      };
+
+    case "DELETE_ITEM":
     case "DELETE_INTERVAL":
       return {
         ...state,
-        intervals: state.intervals.filter((_, i) => i !== action.index),
+        items: state.items.filter((_, i) => i !== action.index),
       };
 
+    case "DUPLICATE_ITEM":
     case "DUPLICATE_INTERVAL":
-      const intervalToDuplicate = state.intervals[action.index];
+      const itemToDuplicate = state.items[action.index];
       return {
         ...state,
-        intervals: [
-          ...state.intervals.slice(0, action.index + 1),
-          { ...intervalToDuplicate },
-          ...state.intervals.slice(action.index + 1),
+        items: [
+          ...state.items.slice(0, action.index + 1),
+          JSON.parse(JSON.stringify(itemToDuplicate)), // Deep clone
+          ...state.items.slice(action.index + 1),
         ],
       };
 
+    case "REORDER_ITEMS":
     case "REORDER_INTERVALS":
       return {
         ...state,
-        intervals: arrayMove(state.intervals, action.oldIndex, action.newIndex),
+        items: arrayMove(state.items, action.oldIndex, action.newIndex),
       };
 
     case "SET_METADATA":
@@ -118,18 +244,40 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
       };
 
     case "LOAD_WORKOUT":
+      // Convert database BuilderItems to builder state
+      const items: BuilderItem[] = action.workout.intervals.map((item) => {
+        if (item.type === "interval") {
+          return {
+            type: "interval",
+            data: {
+              durationSeconds: item.data.durationSeconds,
+              intensityPercentStart: item.data.intensityPercentStart,
+              intensityPercentEnd: item.data.intensityPercentEnd,
+            },
+          };
+        } else {
+          return {
+            type: "repeat",
+            data: {
+              count: item.data.count,
+              intervals: item.data.intervals.map((interval) => ({
+                durationSeconds: interval.durationSeconds,
+                intensityPercentStart: interval.intensityPercentStart,
+                intensityPercentEnd: interval.intensityPercentEnd,
+              })),
+            },
+          };
+        }
+      });
+
       return {
         ...state,
         name: action.mode === "copy" ? `${action.workout.name} Copy` : action.workout.name,
         category: action.workout.category,
         description: action.workout.description || "",
         tags: action.workout.tags || [],
-        isPublic: false, // Default to private for copies and edits
-        intervals: action.workout.intervals.map((interval) => ({
-          durationSeconds: interval.durationSeconds,
-          intensityPercentStart: interval.intensityPercentStart,
-          intensityPercentEnd: interval.intensityPercentEnd,
-        })),
+        isPublic: false,
+        items,
         workoutId: action.mode === "edit" ? action.workout.id : undefined,
         mode: action.mode,
       };
@@ -154,7 +302,7 @@ function SortableIntervalEditor({
   onDuplicate: (index: number) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: `interval-${index}`,
+    id: `item-${index}`,
   });
 
   const style = {
@@ -177,6 +325,56 @@ function SortableIntervalEditor({
   );
 }
 
+// Sortable wrapper for repeat group editor
+function SortableRepeatGroupEditor({
+  group,
+  index,
+  onUpdate,
+  onDelete,
+  onDuplicate,
+  onAddInterval,
+  onUpdateInterval,
+  onDeleteInterval,
+  onDuplicateInterval,
+}: {
+  group: RepeatGroupData;
+  index: number;
+  onUpdate: (index: number, group: Partial<RepeatGroupData>) => void;
+  onDelete: (index: number) => void;
+  onDuplicate: (index: number) => void;
+  onAddInterval: (groupIndex: number) => void;
+  onUpdateInterval: (groupIndex: number, intervalIndex: number, interval: Partial<BuilderInterval>) => void;
+  onDeleteInterval: (groupIndex: number, intervalIndex: number) => void;
+  onDuplicateInterval: (groupIndex: number, intervalIndex: number) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: `item-${index}`,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <RepeatGroupEditor
+        group={group}
+        index={index}
+        onUpdate={onUpdate}
+        onDelete={onDelete}
+        onDuplicate={onDuplicate}
+        onAddInterval={onAddInterval}
+        onUpdateInterval={onUpdateInterval}
+        onDeleteInterval={onDeleteInterval}
+        onDuplicateInterval={onDuplicateInterval}
+        dragHandleProps={{ ...attributes, ...listeners }}
+      />
+    </div>
+  );
+}
+
 function WorkoutBuilderContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -189,7 +387,7 @@ function WorkoutBuilderContent() {
     description: "",
     tags: [],
     isPublic: false,
-    intervals: [],
+    items: [],
     mode,
   });
 
@@ -233,11 +431,7 @@ function WorkoutBuilderContent() {
                 description: data.description,
                 tags: data.tags,
                 isPublic: false,
-                intervals: data.intervals.map((i: any) => ({
-                  durationSeconds: i.durationSeconds,
-                  intensityPercentStart: i.intensityPercentStart,
-                  intensityPercentEnd: i.intensityPercentEnd,
-                })),
+                items: data.intervals, // Store items as-is
               }));
             }, 100);
           }
@@ -254,7 +448,7 @@ function WorkoutBuilderContent() {
       description: state.description,
       tags: state.tags,
       isPublic: state.isPublic,
-      intervals: state.intervals,
+      items: state.items,
     });
     
     // If we have an initial state, compare with current
@@ -264,7 +458,7 @@ function WorkoutBuilderContent() {
       // For create mode, check if anything has been entered
       const hasContent = state.name.trim() !== "" || 
                         state.description.trim() !== "" || 
-                        state.intervals.length > 0;
+                        state.items.length > 0;
       setHasUnsavedChanges(hasContent);
     }
   }, [state, initialState, mode]);
@@ -322,30 +516,84 @@ function WorkoutBuilderContent() {
       return;
     }
 
-    if (state.intervals.length === 0) {
-      alert("Please add at least one interval");
+    if (state.items.length === 0) {
+      alert("Please add at least one interval or repeat group");
       return;
     }
 
-    // Validate all intervals
-    for (let i = 0; i < state.intervals.length; i++) {
-      const interval = state.intervals[i];
-      if (interval.durationSeconds <= 0) {
-        alert(`Interval ${i + 1}: Duration must be greater than 0`);
-        return;
+    // Validate all items
+    for (let i = 0; i < state.items.length; i++) {
+      const item = state.items[i];
+
+      if (item.type === "interval") {
+        // Validate single interval
+        if (item.data.durationSeconds <= 0) {
+          alert(`Interval ${i + 1}: Duration must be greater than 0`);
+          return;
+        }
+        if (
+          item.data.intensityPercentStart !== undefined &&
+          item.data.intensityPercentStart < 0
+        ) {
+          alert(`Interval ${i + 1}: Power must be 0 or greater`);
+          return;
+        }
+        if (
+          item.data.intensityPercentEnd !== undefined &&
+          item.data.intensityPercentEnd < 0
+        ) {
+          alert(`Interval ${i + 1}: End power must be 0 or greater`);
+          return;
+        }
+      } else if (item.type === "repeat") {
+        // Validate repeat group
+        if (item.data.count < 1) {
+          alert(`Repeat group ${i + 1}: Count must be at least 1`);
+          return;
+        }
+        if (item.data.intervals.length === 0) {
+          alert(`Repeat group ${i + 1}: Must contain at least one interval`);
+          return;
+        }
+        // Validate intervals within the group
+        for (let j = 0; j < item.data.intervals.length; j++) {
+          const interval = item.data.intervals[j];
+          if (interval.durationSeconds <= 0) {
+            alert(
+              `Repeat group ${i + 1}, interval ${j + 1}: Duration must be greater than 0`
+            );
+            return;
+          }
+          if (
+            interval.intensityPercentStart !== undefined &&
+            interval.intensityPercentStart < 0
+          ) {
+            alert(
+              `Repeat group ${i + 1}, interval ${j + 1}: Power must be 0 or greater`
+            );
+            return;
+          }
+          if (
+            interval.intensityPercentEnd !== undefined &&
+            interval.intensityPercentEnd < 0
+          ) {
+            alert(
+              `Repeat group ${i + 1}, interval ${j + 1}: End power must be 0 or greater`
+            );
+            return;
+          }
+        }
       }
+    }
+
+    // Check total expanded interval count
+    const flattenedIntervals = flattenBuilderItems(state.items);
+    if (flattenedIntervals.length > 500) {
       if (
-        interval.intensityPercentStart !== undefined &&
-        interval.intensityPercentStart < 0
+        !confirm(
+          `This workout will have ${flattenedIntervals.length} intervals when expanded. This might be excessive. Continue?`
+        )
       ) {
-        alert(`Interval ${i + 1}: Power must be 0 or greater`);
-        return;
-      }
-      if (
-        interval.intensityPercentEnd !== undefined &&
-        interval.intensityPercentEnd < 0
-      ) {
-        alert(`Interval ${i + 1}: End power must be 0 or greater`);
         return;
       }
     }
@@ -353,13 +601,33 @@ function WorkoutBuilderContent() {
     setIsSaving(true);
 
     try {
-      // Convert BuilderIntervals to WorkoutIntervals with auto-generated names
-      const intervals = state.intervals.map((interval, index) => ({
-        name: `Interval ${index + 1}`,
-        durationSeconds: interval.durationSeconds,
-        intensityPercentStart: interval.intensityPercentStart,
-        intensityPercentEnd: interval.intensityPercentEnd,
-      }));
+      // Convert builder items to database format
+      const intervals = state.items.map((item): BuilderItem => {
+        if (item.type === "interval") {
+          return {
+            type: "interval",
+            data: {
+              name: `Interval ${Math.random()}`, // Auto-generated, optional
+              durationSeconds: item.data.durationSeconds,
+              intensityPercentStart: item.data.intensityPercentStart,
+              intensityPercentEnd: item.data.intensityPercentEnd,
+            },
+          };
+        } else {
+          return {
+            type: "repeat",
+            data: {
+              count: item.data.count,
+              intervals: item.data.intervals.map((interval, idx) => ({
+                name: `Interval ${idx + 1}`,
+                durationSeconds: interval.durationSeconds,
+                intensityPercentStart: interval.intensityPercentStart,
+                intensityPercentEnd: interval.intensityPercentEnd,
+              })),
+            },
+          };
+        }
+      });
 
       const supabase = createClient();
       const {
@@ -376,7 +644,7 @@ function WorkoutBuilderContent() {
         category: state.category,
         description: state.description.trim() || null,
         tags: state.tags,
-        intervals,
+        intervals, // Save as BuilderItem array
         is_public: state.isPublic,
         is_preset: false,
         user_id: user.id,
@@ -405,7 +673,7 @@ function WorkoutBuilderContent() {
 
       // Clear unsaved changes flag
       setHasUnsavedChanges(false);
-      
+
       // Success! Navigate to custom workouts page
       router.push("/workouts/custom");
     } catch (error) {
@@ -426,12 +694,10 @@ function WorkoutBuilderContent() {
     );
   }
 
-  // Convert intervals to format expected by chart
-  const chartIntervals = state.intervals.map((interval, index) => ({
+  // Flatten BuilderItems for chart preview
+  const chartIntervals = flattenBuilderItems(state.items).map((interval, index) => ({
     name: `Interval ${index + 1}`,
-    durationSeconds: interval.durationSeconds,
-    intensityPercentStart: interval.intensityPercentStart,
-    intensityPercentEnd: interval.intensityPercentEnd,
+    ...interval,
   }));
 
   return (
@@ -486,7 +752,7 @@ function WorkoutBuilderContent() {
       <div className="mb-6 p-6 border border-border rounded-lg bg-card">
         <h2 className="text-lg font-semibold mb-4">Preview</h2>
         <div className="h-[300px]">
-          {state.intervals.length > 0 ? (
+          {state.items.length > 0 ? (
             <IntensityBarChart intervals={chartIntervals} ftpWatts={250} height={300} />
           ) : (
             <div className="h-full flex items-center justify-center text-muted-foreground bg-muted/30 rounded-lg">
@@ -496,23 +762,34 @@ function WorkoutBuilderContent() {
         </div>
       </div>
 
-      {/* Intervals */}
+      {/* Intervals & Repeat Groups */}
       <div className="p-6 border border-border rounded-lg bg-card">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Intervals</h2>
-          <Button
-            onClick={() => dispatch({ type: "ADD_INTERVAL" })}
-            size="sm"
-            className="gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Add Interval
-          </Button>
+          <h2 className="text-lg font-semibold">Intervals & Repeat Groups</h2>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => dispatch({ type: "ADD_INTERVAL" })}
+              size="sm"
+              variant="outline"
+              className="gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Add Interval
+            </Button>
+            <Button
+              onClick={() => dispatch({ type: "ADD_REPEAT_GROUP" })}
+              size="sm"
+              className="gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Add Repeat Group
+            </Button>
+          </div>
         </div>
 
-        {state.intervals.length === 0 ? (
+        {state.items.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
-            <p>No intervals yet. Click "Add Interval" to get started.</p>
+            <p>No intervals yet. Click "Add Interval" or "Add Repeat Group" to get started.</p>
           </div>
         ) : (
           <DndContext
@@ -521,22 +798,64 @@ function WorkoutBuilderContent() {
             onDragEnd={handleDragEnd}
           >
             <SortableContext
-              items={state.intervals.map((_, index) => `interval-${index}`)}
+              items={state.items.map((_, index) => `item-${index}`)}
               strategy={verticalListSortingStrategy}
             >
               <div className="space-y-3">
-                {state.intervals.map((interval, index) => (
-                  <SortableIntervalEditor
-                    key={`interval-${index}`}
-                    interval={interval}
-                    index={index}
-                    onUpdate={(i, data) =>
-                      dispatch({ type: "UPDATE_INTERVAL", index: i, interval: data })
-                    }
-                    onDelete={(i) => dispatch({ type: "DELETE_INTERVAL", index: i })}
-                    onDuplicate={(i) => dispatch({ type: "DUPLICATE_INTERVAL", index: i })}
-                  />
-                ))}
+                {state.items.map((item, index) => {
+                  if (item.type === "interval") {
+                    return (
+                      <SortableIntervalEditor
+                        key={`item-${index}`}
+                        interval={item.data}
+                        index={index}
+                        onUpdate={(i, data) =>
+                          dispatch({ type: "UPDATE_INTERVAL", index: i, interval: data })
+                        }
+                        onDelete={(i) => dispatch({ type: "DELETE_ITEM", index: i })}
+                        onDuplicate={(i) => dispatch({ type: "DUPLICATE_ITEM", index: i })}
+                      />
+                    );
+                  } else {
+                    return (
+                      <SortableRepeatGroupEditor
+                        key={`item-${index}`}
+                        group={item.data}
+                        index={index}
+                        onUpdate={(i, data) =>
+                          dispatch({ type: "UPDATE_REPEAT_COUNT", groupIndex: i, count: data.count! })
+                        }
+                        onDelete={(i) => dispatch({ type: "DELETE_ITEM", index: i })}
+                        onDuplicate={(i) => dispatch({ type: "DUPLICATE_ITEM", index: i })}
+                        onAddInterval={(i) =>
+                          dispatch({ type: "ADD_INTERVAL_TO_GROUP", groupIndex: i })
+                        }
+                        onUpdateInterval={(i, j, data) =>
+                          dispatch({
+                            type: "UPDATE_INTERVAL_IN_GROUP",
+                            groupIndex: i,
+                            intervalIndex: j,
+                            interval: data,
+                          })
+                        }
+                        onDeleteInterval={(i, j) =>
+                          dispatch({
+                            type: "DELETE_INTERVAL_FROM_GROUP",
+                            groupIndex: i,
+                            intervalIndex: j,
+                          })
+                        }
+                        onDuplicateInterval={(i, j) =>
+                          dispatch({
+                            type: "DUPLICATE_INTERVAL_IN_GROUP",
+                            groupIndex: i,
+                            intervalIndex: j,
+                          })
+                        }
+                      />
+                    );
+                  }
+                })}
               </div>
             </SortableContext>
           </DndContext>

@@ -137,16 +137,16 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
         items: state.items.map((item, i) =>
           i === action.groupIndex && item.type === "repeat"
             ? {
-                ...item,
-                data: {
-                  ...item.data,
-                  intervals: item.data.intervals.map((interval, j) =>
-                    j === action.intervalIndex
-                      ? { ...interval, ...action.interval }
-                      : interval
-                  ),
-                },
-              }
+              ...item,
+              data: {
+                ...item.data,
+                intervals: item.data.intervals.map((interval, j) =>
+                  j === action.intervalIndex
+                    ? { ...interval, ...action.interval }
+                    : interval
+                ),
+              },
+            }
             : item
         ),
       };
@@ -157,15 +157,15 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
         items: state.items.map((item, i) =>
           i === action.groupIndex && item.type === "repeat"
             ? {
-                ...item,
-                data: {
-                  ...item.data,
-                  intervals: [
-                    ...item.data.intervals,
-                    { durationSeconds: 300, intensityPercentStart: 50 },
-                  ],
-                },
-              }
+              ...item,
+              data: {
+                ...item.data,
+                intervals: [
+                  ...item.data.intervals,
+                  { durationSeconds: 300, intensityPercentStart: 50 },
+                ],
+              },
+            }
             : item
         ),
       };
@@ -197,16 +197,16 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
         items: state.items.map((item, i) =>
           i === action.groupIndex && item.type === "repeat"
             ? {
-                ...item,
-                data: {
-                  ...item.data,
-                  intervals: [
-                    ...item.data.intervals.slice(0, action.intervalIndex + 1),
-                    { ...item.data.intervals[action.intervalIndex] },
-                    ...item.data.intervals.slice(action.intervalIndex + 1),
-                  ],
-                },
-              }
+              ...item,
+              data: {
+                ...item.data,
+                intervals: [
+                  ...item.data.intervals.slice(0, action.intervalIndex + 1),
+                  { ...item.data.intervals[action.intervalIndex] },
+                  ...item.data.intervals.slice(action.intervalIndex + 1),
+                ],
+              },
+            }
             : item
         ),
       };
@@ -450,15 +450,15 @@ function WorkoutBuilderContent() {
       isPublic: state.isPublic,
       items: state.items,
     });
-    
+
     // If we have an initial state, compare with current
     if (initialState) {
       setHasUnsavedChanges(currentState !== initialState);
     } else if (mode === "create") {
       // For create mode, check if anything has been entered
-      const hasContent = state.name.trim() !== "" || 
-                        state.description.trim() !== "" || 
-                        state.items.length > 0;
+      const hasContent = state.name.trim() !== "" ||
+        state.description.trim() !== "" ||
+        state.items.length > 0;
       setHasUnsavedChanges(hasContent);
     }
   }, [state, initialState, mode]);
@@ -765,7 +765,7 @@ function WorkoutBuilderContent() {
       {/* Intervals & Repeat Groups */}
       <div className="p-6 border border-border rounded-lg bg-card">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Intervals & Repeat Groups</h2>
+          <h2 className="text-lg font-semibold">Intervals</h2>
           <div className="flex gap-2">
             <Button
               onClick={() => dispatch({ type: "ADD_INTERVAL" })}

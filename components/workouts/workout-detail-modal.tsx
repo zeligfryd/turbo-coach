@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useState } from "react";
-import { Star, Copy, MoreVertical, Edit2, Trash2 } from "lucide-react";
+import { Star, Copy, MoreVertical, Edit2, Trash2, Download } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +27,7 @@ import {
   flattenBuilderItems,
 } from "@/lib/workouts/utils";
 import { toggleWorkoutFavorite, deleteWorkout } from "@/app/workouts/actions";
+import { downloadWorkout } from "@/lib/workouts/export";
 
 const IntensityBarChart = dynamic(
   () => import("./intensity-bar-chart").then((mod) => ({ default: mod.IntensityBarChart })),
@@ -101,6 +102,10 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
     onClose();
   };
 
+  const handleExport = () => {
+    downloadWorkout(workout, "json");
+  };
+
   const handleEdit = () => {
     router.push(`/workouts/builder?mode=edit&id=${workout.id}`);
     onClose();
@@ -166,6 +171,10 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
                   <DropdownMenuItem onClick={handleCopy}>
                     <Copy className="w-4 h-4" />
                     Copy
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExport}>
+                    <Download className="w-4 h-4" />
+                    Export (JSON)
                   </DropdownMenuItem>
                   {isCustom && (
                     <>

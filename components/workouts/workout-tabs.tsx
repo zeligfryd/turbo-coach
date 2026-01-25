@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 const tabs = [
   { label: "Presets", href: "/workouts/presets" },
   { label: "Favorites", href: "/workouts/favorites" },
+  { label: "My Workouts", href: "/workouts/custom" },
 ];
 
 export function WorkoutTabs() {

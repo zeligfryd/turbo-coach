@@ -2,7 +2,7 @@ import { z } from "zod";
 
 // Zod schema for workout intervals with ramp and free ride support
 export const WorkoutIntervalSchema = z.object({
-  name: z.string(),
+  name: z.string().optional(), // Optional for backward compatibility
   durationSeconds: z.number().positive(),
   intensityPercentStart: z.number().min(0).optional(),
   intensityPercentEnd: z.number().min(0).optional(),
@@ -19,6 +19,9 @@ export const WorkoutSchema = z.object({
   created_at: z.string().optional(),
   updated_at: z.string().optional(),
   is_favorite: z.boolean().optional(),
+  user_id: z.string().uuid().nullable().optional(),
+  is_public: z.boolean().optional(),
+  is_preset: z.boolean().optional(),
 });
 
 // Infer TypeScript types from Zod schemas

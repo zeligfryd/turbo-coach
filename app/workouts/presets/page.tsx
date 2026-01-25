@@ -12,13 +12,14 @@ export default async function PresetsPage() {
   // Get current user
   const { data: userData } = await supabase.auth.getUser();
 
-  // Fetch workouts with favorite status
+  // Fetch preset workouts with favorite status
   const { data: workouts, error } = await supabase
     .from("workouts")
     .select(`
       *,
       user_favorite_workouts!left(user_id)
     `)
+    .eq("is_preset", true)
     .order("category", { ascending: true })
     .order("name", { ascending: true });
 

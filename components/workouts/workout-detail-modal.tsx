@@ -2,9 +2,16 @@
 
 import dynamic from "next/dynamic";
 import { useState } from "react";
-import { Star } from "lucide-react";
+import { Star, Copy, MoreVertical, Edit2, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useRouter } from "next/navigation";
 import type { Workout } from "@/lib/workouts/types";
 import {
   calculateAverageIntensity,
@@ -18,7 +25,7 @@ import {
   isFreeRideInterval,
   POWER_ZONES,
 } from "@/lib/workouts/utils";
-import { toggleWorkoutFavorite } from "@/app/workouts/actions";
+import { toggleWorkoutFavorite, deleteWorkout } from "@/app/workouts/actions";
 
 const IntensityBarChart = dynamic(
   () => import("./intensity-bar-chart").then((mod) => ({ default: mod.IntensityBarChart })),
@@ -39,10 +46,15 @@ interface WorkoutDetailModalProps {
 }
 
 export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailModalProps) {
+  const router = useRouter();
   const [isFavorite, setIsFavorite] = useState(workout?.is_favorite || false);
   const [isToggling, setIsToggling] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   if (!workout) return null;
+
+  const isPreset = (workout as any).is_preset === true;
+  const isCustom = !isPreset;
 
   const ftpWatts = userFtp ?? 250; // Use user's FTP or default to 250
   const zoneTime = calculateZoneTime(workout.intervals);
@@ -80,6 +92,33 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
     }
   };
 
+  const handleCopy = () => {
+    router.push(`/workouts/builder?mode=copy&id=${workout.id}`);
+    onClose();
+  };
+
+  const handleEdit = () => {
+    router.push(`/workouts/builder?mode=edit&id=${workout.id}`);
+    onClose();
+  };
+
+  const handleDelete = async () => {
+    if (!confirm(`Are you sure you want to delete "${workout.name}"?`)) {
+      return;
+    }
+
+    setIsDeleting(true);
+    const result = await deleteWorkout(workout.id);
+
+    if (result.success) {
+      onClose();
+      router.refresh();
+    } else {
+      alert(`Failed to delete workout: ${result.error}`);
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <Dialog open={!!workout} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
@@ -94,19 +133,51 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
                 Duration {formatDuration(totalMinutes)} • Intensity {avgIntensity}%
               </p>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleToggleFavorite}
-              disabled={isToggling}
-              className="flex-shrink-0"
-              title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-            >
-              <Star
-                className={`w-5 h-5 transition-colors ${isFavorite ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"
-                  }`}
-              />
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleToggleFavorite}
+                disabled={isToggling}
+                className="flex-shrink-0"
+                title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+              >
+                <Star
+                  className={`w-5 h-5 transition-colors ${isFavorite ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"
+                    }`}
+                />
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    disabled={isDeleting}
+                    className="flex-shrink-0"
+                  >
+                    <MoreVertical className="w-5 h-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleCopy}>
+                    <Copy className="w-4 h-4" />
+                    Copy
+                  </DropdownMenuItem>
+                  {isCustom && (
+                    <>
+                      <DropdownMenuItem onClick={handleEdit}>
+                        <Edit2 className="w-4 h-4" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleDelete} className="text-destructive">
+                        <Trash2 className="w-4 h-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </DialogHeader>
 
@@ -233,8 +304,7 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
                       style={{ backgroundColor: zoneColor }}
                     ></div>
                     <div className="flex-1">
-                      <span className="text-foreground">{interval.name}</span>
-                      <span className="text-muted-foreground ml-2">
+                      <span className="text-muted-foreground">
                         {displayText}
                       </span>
                     </div>

@@ -1,9 +1,8 @@
 "use client";
 
-import { ChevronDown, ChevronRight, Filter, Search, Star } from "lucide-react";
+import { ChevronDown, ChevronRight, Filter, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -15,14 +14,10 @@ import {
 import {
   calculateTotalDuration,
   formatDuration,
-  getZoneForIntensity,
-  getIntervalAverageIntensity,
-  POWER_ZONES,
 } from "@/lib/workouts/utils";
-import type { Workout, WorkoutInterval } from "@/lib/workouts/types";
-import { MiniIntensityChart } from "./mini-intensity-chart";
+import type { Workout } from "@/lib/workouts/types";
+import { WorkoutCard } from "./workout-card";
 import { WorkoutDetailModal } from "./workout-detail-modal";
-import { toggleWorkoutFavorite } from "@/app/workouts/actions";
 
 const CATEGORY_ORDER = [
   "recovery",
@@ -251,88 +246,3 @@ export function WorkoutLibraryClient({ workouts, userFtp }: WorkoutLibraryClient
   );
 }
 
-interface WorkoutCardProps {
-  workout: Workout;
-  onClick: () => void;
-}
-
-function WorkoutCard({ workout, onClick }: WorkoutCardProps) {
-  const [isFavorite, setIsFavorite] = useState(workout.is_favorite || false);
-  const [isToggling, setIsToggling] = useState(false);
-
-  const totalSeconds = calculateTotalDuration(workout.intervals);
-  const totalMinutes = totalSeconds / 60;
-
-  const zoneTime: Record<string, number> = {};
-  workout.intervals.forEach((interval: WorkoutInterval) => {
-    const avgIntensity = getIntervalAverageIntensity(interval);
-    const zone = getZoneForIntensity(avgIntensity);
-    zoneTime[zone] = (zoneTime[zone] || 0) + interval.durationSeconds;
-  });
-  const primaryZone = Object.entries(zoneTime).sort((a, b) => b[1] - a[1])[0]?.[0] || "Z2";
-  const zoneColor = POWER_ZONES[primaryZone as keyof typeof POWER_ZONES]?.color || "#10b981";
-
-  const handleToggleFavorite = async (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent card click
-    if (isToggling) return;
-
-    // Optimistic update
-    const previousState = isFavorite;
-    setIsFavorite(!isFavorite);
-    setIsToggling(true);
-
-    try {
-      const result = await toggleWorkoutFavorite(workout.id);
-
-      if (!result.success) {
-        // Rollback on error
-        setIsFavorite(previousState);
-        console.error("Failed to toggle favorite:", result.error);
-      }
-    } catch (error) {
-      // Rollback on error
-      setIsFavorite(previousState);
-      console.error("Error toggling favorite:", error);
-    } finally {
-      setIsToggling(false);
-    }
-  };
-
-  return (
-    <Card
-      onClick={onClick}
-      className="text-left p-4 cursor-pointer hover:border-border transition-all group"
-    >
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div
-            className="w-3 h-3 rounded-full flex-shrink-0"
-            style={{ backgroundColor: zoneColor }}
-          />
-          <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors truncate">
-            {workout.name}
-          </h3>
-        </div>
-        <button
-          onClick={handleToggleFavorite}
-          disabled={isToggling}
-          className="flex-shrink-0 p-1 rounded hover:bg-accent transition-colors"
-          title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-        >
-          <Star
-            className={`w-4 h-4 transition-colors ${isFavorite ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"
-              }`}
-          />
-        </button>
-      </div>
-
-      <div className="mb-3">
-        <MiniIntensityChart intervals={workout.intervals} width={280} height={30} />
-      </div>
-
-      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-        <span>{formatDuration(totalMinutes)}</span>
-      </div>
-    </Card>
-  );
-}

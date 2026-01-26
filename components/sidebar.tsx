@@ -54,7 +54,7 @@ export function Sidebar() {
       {/* Mobile Menu Button - Always visible on mobile */}
       <button
         onClick={toggleCollapsed}
-        className="md:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-background border border-border hover:bg-accent transition-colors"
+        className="md:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-card shadow-md hover:bg-accent transition-colors"
         aria-label="Toggle menu"
       >
         <Menu className="h-5 w-5" />
@@ -72,17 +72,17 @@ export function Sidebar() {
       {/* Sidebar */}
       <aside
         className={cn(
-          "h-screen border-r border-border bg-background flex flex-col transition-all duration-300 ease-in-out",
+          "h-screen bg-card flex flex-col transition-all duration-300 ease-in-out",
           // Mobile: Fixed overlay that slides in from left
-          "fixed left-0 top-0 w-60 z-40",
+          "fixed left-0 top-0 w-60 z-40 shadow-xl",
           isMobileOpen ? "translate-x-0" : "-translate-x-full",
           // Desktop: Static sidebar with collapsible width
-          "md:relative md:translate-x-0",
+          "md:relative md:translate-x-0 md:shadow-none",
           isCollapsed ? "md:w-16" : "md:w-60"
         )}
       >
         {/* Toggle Button - Hidden on mobile, visible on desktop */}
-        <div className="h-16 hidden md:flex items-center justify-start border-b border-border px-4">
+        <div className="h-16 hidden md:flex items-center justify-start px-4">
           <button
             onClick={toggleCollapsed}
             className="p-2 rounded-lg hover:bg-accent transition-colors"
@@ -93,7 +93,7 @@ export function Sidebar() {
         </div>
 
         {/* Mobile Header */}
-        <div className="h-16 flex md:hidden items-center justify-between border-b border-border px-4">
+        <div className="h-16 flex md:hidden items-center justify-between px-4">
           <span className="font-semibold">Menu</span>
           <button
             onClick={() => setIsMobileOpen(false)}
@@ -152,14 +152,14 @@ export function Sidebar() {
 
         {/* Brand at bottom */}
         {isLoaded && (
-          <div className="p-4 border-t border-border md:hidden">
+          <div className="p-4 md:hidden">
             <p className="text-xs text-muted-foreground text-center">
               Turbo Coach
             </p>
           </div>
         )}
         {!isCollapsed && isLoaded && (
-          <div className="hidden md:block p-4 border-t border-border">
+          <div className="hidden md:block p-4">
             <p className="text-xs text-muted-foreground text-center">
               Turbo Coach
             </p>

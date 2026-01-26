@@ -21,7 +21,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       {/* Main Content Area - Full width on mobile (sidebar overlays), flex-1 on desktop */}
       <main className="flex flex-col overflow-auto h-screen md:flex-1">
         {/* Top Header with Auth and Theme Switcher */}
-        <header className="h-16 min-h-16 flex-shrink-0 border-b border-border flex items-center justify-end px-4 sm:px-6 gap-2 sm:gap-4 bg-background">
+        <header className="h-16 min-h-16 flex-shrink-0 flex items-center justify-end px-4 sm:px-6 gap-2 sm:gap-4 bg-card shadow-sm">
           <Suspense>
             <AuthButton />
           </Suspense>

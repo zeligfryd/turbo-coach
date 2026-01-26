@@ -128,7 +128,7 @@ export function WorkoutCard({ workout, onClick, isCustom, userFtp }: WorkoutCard
   return (
     <Card
       onClick={onClick}
-      className="text-left p-4 cursor-pointer hover:border-border transition-all group"
+      className="text-left p-4 cursor-pointer hover:shadow-md transition-all group border-0"
     >
       <div className="flex items-center justify-between gap-3 mb-3">
         <div className="flex items-center gap-3 flex-1 min-w-0">

@@ -14,14 +14,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="md:flex h-screen overflow-hidden">
       {/* Left Sidebar */}
       <Sidebar />
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col overflow-auto">
+      {/* Main Content Area - Full width on mobile (sidebar overlays), flex-1 on desktop */}
+      <main className="flex flex-col overflow-auto h-screen md:flex-1">
         {/* Top Header with Auth and Theme Switcher */}
-        <header className="h-16 min-h-16 flex-shrink-0 border-b border-border flex items-center justify-end px-6 gap-4 bg-background">
+        <header className="h-16 min-h-16 flex-shrink-0 border-b border-border flex items-center justify-end px-4 sm:px-6 gap-2 sm:gap-4 bg-background">
           <Suspense>
             <AuthButton />
           </Suspense>
@@ -29,7 +29,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </header>
 
         {/* Page Content */}
-        <div className="flex-1 p-6">
+        <div className="flex-1 p-4 sm:p-6">
           <div className="max-w-7xl mx-auto">{children}</div>
         </div>
       </main>

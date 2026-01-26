@@ -149,8 +149,8 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
   return (
     <Dialog open={!!workout} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
-        <DialogHeader className="p-6 border-b border-border">
-          <div className="flex items-center gap-3">
+        <DialogHeader className="p-4 sm:p-6 border-b border-border">
+          <div className="flex items-center gap-2 sm:gap-3">
             <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
               <span className="text-primary text-lg">🚴</span>
             </div>
@@ -212,13 +212,13 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
           </div>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
           {/* Performance Metrics */}
           <div>
             {/* <h3 className="text-sm font-medium text-foreground mb-3">Performance Metrics</h3> */}
             <div className="space-y-3">
               {/* Line 1: Duration - Intensity - TSS */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-3 gap-3 sm:gap-4">
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Duration</div>
                   <div className="text-lg font-semibold text-foreground">
@@ -237,7 +237,7 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
                 </div>
               </div>
               {/* Line 2: Average Power - Work */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-3 gap-3 sm:gap-4">
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">Average Power</div>
                   <div className="text-lg font-semibold text-foreground">

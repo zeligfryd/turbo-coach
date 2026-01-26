@@ -10,10 +10,11 @@ const STORAGE_KEY = "turbo-coach-sidebar-collapsed";
 
 export function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(true); // Start collapsed to avoid flicker
+  const [isMobileOpen, setIsMobileOpen] = useState(false); // Mobile drawer state
   const [isLoaded, setIsLoaded] = useState(false);
   const pathname = usePathname();
 
-  // Load collapsed state from localStorage on mount
+  // Load collapsed state from localStorage on mount (desktop only)
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     // Expand if no value in localStorage or if explicitly set to expanded
@@ -24,11 +25,22 @@ export function Sidebar() {
     setIsLoaded(true);
   }, []);
 
-  // Save collapsed state to localStorage
+  // Close mobile menu when route changes
+  useEffect(() => {
+    setIsMobileOpen(false);
+  }, [pathname]);
+
+  // Save collapsed state to localStorage (desktop only)
   const toggleCollapsed = () => {
-    const newState = !isCollapsed;
-    setIsCollapsed(newState);
-    localStorage.setItem(STORAGE_KEY, String(newState));
+    // On mobile, toggle the drawer
+    if (window.innerWidth < 768) {
+      setIsMobileOpen(!isMobileOpen);
+    } else {
+      // On desktop, toggle collapsed state
+      const newState = !isCollapsed;
+      setIsCollapsed(newState);
+      localStorage.setItem(STORAGE_KEY, String(newState));
+    }
   };
 
   const navItems = [
@@ -38,63 +50,122 @@ export function Sidebar() {
   ];
 
   return (
-    <aside
-      className={cn(
-        "h-screen border-r border-border bg-background flex flex-col transition-all duration-300 ease-in-out",
-        isCollapsed ? "w-16" : "w-60"
+    <>
+      {/* Mobile Menu Button - Always visible on mobile */}
+      <button
+        onClick={toggleCollapsed}
+        className="md:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-background border border-border hover:bg-accent transition-colors"
+        aria-label="Toggle menu"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
+      {/* Backdrop for mobile */}
+      {isMobileOpen && (
+        <div
+          className="md:hidden fixed inset-0 bg-black/50 z-40 transition-opacity"
+          onClick={() => setIsMobileOpen(false)}
+          aria-hidden="true"
+        />
       )}
-    >
-      {/* Toggle Button */}
-      <div className="h-16 flex items-center justify-start border-b border-border px-4">
-        <button
-          onClick={toggleCollapsed}
-          className="p-2 rounded-lg hover:bg-accent transition-colors"
-          aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          <Menu className="h-5 w-5" />
-        </button>
-      </div>
 
-      {/* Navigation Items */}
-      <nav className="flex-1 py-4">
-        <ul className="space-y-1 px-2">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = pathname === item.href;
+      {/* Sidebar */}
+      <aside
+        className={cn(
+          "h-screen border-r border-border bg-background flex flex-col transition-all duration-300 ease-in-out",
+          // Mobile: Fixed overlay that slides in from left
+          "fixed left-0 top-0 w-60 z-40",
+          isMobileOpen ? "translate-x-0" : "-translate-x-full",
+          // Desktop: Static sidebar with collapsible width
+          "md:relative md:translate-x-0",
+          isCollapsed ? "md:w-16" : "md:w-60"
+        )}
+      >
+        {/* Toggle Button - Hidden on mobile, visible on desktop */}
+        <div className="h-16 hidden md:flex items-center justify-start border-b border-border px-4">
+          <button
+            onClick={toggleCollapsed}
+            className="p-2 rounded-lg hover:bg-accent transition-colors"
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        </div>
 
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors",
-                    "hover:bg-accent hover:text-accent-foreground",
-                    isActive && "bg-accent text-accent-foreground font-medium",
-                    isCollapsed && "justify-center"
-                  )}
-                  title={isCollapsed ? item.label : undefined}
-                >
-                  <Icon className="h-5 w-5 flex-shrink-0" />
-                  {!isCollapsed && (
-                    <span className="transition-opacity duration-200">
+        {/* Mobile Header */}
+        <div className="h-16 flex md:hidden items-center justify-between border-b border-border px-4">
+          <span className="font-semibold">Menu</span>
+          <button
+            onClick={() => setIsMobileOpen(false)}
+            className="p-2 rounded-lg hover:bg-accent transition-colors"
+            aria-label="Close menu"
+          >
+            <svg
+              className="h-5 w-5"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+
+        {/* Navigation Items */}
+        <nav className="flex-1 py-4">
+          <ul className="space-y-1 px-2">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = pathname === item.href;
+
+              return (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors",
+                      "hover:bg-accent hover:text-accent-foreground",
+                      isActive && "bg-accent text-accent-foreground font-medium",
+                      "md:justify-start",
+                      isCollapsed && "md:justify-center"
+                    )}
+                    title={isCollapsed ? item.label : undefined}
+                  >
+                    <Icon className="h-5 w-5 flex-shrink-0" />
+                    <span className="md:hidden transition-opacity duration-200">
                       {item.label}
                     </span>
-                  )}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
+                    {!isCollapsed && (
+                      <span className="hidden md:inline transition-opacity duration-200">
+                        {item.label}
+                      </span>
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
 
-      {/* Brand at bottom (optional) */}
-      {!isCollapsed && isLoaded && (
-        <div className="p-4 border-t border-border">
-          <p className="text-xs text-muted-foreground text-center">
-            Turbo Coach
-          </p>
-        </div>
-      )}
-    </aside>
+        {/* Brand at bottom */}
+        {isLoaded && (
+          <div className="p-4 border-t border-border md:hidden">
+            <p className="text-xs text-muted-foreground text-center">
+              Turbo Coach
+            </p>
+          </div>
+        )}
+        {!isCollapsed && isLoaded && (
+          <div className="hidden md:block p-4 border-t border-border">
+            <p className="text-xs text-muted-foreground text-center">
+              Turbo Coach
+            </p>
+          </div>
+        )}
+      </aside>
+    </>
   );
 }

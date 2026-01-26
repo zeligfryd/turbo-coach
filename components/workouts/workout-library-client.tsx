@@ -148,7 +148,7 @@ export function WorkoutLibraryClient({ workouts, userFtp }: WorkoutLibraryClient
         <h1 className="text-2xl font-bold text-foreground mb-4">Workout Library</h1>
 
         {/* Search and Filter */}
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground z-10" />
             <Input
@@ -159,13 +159,13 @@ export function WorkoutLibraryClient({ workouts, userFtp }: WorkoutLibraryClient
               className="pl-10"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <Filter className="w-5 h-5 text-muted-foreground" />
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Filter className="w-5 h-5 text-muted-foreground flex-shrink-0" />
             <Select
               value={selectedCategory || "all"}
               onValueChange={(value) => setSelectedCategory(value === "all" ? null : value)}
             >
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-full sm:w-[180px]">
                 <SelectValue placeholder="All Categories" />
               </SelectTrigger>
               <SelectContent>

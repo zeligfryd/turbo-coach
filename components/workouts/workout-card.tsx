@@ -191,7 +191,7 @@ export function WorkoutCard({ workout, onClick, isCustom, userFtp }: WorkoutCard
       </div>
 
       <div className="mb-3">
-        <MiniIntensityChart intervals={intervals} width={280} height={30} />
+        <MiniIntensityChart intervals={intervals} height={30} />
       </div>
 
       <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">

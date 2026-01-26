@@ -799,29 +799,31 @@ function WorkoutBuilderContent() {
   return (
     <div className="max-w-6xl mx-auto pb-12">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <Button
             variant="ghost"
             size="sm"
             onClick={handleBack}
-            className="gap-2"
+            className="gap-2 flex-shrink-0"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back
+            <span className="hidden sm:inline">Back</span>
           </Button>
-          <h1 className="text-2xl font-bold">
-            {state.mode === "create" && "Create Workout"}
-            {state.mode === "edit" && "Edit Workout"}
-            {state.mode === "copy" && "Copy Workout"}
-          </h1>
-          {hasUnsavedChanges && (
-            <span className="text-sm text-muted-foreground italic">
-              (Unsaved changes)
-            </span>
-          )}
+          <div className="min-w-0 flex items-center gap-2">
+            <h1 className="text-xl sm:text-2xl font-bold truncate">
+              {state.mode === "create" && "Create Workout"}
+              {state.mode === "edit" && "Edit Workout"}
+              {state.mode === "copy" && "Copy Workout"}
+            </h1>
+            {hasUnsavedChanges && (
+              <span className="text-xs sm:text-sm text-muted-foreground italic flex-shrink-0 hidden sm:inline">
+                (Unsaved changes)
+              </span>
+            )}
+          </div>
         </div>
-        <Button onClick={handleSave} disabled={isSaving}>
+        <Button onClick={handleSave} disabled={isSaving} className="flex-shrink-0">
           {isSaving ? "Saving..." : "Save Workout"}
         </Button>
       </div>
@@ -935,25 +937,27 @@ function WorkoutBuilderContent() {
       {/* Intervals & Repeat Groups */}
       {generatorStep === "none" && (
         <div className="p-6 border border-border rounded-lg bg-card">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <h2 className="text-lg font-semibold">Intervals</h2>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Button
                 onClick={() => dispatch({ type: "ADD_INTERVAL" })}
                 size="sm"
                 variant="outline"
-                className="gap-2"
+                className="gap-2 flex-1 sm:flex-initial"
               >
                 <Plus className="w-4 h-4" />
-                Add Interval
+                <span className="hidden xs:inline">Add Interval</span>
+                <span className="xs:hidden">Interval</span>
               </Button>
               <Button
                 onClick={() => dispatch({ type: "ADD_REPEAT_GROUP" })}
                 size="sm"
-                className="gap-2"
+                className="gap-2 flex-1 sm:flex-initial"
               >
                 <Plus className="w-4 h-4" />
-                Add Repeat Group
+                <span className="hidden xs:inline">Add Repeat Group</span>
+                <span className="xs:hidden">Repeat</span>
               </Button>
             </div>
           </div>

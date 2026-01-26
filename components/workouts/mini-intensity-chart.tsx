@@ -12,17 +12,20 @@ interface MiniIntensityChartProps {
 
 export function MiniIntensityChart({
   intervals,
-  width = 120,
+  width = 400,
   height = 30,
 }: MiniIntensityChartProps) {
+  // Use a fixed internal width for calculations, but scale responsively
+  const internalWidth = 400;
+  
   const chartData = useMemo(() => {
     const dimensions = {
-      width,
+      width: internalWidth,
       height,
       plotArea: {
         left: 0,
         top: 0,
-        width,
+        width: internalWidth,
         height,
       },
     };
@@ -30,19 +33,20 @@ export function MiniIntensityChart({
     return calculateChartElements(intervals, dimensions, {
       useAbsolutePower: false, // Use relative scaling for mini chart
     });
-  }, [intervals, width, height]);
+  }, [intervals, height]);
 
   if (chartData.length === 0) {
-    return <div className="bg-muted rounded" style={{ width, height }} />;
+    return <div className="bg-muted rounded w-full" style={{ height }} />;
   }
 
   return (
     <svg
-      width={width}
+      width="100%"
       height={height}
-      viewBox={`0 0 ${width} ${height}`}
+      viewBox={`0 0 ${internalWidth} ${height}`}
       className="rounded overflow-hidden"
       style={{ display: "block" }}
+      preserveAspectRatio="none"
     >
       {chartData.map((element, index) => {
         if (element.type === "path") {

@@ -51,6 +51,43 @@ export type RepeatGroupData = z.infer<typeof RepeatGroupDataSchema>;
 export type BuilderItem = z.infer<typeof BuilderItemSchema>;
 export type Workout = z.infer<typeof WorkoutSchema>;
 
+// Workout categories
+export const WORKOUT_CATEGORIES = [
+  "recovery",
+  "endurance",
+  "tempo",
+  "sweet_spot",
+  "threshold",
+  "vo2max",
+  "anaerobic",
+  "race_simulation",
+] as const;
+
+export type WorkoutCategory = (typeof WORKOUT_CATEGORIES)[number];
+
+export const WorkoutCategorySchema = z.enum([
+  "recovery",
+  "endurance",
+  "tempo",
+  "sweet_spot",
+  "threshold",
+  "vo2max",
+  "anaerobic",
+  "race_simulation",
+]);
+
+// Category display labels
+export const CATEGORY_LABELS: Record<WorkoutCategory, string> = {
+  recovery: "Recovery",
+  endurance: "Endurance",
+  tempo: "Tempo",
+  sweet_spot: "Sweet Spot",
+  threshold: "Threshold",
+  vo2max: "VO2max",
+  anaerobic: "Anaerobic",
+  race_simulation: "Race Simulation",
+};
+
 // Validation helper function
 export function validateWorkout(data: unknown): Workout | null {
   try {
@@ -64,7 +101,7 @@ export function validateWorkout(data: unknown): Workout | null {
 // Validation helper for arrays of workouts
 export function validateWorkouts(data: unknown[]): Workout[] {
   const validWorkouts: Workout[] = [];
-  
+
   data.forEach((workout, index) => {
     const validated = validateWorkout(workout);
     if (validated) {
@@ -73,6 +110,6 @@ export function validateWorkouts(data: unknown[]): Workout[] {
       console.warn(`Skipping invalid workout at index ${index}`);
     }
   });
-  
+
   return validWorkouts;
 }

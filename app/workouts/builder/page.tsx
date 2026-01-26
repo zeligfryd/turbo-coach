@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useReducer, useEffect, Suspense } from "react";
+import React, { useReducer, useEffect, Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, Plus, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -15,11 +15,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { WorkoutMetadata } from "@/components/workouts/workout-metadata";
+import { ProtocolLibraryBrowser } from "@/components/workouts/protocol-library-browser";
+import { ProtocolParameterForm } from "@/components/workouts/protocol-parameter-form";
 import { IntervalEditor, type BuilderInterval } from "@/components/workouts/interval-editor";
 import { RepeatGroupEditor, type RepeatGroupData } from "@/components/workouts/repeat-group-editor";
 import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 import type { Workout, BuilderItem, WorkoutInterval } from "@/lib/workouts/types";
+import type { WorkoutProtocol, UserParameters } from "@/lib/workouts/protocols";
+import { generateFromProtocol } from "@/lib/workouts/protocols";
 import {
   flattenBuilderItems,
   calculateAveragePower,
@@ -89,7 +93,8 @@ type BuilderAction =
   | { type: "REORDER_ITEMS"; oldIndex: number; newIndex: number }
   | { type: "REORDER_INTERVALS"; oldIndex: number; newIndex: number }
   | { type: "SET_METADATA"; field: string; value: any }
-  | { type: "LOAD_WORKOUT"; workout: Workout; mode: "edit" | "copy" };
+  | { type: "LOAD_WORKOUT"; workout: Workout; mode: "edit" | "copy" }
+  | { type: "LOAD_GENERATED_WORKOUT"; items: BuilderItem[]; metadata: Partial<Workout> };
 
 function builderReducer(state: BuilderState, action: BuilderAction): BuilderState {
   switch (action.type) {
@@ -292,6 +297,16 @@ function builderReducer(state: BuilderState, action: BuilderAction): BuilderStat
         mode: action.mode,
       };
 
+    case "LOAD_GENERATED_WORKOUT":
+      return {
+        ...state,
+        name: action.metadata.name || "",
+        category: action.metadata.category || "custom",
+        description: action.metadata.description || "",
+        tags: action.metadata.tags || [],
+        items: action.items,
+      };
+
     default:
       return state;
   }
@@ -408,6 +423,9 @@ function WorkoutBuilderContent() {
   const [showUnsavedDialog, setShowUnsavedDialog] = React.useState(false);
   const [pendingNavigation, setPendingNavigation] = React.useState<(() => void) | null>(null);
   const [userFtp, setUserFtp] = React.useState<number>(DEFAULT_FTP_WATTS);
+  const [generatorStep, setGeneratorStep] = React.useState<"none" | "browse" | "params">("none");
+  const [selectedProtocol, setSelectedProtocol] = React.useState<WorkoutProtocol | null>(null);
+  const [selectedCategory, setSelectedCategory] = React.useState<string>("");
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -714,6 +732,38 @@ function WorkoutBuilderContent() {
     }
   };
 
+  const handleSelectProtocol = (protocol: WorkoutProtocol) => {
+    setSelectedProtocol(protocol);
+    setGeneratorStep("params");
+  };
+
+  const handleGenerateFromProtocol = (protocol: WorkoutProtocol, params: UserParameters) => {
+    const items = generateFromProtocol(protocol, params);
+    dispatch({
+      type: "LOAD_GENERATED_WORKOUT",
+      items,
+      metadata: {
+        name: protocol.name,
+        category: protocol.category,
+        description: protocol.description,
+        tags: protocol.tags,
+      },
+    });
+    setGeneratorStep("none");
+    setSelectedProtocol(null);
+    setHasUnsavedChanges(true);
+  };
+
+  const handleCancelGenerator = () => {
+    setGeneratorStep("none");
+    setSelectedProtocol(null);
+  };
+
+  const handleBackToProtocolBrowser = () => {
+    setGeneratorStep("browse");
+    setSelectedProtocol(null);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -776,26 +826,65 @@ function WorkoutBuilderContent() {
         </Button>
       </div>
 
-      {/* Metadata */}
-      <div className="mb-6 p-6 border border-border rounded-lg bg-card">
-        <WorkoutMetadata
-          name={state.name}
-          category={state.category}
-          description={state.description}
-          tags={state.tags}
-          isPublic={state.isPublic}
-          onNameChange={(value) => dispatch({ type: "SET_METADATA", field: "name", value })}
-          onCategoryChange={(value) => dispatch({ type: "SET_METADATA", field: "category", value })}
-          onDescriptionChange={(value) =>
-            dispatch({ type: "SET_METADATA", field: "description", value })
-          }
-          onTagsChange={(value) => dispatch({ type: "SET_METADATA", field: "tags", value })}
-          onPublicChange={(value) => dispatch({ type: "SET_METADATA", field: "isPublic", value })}
+      {/* Generator Toggle (only in create mode with no intervals) */}
+      {state.mode === "create" && state.items.length === 0 && generatorStep === "none" && (
+        <div className="mb-6 p-6 border border-border rounded-lg bg-card">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold mb-1">How would you like to start?</h3>
+              <p className="text-sm text-muted-foreground">
+                Build from scratch or generate a workout from a template
+              </p>
+            </div>
+            <Button onClick={() => setGeneratorStep("browse")} className="gap-2">
+              <Sparkles className="w-4 h-4" />
+              Browse Templates
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Protocol Library Browser */}
+      {generatorStep === "browse" && (
+        <ProtocolLibraryBrowser
+          onSelectProtocol={handleSelectProtocol}
+          onClose={handleCancelGenerator}
+          initialCategory={selectedCategory}
+          onCategoryChange={setSelectedCategory}
         />
-      </div>
+      )}
+
+      {/* Protocol Parameter Form */}
+      {generatorStep === "params" && selectedProtocol && (
+        <ProtocolParameterForm
+          protocol={selectedProtocol}
+          onGenerate={handleGenerateFromProtocol}
+          onBack={handleBackToProtocolBrowser}
+        />
+      )}
+
+      {/* Metadata */}
+      {generatorStep === "none" && (
+        <div className="mb-6 p-6 border border-border rounded-lg bg-card">
+          <WorkoutMetadata
+            name={state.name}
+            category={state.category}
+            description={state.description}
+            tags={state.tags}
+            isPublic={state.isPublic}
+            onNameChange={(value) => dispatch({ type: "SET_METADATA", field: "name", value })}
+            onCategoryChange={(value) => dispatch({ type: "SET_METADATA", field: "category", value })}
+            onDescriptionChange={(value) =>
+              dispatch({ type: "SET_METADATA", field: "description", value })
+            }
+            onTagsChange={(value) => dispatch({ type: "SET_METADATA", field: "tags", value })}
+            onPublicChange={(value) => dispatch({ type: "SET_METADATA", field: "isPublic", value })}
+          />
+        </div>
+      )}
 
       {/* Workout Metrics */}
-      {state.items.length > 0 && (
+      {generatorStep === "none" && state.items.length > 0 && (
         <div className="mb-6 p-6 border border-border rounded-lg bg-card">
           <h2 className="text-lg font-semibold mb-4">Workout Metrics</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -828,118 +917,122 @@ function WorkoutBuilderContent() {
       )}
 
       {/* Live Preview Chart */}
-      <div className="mb-6 p-6 border border-border rounded-lg bg-card">
-        <h2 className="text-lg font-semibold mb-4">Preview</h2>
-        <div className="h-[300px]">
-          {state.items.length > 0 ? (
-            <IntensityBarChart intervals={chartIntervals} ftpWatts={userFtp} height={300} />
-          ) : (
-            <div className="h-full flex items-center justify-center text-muted-foreground bg-muted/30 rounded-lg">
-              Add intervals to see the workout preview
-            </div>
-          )}
+      {generatorStep === "none" && (
+        <div className="mb-6 p-6 border border-border rounded-lg bg-card">
+          <h2 className="text-lg font-semibold mb-4">Preview</h2>
+          <div className="h-[300px]">
+            {state.items.length > 0 ? (
+              <IntensityBarChart intervals={chartIntervals} ftpWatts={userFtp} height={300} />
+            ) : (
+              <div className="h-full flex items-center justify-center text-muted-foreground bg-muted/30 rounded-lg">
+                Add intervals to see the workout preview
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Intervals & Repeat Groups */}
-      <div className="p-6 border border-border rounded-lg bg-card">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Intervals</h2>
-          <div className="flex gap-2">
-            <Button
-              onClick={() => dispatch({ type: "ADD_INTERVAL" })}
-              size="sm"
-              variant="outline"
-              className="gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              Add Interval
-            </Button>
-            <Button
-              onClick={() => dispatch({ type: "ADD_REPEAT_GROUP" })}
-              size="sm"
-              className="gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              Add Repeat Group
-            </Button>
+      {generatorStep === "none" && (
+        <div className="p-6 border border-border rounded-lg bg-card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">Intervals</h2>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => dispatch({ type: "ADD_INTERVAL" })}
+                size="sm"
+                variant="outline"
+                className="gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Add Interval
+              </Button>
+              <Button
+                onClick={() => dispatch({ type: "ADD_REPEAT_GROUP" })}
+                size="sm"
+                className="gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Add Repeat Group
+              </Button>
+            </div>
           </div>
-        </div>
 
-        {state.items.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <p>No intervals yet. Click "Add Interval" or "Add Repeat Group" to get started.</p>
-          </div>
-        ) : (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={state.items.map((_, index) => `item-${index}`)}
-              strategy={verticalListSortingStrategy}
+          {state.items.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <p>No intervals yet. Click "Add Interval" or "Add Repeat Group" to get started.</p>
+            </div>
+          ) : (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
             >
-              <div className="space-y-3">
-                {state.items.map((item, index) => {
-                  if (item.type === "interval") {
-                    return (
-                      <SortableIntervalEditor
-                        key={`item-${index}`}
-                        interval={item.data}
-                        index={index}
-                        onUpdate={(i, data) =>
-                          dispatch({ type: "UPDATE_INTERVAL", index: i, interval: data })
-                        }
-                        onDelete={(i) => dispatch({ type: "DELETE_ITEM", index: i })}
-                        onDuplicate={(i) => dispatch({ type: "DUPLICATE_ITEM", index: i })}
-                      />
-                    );
-                  } else {
-                    return (
-                      <SortableRepeatGroupEditor
-                        key={`item-${index}`}
-                        group={item.data}
-                        index={index}
-                        onUpdate={(i, data) =>
-                          dispatch({ type: "UPDATE_REPEAT_COUNT", groupIndex: i, count: data.count! })
-                        }
-                        onDelete={(i) => dispatch({ type: "DELETE_ITEM", index: i })}
-                        onDuplicate={(i) => dispatch({ type: "DUPLICATE_ITEM", index: i })}
-                        onAddInterval={(i) =>
-                          dispatch({ type: "ADD_INTERVAL_TO_GROUP", groupIndex: i })
-                        }
-                        onUpdateInterval={(i, j, data) =>
-                          dispatch({
-                            type: "UPDATE_INTERVAL_IN_GROUP",
-                            groupIndex: i,
-                            intervalIndex: j,
-                            interval: data,
-                          })
-                        }
-                        onDeleteInterval={(i, j) =>
-                          dispatch({
-                            type: "DELETE_INTERVAL_FROM_GROUP",
-                            groupIndex: i,
-                            intervalIndex: j,
-                          })
-                        }
-                        onDuplicateInterval={(i, j) =>
-                          dispatch({
-                            type: "DUPLICATE_INTERVAL_IN_GROUP",
-                            groupIndex: i,
-                            intervalIndex: j,
-                          })
-                        }
-                      />
-                    );
-                  }
-                })}
-              </div>
-            </SortableContext>
-          </DndContext>
-        )}
-      </div>
+              <SortableContext
+                items={state.items.map((_, index) => `item-${index}`)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="space-y-3">
+                  {state.items.map((item, index) => {
+                    if (item.type === "interval") {
+                      return (
+                        <SortableIntervalEditor
+                          key={`item-${index}`}
+                          interval={item.data}
+                          index={index}
+                          onUpdate={(i, data) =>
+                            dispatch({ type: "UPDATE_INTERVAL", index: i, interval: data })
+                          }
+                          onDelete={(i) => dispatch({ type: "DELETE_ITEM", index: i })}
+                          onDuplicate={(i) => dispatch({ type: "DUPLICATE_ITEM", index: i })}
+                        />
+                      );
+                    } else {
+                      return (
+                        <SortableRepeatGroupEditor
+                          key={`item-${index}`}
+                          group={item.data}
+                          index={index}
+                          onUpdate={(i, data) =>
+                            dispatch({ type: "UPDATE_REPEAT_COUNT", groupIndex: i, count: data.count! })
+                          }
+                          onDelete={(i) => dispatch({ type: "DELETE_ITEM", index: i })}
+                          onDuplicate={(i) => dispatch({ type: "DUPLICATE_ITEM", index: i })}
+                          onAddInterval={(i) =>
+                            dispatch({ type: "ADD_INTERVAL_TO_GROUP", groupIndex: i })
+                          }
+                          onUpdateInterval={(i, j, data) =>
+                            dispatch({
+                              type: "UPDATE_INTERVAL_IN_GROUP",
+                              groupIndex: i,
+                              intervalIndex: j,
+                              interval: data,
+                            })
+                          }
+                          onDeleteInterval={(i, j) =>
+                            dispatch({
+                              type: "DELETE_INTERVAL_FROM_GROUP",
+                              groupIndex: i,
+                              intervalIndex: j,
+                            })
+                          }
+                          onDuplicateInterval={(i, j) =>
+                            dispatch({
+                              type: "DUPLICATE_INTERVAL_IN_GROUP",
+                              groupIndex: i,
+                              intervalIndex: j,
+                            })
+                          }
+                        />
+                      );
+                    }
+                  })}
+                </div>
+              </SortableContext>
+            </DndContext>
+          )}
+        </div>
+      )}
 
       {/* Unsaved Changes Dialog */}
       <AlertDialog open={showUnsavedDialog} onOpenChange={setShowUnsavedDialog}>

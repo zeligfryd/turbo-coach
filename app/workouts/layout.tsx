@@ -21,7 +21,7 @@ export default async function WorkoutsLayout({ children }: { children: React.Rea
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-auto">
         {/* Top Header with Auth and Theme Switcher */}
-        <header className="h-16 border-b border-border flex items-center justify-end px-6 gap-4 bg-background">
+        <header className="h-16 min-h-16 flex-shrink-0 border-b border-border flex items-center justify-end px-6 gap-4 bg-background">
           <Suspense>
             <AuthButton />
           </Suspense>

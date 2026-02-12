@@ -2,6 +2,15 @@ import { WorkoutLibraryClient } from "@/components/workouts/workout-library-clie
 import { WorkoutTabs } from "@/components/workouts/workout-tabs";
 import { createClient } from "@/lib/supabase/server";
 import { validateWorkouts } from "@/lib/workouts/types";
+import type { Workout } from "@/lib/workouts/types";
+
+type FavoriteJoinRow = {
+  user_id: string | null;
+};
+
+type WorkoutWithFavoritesRow = Workout & {
+  user_favorite_workouts?: FavoriteJoinRow[] | null;
+};
 
 export const dynamic = 'force-dynamic';
 
@@ -37,13 +46,14 @@ export default async function PresetsPage() {
   }
 
   // Transform data to include is_favorite flag
-  const workoutsWithFavorites = workouts?.map((workout: any) => ({
-    ...workout,
-    is_favorite: workout.user_favorite_workouts?.some(
-      (fav: any) => fav.user_id === userData?.user?.id
-    ) || false,
-    user_favorite_workouts: undefined, // Remove the join data
-  })) || [];
+  const workoutsWithFavorites =
+    ((workouts as WorkoutWithFavoritesRow[] | null) ?? []).map((workout) => ({
+      ...workout,
+      is_favorite:
+        workout.user_favorite_workouts?.some((fav) => fav.user_id === userData?.user?.id) ??
+        false,
+      user_favorite_workouts: undefined, // Remove the join data
+    }));
 
   // Validate workouts and filter out invalid ones
   const validatedWorkouts = validateWorkouts(workoutsWithFavorites);

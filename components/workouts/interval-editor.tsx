@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
+import type { HTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
 export type BuilderInterval = {
@@ -21,7 +22,7 @@ interface IntervalEditorProps {
   onUpdate: (index: number, interval: Partial<BuilderInterval>) => void;
   onDelete: (index: number) => void;
   onDuplicate: (index: number) => void;
-  dragHandleProps?: any;
+  dragHandleProps?: HTMLAttributes<HTMLElement>;
   isNested?: boolean; // When true, apply nested styling
 }
 

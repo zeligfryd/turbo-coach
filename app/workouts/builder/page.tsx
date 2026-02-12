@@ -76,6 +76,13 @@ type BuilderState = {
   mode: "create" | "edit" | "copy";
 };
 
+type MetadataAction =
+  | { type: "SET_METADATA"; field: "name"; value: BuilderState["name"] }
+  | { type: "SET_METADATA"; field: "category"; value: BuilderState["category"] }
+  | { type: "SET_METADATA"; field: "description"; value: BuilderState["description"] }
+  | { type: "SET_METADATA"; field: "tags"; value: BuilderState["tags"] }
+  | { type: "SET_METADATA"; field: "isPublic"; value: BuilderState["isPublic"] };
+
 type BuilderAction =
   | { type: "ADD_INTERVAL" }
   | { type: "ADD_REPEAT_GROUP" }
@@ -92,7 +99,7 @@ type BuilderAction =
   | { type: "DUPLICATE_INTERVAL"; index: number }
   | { type: "REORDER_ITEMS"; oldIndex: number; newIndex: number }
   | { type: "REORDER_INTERVALS"; oldIndex: number; newIndex: number }
-  | { type: "SET_METADATA"; field: string; value: any }
+  | MetadataAction
   | { type: "LOAD_WORKOUT"; workout: Workout; mode: "edit" | "copy" }
   | { type: "LOAD_GENERATED_WORKOUT"; items: BuilderItem[]; metadata: Partial<Workout> };
 

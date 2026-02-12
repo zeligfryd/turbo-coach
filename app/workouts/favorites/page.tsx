@@ -5,6 +5,11 @@ import { validateWorkouts } from "@/lib/workouts/types";
 import type { Workout } from "@/lib/workouts/types";
 import { Star } from "lucide-react";
 
+type FavoriteWorkoutRow = {
+  workout_id: string;
+  workouts: Workout | null;
+};
+
 export const dynamic = 'force-dynamic';
 
 export default async function FavoritesPage() {
@@ -51,12 +56,12 @@ export default async function FavoritesPage() {
   }
 
   // Extract workouts from the join and add is_favorite flag
-  const rawWorkouts = favorites
-    ?.map((fav: any) => ({
-      ...fav.workouts,
-      is_favorite: true,
-    }))
-    .filter((w: any) => w.id) || []; // Filter out any null workouts
+  const rawWorkouts =
+    ((favorites as unknown as FavoriteWorkoutRow[] | null) ?? [])
+      .map((fav) => (fav.workouts ? { ...fav.workouts, is_favorite: true } : null))
+      .filter(
+        (workout): workout is Workout & { is_favorite: true } => workout !== null
+      ); // Filter out null workout joins
 
   // Validate workouts and filter out invalid ones
   const validatedWorkouts = validateWorkouts(rawWorkouts);

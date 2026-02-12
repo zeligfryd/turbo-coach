@@ -2,13 +2,14 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import type { BuilderItem } from "@/lib/workouts/types";
 
 export async function createWorkout(data: {
   name: string;
   category: string;
   description: string | null;
   tags: string[];
-  intervals: any[];
+  intervals: BuilderItem[];
   is_public: boolean;
 }) {
   try {
@@ -54,7 +55,7 @@ export async function updateWorkout(
     category: string;
     description: string | null;
     tags: string[];
-    intervals: any[];
+    intervals: BuilderItem[];
     is_public: boolean;
   }
 ) {

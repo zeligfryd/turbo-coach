@@ -20,9 +20,7 @@ import {
   POWER_ZONES,
   flattenBuilderItems,
   calculateAveragePower,
-  calculateWork,
   calculateTSS,
-  formatWork,
   DEFAULT_FTP_WATTS,
 } from "@/lib/workouts/utils";
 import type { Workout, WorkoutInterval } from "@/lib/workouts/types";
@@ -48,10 +46,10 @@ export function WorkoutCard({ workout, onClick, isCustom, userFtp }: WorkoutCard
   const totalSeconds = calculateTotalDuration(intervals);
   const totalMinutes = totalSeconds / 60;
   const avgIntensity = calculateAverageIntensity(intervals);
-  const isPublic = (workout as any).is_public === true;
+  const isPublic = workout.is_public === true;
   
   // Auto-detect if custom based on is_preset field if not explicitly provided
-  const isCustomWorkout = isCustom !== undefined ? isCustom : !(workout as any).is_preset;
+  const isCustomWorkout = isCustom !== undefined ? isCustom : !workout.is_preset;
 
   const zoneTime: Record<string, number> = {};
   intervals.forEach((interval: WorkoutInterval) => {
@@ -66,10 +64,6 @@ export function WorkoutCard({ workout, onClick, isCustom, userFtp }: WorkoutCard
   const ftpWatts = userFtp ?? DEFAULT_FTP_WATTS;
   const avgPowerWatts = workout.avg_intensity_percent 
     ? calculateAveragePower(workout.avg_intensity_percent, ftpWatts)
-    : null;
-
-  const workKJ = workout.avg_intensity_percent && workout.duration_seconds
-    ? calculateWork(workout.avg_intensity_percent, workout.duration_seconds, ftpWatts)
     : null;
 
   const tss = workout.avg_intensity_percent && workout.duration_seconds

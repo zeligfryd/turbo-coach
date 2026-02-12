@@ -60,7 +60,7 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
 
   if (!workout) return null;
 
-  const isPreset = (workout as any).is_preset === true;
+  const isPreset = workout.is_preset === true;
   const isCustom = !isPreset;
 
   // Flatten BuilderItems to intervals

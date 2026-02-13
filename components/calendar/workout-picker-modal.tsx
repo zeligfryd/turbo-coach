@@ -94,7 +94,11 @@ export function WorkoutPickerModal({ open, onClose, onSelectWorkout }: WorkoutPi
                 <button
                   key={workout.id}
                   className="w-full text-left rounded-lg bg-card shadow-sm p-3 hover:bg-accent/30 transition-colors"
-                  onClick={() => onSelectWorkout(workout.id)}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onSelectWorkout(workout.id);
+                  }}
                 >
                   <div className="font-medium">{workout.name}</div>
                   <div className="text-xs text-muted-foreground">

@@ -1,10 +1,16 @@
 import { Plus, X } from "lucide-react";
+import { MiniIntensityChart } from "@/components/workouts/mini-intensity-chart";
+import { flattenBuilderItems } from "@/lib/workouts/utils";
 import type { ScheduledWorkout } from "./types";
-import { formatDateKey, formatHoursFromSeconds, getWorkoutMetrics } from "./utils";
+import {
+  getCalendarDayLabelParts,
+  formatDateKey,
+  formatHoursFromSeconds,
+  getWorkoutMetrics,
+} from "./utils";
 
 interface CalendarAgendaDayProps {
   date: Date;
-  isCurrentMonth: boolean;
   workouts: ScheduledWorkout[];
   onAdd: (dateKey: string) => void;
   onRemove: (scheduledWorkoutId: string) => void;
@@ -12,24 +18,30 @@ interface CalendarAgendaDayProps {
 
 export function CalendarAgendaDay({
   date,
-  isCurrentMonth,
   workouts,
   onAdd,
   onRemove,
 }: CalendarAgendaDayProps) {
   const dateKey = formatDateKey(date);
   const weekday = date.toLocaleString("en-US", { weekday: "short" });
+  const { monthPrefix, dayOfMonth } = getCalendarDayLabelParts(date);
 
   return (
     <div
-      className={[
-        "rounded-lg bg-card shadow-sm p-3 flex items-start gap-3",
-        isCurrentMonth ? "text-foreground" : "text-muted-foreground opacity-70",
-      ].join(" ")}
+      className="rounded-lg bg-card shadow-sm px-2.5 py-2 flex items-start gap-2 text-foreground"
+      data-day-date={dateKey}
     >
       <div className="min-w-[72px]">
         <div className="text-xs uppercase text-muted-foreground">{weekday}</div>
-        <div className="text-lg font-semibold leading-none">{date.getDate()}</div>
+        <div className="text-lg leading-none text-muted-foreground">
+          {monthPrefix ? (
+            <>
+              <span className="font-bold text-foreground">{monthPrefix}</span> {dayOfMonth}
+            </>
+          ) : (
+            dayOfMonth
+          )}
+        </div>
       </div>
 
       <div className="flex-1 flex flex-col gap-2">
@@ -49,12 +61,15 @@ export function CalendarAgendaDay({
             return (
               <div
                 key={item.id}
-                className="rounded-md bg-background px-2 py-1.5 text-xs flex items-start justify-between gap-2 shadow-sm"
+                className="rounded-md bg-background px-1.5 py-1 text-xs flex items-start justify-between gap-1.5 shadow-sm"
               >
                 <div className="min-w-0">
-                  <div className="font-medium truncate">{item.workout.name}</div>
-                  <div className="text-muted-foreground">
+                  <div className="truncate text-[11px] font-bold leading-tight">{item.workout.name}</div>
+                  <div className="text-[10px] text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis">
                     {formatHoursFromSeconds(metrics.durationSeconds)} • TSS {metrics.tss}
+                  </div>
+                  <div className="mt-1">
+                    <MiniIntensityChart intervals={flattenBuilderItems(item.workout.intervals)} height={12} />
                   </div>
                 </div>
                 <button

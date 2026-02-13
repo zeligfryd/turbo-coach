@@ -5,7 +5,6 @@ import { formatDateKey } from "./utils";
 
 interface CalendarAgendaProps {
   weeks: Date[][];
-  focusMonth: number;
   scheduledByDate: Record<string, ScheduledWorkout[]>;
   onAdd: (dateKey: string) => void;
   onRemove: (scheduledWorkoutId: string) => void;
@@ -21,7 +20,6 @@ function formatWeekRangeLabel(week: Date[]) {
 
 export function CalendarAgenda({
   weeks,
-  focusMonth,
   scheduledByDate,
   onAdd,
   onRemove,
@@ -55,7 +53,6 @@ export function CalendarAgenda({
                   <CalendarAgendaDay
                     key={key}
                     date={day}
-                    isCurrentMonth={day.getMonth() === focusMonth}
                     workouts={items}
                     onAdd={onAdd}
                     onRemove={onRemove}

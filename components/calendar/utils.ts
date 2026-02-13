@@ -13,6 +13,11 @@ export function formatDateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+export function parseDateKey(value: string): Date {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
 export function startOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }
@@ -87,6 +92,24 @@ export function getWeekStartKey(date: Date): string {
 
 export function formatMonthLabel(date: Date): string {
   return date.toLocaleString("en-US", { month: "long", year: "numeric" });
+}
+
+export function formatCalendarDayLabel(date: Date): string {
+  const { monthPrefix, dayOfMonth } = getCalendarDayLabelParts(date);
+  return monthPrefix ? `${monthPrefix} ${dayOfMonth}` : String(dayOfMonth);
+}
+
+export function getCalendarDayLabelParts(date: Date) {
+  const dayOfMonth = date.getDate();
+  if (dayOfMonth !== 1) {
+    return { monthPrefix: null, dayOfMonth };
+  }
+
+  const shortMonth = date.toLocaleString("en-US", { month: "short" });
+  return {
+    monthPrefix: shortMonth.endsWith(".") ? shortMonth : `${shortMonth}.`,
+    dayOfMonth,
+  };
 }
 
 export function getWorkoutMetrics(workout: Workout) {

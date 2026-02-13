@@ -12,7 +12,7 @@ import {
   formatMonthLabel,
   formatDateKey,
   getWeeksBetween,
-  getWeekStartKey,
+  parseDateKey,
   startOfMonth,
   startOfWeekMonday,
 } from "./utils";
@@ -49,9 +49,11 @@ export function CalendarClient() {
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const pendingPrependAdjust = useRef<number | null>(null);
-  const pendingScrollToWeek = useRef<string | null>(null);
+  const pendingScrollToDate = useRef<string | null>(null);
   const pendingScrollRaf = useRef<number | null>(null);
   const didInitScroll = useRef(false);
+  const isAutoScrolling = useRef(false);
+  const suppressAddUntil = useRef(0);
 
   const monthOptions = useMemo(() => {
     const options = [];
@@ -101,27 +103,44 @@ export function CalendarClient() {
     const container = scrollRef.current;
     if (!container) return;
 
-    const weekElements = Array.from(
-      container.querySelectorAll<HTMLElement>("[data-week-start]")
-    );
-    if (weekElements.length === 0) return;
+    const dayElements = Array.from(container.querySelectorAll<HTMLElement>("[data-day-date]"));
+    if (dayElements.length === 0) return;
 
-    const scrollTop = container.scrollTop;
-    const threshold = 40;
-    let activeWeek = weekElements[0];
+    const containerRect = container.getBoundingClientRect();
+    setViewingMonthKey((current) => {
+      const monthVisibility = new Map<string, number>();
 
-    for (const element of weekElements) {
-      if (element.offsetTop <= scrollTop + threshold) {
-        activeWeek = element;
-      } else {
-        break;
-      }
-    }
+      dayElements.forEach((element) => {
+        const dateKey = element.dataset.dayDate;
+        if (!dateKey) return;
 
-    const weekStart = activeWeek.dataset.weekStart;
-    if (!weekStart) return;
-    const nextKey = getMonthKey(new Date(weekStart));
-    setViewingMonthKey((current) => (current === nextKey ? current : nextKey));
+        const dayRect = element.getBoundingClientRect();
+        const visibleTop = Math.max(dayRect.top, containerRect.top);
+        const visibleBottom = Math.min(dayRect.bottom, containerRect.bottom);
+        const visibleHeight = visibleBottom - visibleTop;
+        if (visibleHeight <= 0) return;
+
+        const monthKey = getMonthKey(parseDateKey(dateKey));
+        const visibleRatio = visibleHeight / Math.max(dayRect.height, 1);
+        monthVisibility.set(monthKey, (monthVisibility.get(monthKey) ?? 0) + visibleRatio);
+      });
+
+      if (monthVisibility.size === 0) return current;
+
+      let bestMonthKey = current;
+      let bestScore = -1;
+      monthVisibility.forEach((score, monthKey) => {
+        if (
+          score > bestScore + 0.001 ||
+          (Math.abs(score - bestScore) <= 0.001 && monthKey === current)
+        ) {
+          bestScore = score;
+          bestMonthKey = monthKey;
+        }
+      });
+
+      return bestMonthKey;
+    });
   }, []);
 
   const handleScroll = useCallback(() => {
@@ -136,6 +155,11 @@ export function CalendarClient() {
 
     const threshold = 200;
     const { scrollTop, scrollHeight, clientHeight } = container;
+    const isProgrammaticMonthJump = pendingScrollToDate.current !== null;
+
+    if (isProgrammaticMonthJump || isAutoScrolling.current) {
+      return;
+    }
 
     if (scrollTop < threshold) {
       const first = months[0];
@@ -169,31 +193,64 @@ export function CalendarClient() {
     }
   }, [months]);
 
-  const scrollToWeek = useCallback(
-    (weekKey: string) => {
+  const alignDateRowToTop = useCallback((container: HTMLDivElement, dateKey: string) => {
+    const target = container.querySelector<HTMLElement>(`[data-day-date="${dateKey}"]`);
+    if (!target) {
+      return false;
+    }
+
+    const targetWeek = target.closest<HTMLElement>("[data-week-start]");
+    const anchor = targetWeek ?? target;
+    const stickyHeader = container.querySelector<HTMLElement>("[data-calendar-sticky-header]");
+    const stickyHeaderOffset = stickyHeader?.offsetHeight ?? 0;
+    const containerRect = container.getBoundingClientRect();
+    const anchorRect = anchor.getBoundingClientRect();
+    const desiredTop = containerRect.top + stickyHeaderOffset;
+    const delta = anchorRect.top - desiredTop;
+
+    if (Math.abs(delta) > 1) {
+      container.scrollTop += delta;
+    }
+
+    return true;
+  }, []);
+
+  const scrollToDate = useCallback(
+    (dateKey: string) => {
       const container = scrollRef.current;
       if (!container) {
-        pendingScrollToWeek.current = weekKey;
+        pendingScrollToDate.current = dateKey;
         return;
       }
-      const target = container.querySelector<HTMLElement>(`[data-week-start="${weekKey}"]`);
-      if (target) {
-        container.scrollTop = target.offsetTop;
-        pendingScrollToWeek.current = null;
-        updateViewingMonth();
+      if (alignDateRowToTop(container, dateKey)) {
+        pendingScrollToDate.current = null;
+        isAutoScrolling.current = true;
+        requestAnimationFrame(() => {
+          const liveContainer = scrollRef.current;
+          if (!liveContainer) return;
+          alignDateRowToTop(liveContainer, dateKey);
+          requestAnimationFrame(() => {
+            const latestContainer = scrollRef.current;
+            if (latestContainer) {
+              alignDateRowToTop(latestContainer, dateKey);
+            }
+            isAutoScrolling.current = false;
+            updateViewingMonth();
+          });
+        });
       } else {
-        pendingScrollToWeek.current = weekKey;
+        pendingScrollToDate.current = dateKey;
       }
     },
-    [updateViewingMonth]
+    [alignDateRowToTop, updateViewingMonth]
   );
 
   useEffect(() => {
-    const targetKey = pendingScrollToWeek.current;
+    const targetKey = pendingScrollToDate.current;
     if (targetKey) {
-      scrollToWeek(targetKey);
+      scrollToDate(targetKey);
     }
-  }, [weeks, scrollToWeek]);
+  }, [weeks, scrollToDate]);
 
   useEffect(() => {
     updateViewingMonth();
@@ -203,17 +260,23 @@ export function CalendarClient() {
     if (didInitScroll.current) return;
     if (weeks.length === 0) return;
     didInitScroll.current = true;
-    scrollToWeek(getWeekStartKey(startOfMonth(parseMonthKey(selectedMonthKey))));
-  }, [weeks, selectedMonthKey, scrollToWeek]);
+    scrollToDate(formatDateKey(startOfMonth(parseMonthKey(selectedMonthKey))));
+  }, [weeks, selectedMonthKey, scrollToDate]);
 
   const handleMonthChange = (value: string) => {
     const date = parseMonthKey(value);
+    const firstDayKey = formatDateKey(startOfMonth(date));
+    pendingPrependAdjust.current = null;
     setMonths(buildMonthWindow(date, 6, 6));
     setSelectedMonthKey(value);
-    scrollToWeek(getWeekStartKey(startOfMonth(date)));
+    setViewingMonthKey(value);
+    pendingScrollToDate.current = firstDayKey;
   };
 
   const handleAdd = (dateKey: string) => {
+    if (Date.now() < suppressAddUntil.current) {
+      return;
+    }
     setSelectedDateKey(dateKey);
     setIsPickerOpen(true);
   };
@@ -225,9 +288,12 @@ export function CalendarClient() {
 
   const handleSchedule = async (workoutId: string) => {
     if (!selectedDateKey) return;
-    await scheduleWorkout(workoutId, selectedDateKey);
+    const targetDateKey = selectedDateKey;
+    // Prevent click-through from reopening the picker while it closes.
+    suppressAddUntil.current = Date.now() + 400;
     setIsPickerOpen(false);
     setSelectedDateKey(null);
+    await scheduleWorkout(workoutId, targetDateKey);
     fetchScheduled();
   };
 
@@ -236,7 +302,6 @@ export function CalendarClient() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Calendar</h1>
-          <p className="text-sm text-muted-foreground">Plan your workouts by day and week.</p>
         </div>
         <MonthPicker value={viewingMonthKey} options={monthOptions} onChange={handleMonthChange} />
       </div>
@@ -248,7 +313,6 @@ export function CalendarClient() {
         <div className="hidden md:block">
           <CalendarGrid
             weeks={weeks}
-            focusMonth={parseMonthKey(viewingMonthKey).getMonth()}
             scheduledByDate={scheduledByDate}
             onAdd={handleAdd}
             onRemove={handleRemove}
@@ -257,7 +321,6 @@ export function CalendarClient() {
         <div className="md:hidden">
           <CalendarAgenda
             weeks={weeks}
-            focusMonth={parseMonthKey(viewingMonthKey).getMonth()}
             scheduledByDate={scheduledByDate}
             onAdd={handleAdd}
             onRemove={handleRemove}

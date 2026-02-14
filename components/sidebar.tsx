@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
-import { Menu, Home, Bike, User, Calendar } from "lucide-react";
+import { Menu, Home, Bike, User, Calendar, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const STORAGE_KEY = "turbo-coach-sidebar-collapsed";
@@ -45,6 +45,7 @@ export function Sidebar() {
 
   const navItems = [
     { href: "/dashboard", label: "Home", icon: Home },
+    { href: "/ride", label: "Ride", icon: Activity },
     { href: "/calendar", label: "Calendar", icon: Calendar },
     { href: "/profile", label: "Profile", icon: User },
     { href: "/workouts", label: "Workouts", icon: Bike },

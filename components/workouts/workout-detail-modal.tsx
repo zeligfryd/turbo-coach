@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useState } from "react";
-import { Star, Copy, MoreVertical, Edit2, Trash2, Download } from "lucide-react";
+import { Star, Copy, MoreVertical, Edit2, Trash2, Download, Bike } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -129,6 +129,11 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
     onClose();
   };
 
+  const handleRide = () => {
+    router.push(`/ride?workoutId=${encodeURIComponent(workout.id)}`);
+    onClose();
+  };
+
   const handleDelete = async () => {
     if (!confirm(`Are you sure you want to delete "${workout.name}"?`)) {
       return;
@@ -161,6 +166,15 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRide}
+                className="flex-shrink-0"
+              >
+                <Bike className="w-4 h-4" />
+                Ride
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"

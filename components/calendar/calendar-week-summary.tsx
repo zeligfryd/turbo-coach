@@ -17,7 +17,7 @@ export function CalendarWeekSummary({ weekWorkouts }: CalendarWeekSummaryProps) 
   );
 
   return (
-    <div className="h-full rounded-lg bg-card shadow-sm p-3 flex flex-col justify-center text-sm">
+    <div className="h-full rounded-lg bg-card shadow-sm p-3 flex flex-col justify-start text-sm">
       <div className="text-muted-foreground">Week Total</div>
       <div className="font-medium">{formatHoursFromSeconds(totals.totalSeconds)}</div>
       <div className="text-muted-foreground">TSS {totals.totalTss}</div>

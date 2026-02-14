@@ -1,27 +1,41 @@
 import { Plus, X } from "lucide-react";
+import { MiniIntensityChart } from "@/components/workouts/mini-intensity-chart";
+import { flattenBuilderItems } from "@/lib/workouts/utils";
 import type { ScheduledWorkout } from "./types";
-import { formatDateKey, formatHoursFromSeconds, getWorkoutMetrics } from "./utils";
+import {
+  getCalendarDayLabelParts,
+  formatDateKey,
+  formatHoursFromSeconds,
+  getWorkoutMetrics,
+} from "./utils";
 
 interface CalendarDayProps {
   date: Date;
-  isCurrentMonth: boolean;
   workouts: ScheduledWorkout[];
   onAdd: (dateKey: string) => void;
   onRemove: (scheduledWorkoutId: string) => void;
 }
 
-export function CalendarDay({ date, isCurrentMonth, workouts, onAdd, onRemove }: CalendarDayProps) {
+export function CalendarDay({ date, workouts, onAdd, onRemove }: CalendarDayProps) {
   const dateKey = formatDateKey(date);
+  const { monthPrefix, dayOfMonth } = getCalendarDayLabelParts(date);
 
   return (
     <div
-      className={[
-        "group relative rounded-lg bg-card shadow-sm p-3 min-h-[120px] flex flex-col gap-2",
-        isCurrentMonth ? "text-foreground" : "text-muted-foreground opacity-70",
-      ].join(" ")}
+      className="group relative rounded-lg bg-card shadow-sm px-2 py-2 min-h-[120px] flex flex-col gap-2 text-foreground"
+      data-day-date={dateKey}
     >
       <div className="flex items-start justify-between">
-        <span className="text-sm font-medium">{date.getDate()}</span>
+        <span className="text-sm text-muted-foreground">
+          {monthPrefix ? (
+            <>
+              <span className="font-bold text-foreground">{monthPrefix}</span>{" "}
+              {dayOfMonth}
+            </>
+          ) : (
+            dayOfMonth
+          )}
+        </span>
         <button
           onClick={() => onAdd(dateKey)}
           className="opacity-50 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-accent"
@@ -37,12 +51,15 @@ export function CalendarDay({ date, isCurrentMonth, workouts, onAdd, onRemove }:
           return (
             <div
               key={item.id}
-              className="rounded-md bg-background px-2 py-1.5 text-xs flex items-start justify-between gap-2 shadow-sm"
+              className="rounded-md bg-background px-1.5 py-1 text-xs flex items-start justify-between gap-1.5 shadow-sm"
             >
               <div className="min-w-0">
-                <div className="font-medium truncate">{item.workout.name}</div>
-                <div className="text-muted-foreground">
+                <div className="truncate text-[11px] font-bold leading-tight">{item.workout.name}</div>
+                <div className="text-[10px] text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis">
                   {formatHoursFromSeconds(metrics.durationSeconds)} • TSS {metrics.tss}
+                </div>
+                <div className="mt-1">
+                  <MiniIntensityChart intervals={flattenBuilderItems(item.workout.intervals)} height={12} />
                 </div>
               </div>
               <button

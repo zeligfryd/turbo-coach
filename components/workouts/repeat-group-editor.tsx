@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
+import type { HTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 import { IntervalEditor, type BuilderInterval } from "./interval-editor";
 
@@ -23,8 +24,8 @@ interface RepeatGroupEditorProps {
   onUpdateInterval: (groupIndex: number, intervalIndex: number, interval: Partial<BuilderInterval>) => void;
   onDeleteInterval: (groupIndex: number, intervalIndex: number) => void;
   onDuplicateInterval: (groupIndex: number, intervalIndex: number) => void;
-  dragHandleProps?: any;
-  intervalDragHandleProps?: (intervalIndex: number) => any;
+  dragHandleProps?: HTMLAttributes<HTMLElement>;
+  intervalDragHandleProps?: (intervalIndex: number) => HTMLAttributes<HTMLElement>;
 }
 
 export function RepeatGroupEditor({

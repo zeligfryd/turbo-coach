@@ -2,7 +2,28 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { validateWorkouts } from "@/lib/workouts/types";
+import { validateWorkout, validateWorkouts } from "@/lib/workouts/types";
+import type { Workout } from "@/lib/workouts/types";
+import type { ScheduledWorkout } from "@/components/calendar/types";
+
+type ScheduledWorkoutRow = {
+  id: string;
+  scheduled_date: string;
+  workout: Workout | Workout[] | null;
+};
+
+type FavoriteJoinRow = {
+  user_id: string | null;
+};
+
+type WorkoutWithFavoritesRow = Workout & {
+  user_favorite_workouts?: FavoriteJoinRow[] | null;
+};
+
+type FavoriteWorkoutRow = {
+  workout_id: string;
+  workouts: Workout | null;
+};
 
 export async function getScheduledWorkouts(startDate: string, endDate: string) {
   try {
@@ -34,7 +55,25 @@ export async function getScheduledWorkouts(startDate: string, endDate: string) {
       return { success: false, error: error.message, workouts: [] };
     }
 
-    return { success: true, workouts: data || [] };
+    const normalized: ScheduledWorkout[] =
+      ((data as ScheduledWorkoutRow[] | null) ?? [])
+        .map((row) => {
+          const workoutCandidate = Array.isArray(row.workout) ? row.workout[0] : row.workout;
+          const workout = workoutCandidate ? validateWorkout(workoutCandidate) : null;
+
+          if (!workout) {
+            return null;
+          }
+
+          return {
+            id: row.id,
+            scheduled_date: row.scheduled_date,
+            workout,
+          };
+        })
+        .filter((workout): workout is ScheduledWorkout => workout !== null);
+
+    return { success: true, workouts: normalized };
   } catch (error) {
     return {
       success: false,
@@ -150,13 +189,13 @@ export async function getWorkoutLibrary() {
       };
     }
 
-    const presetsWithFavorites = presetWorkouts?.map((workout: any) => ({
-      ...workout,
-      is_favorite:
-        workout.user_favorite_workouts?.some((fav: any) => fav.user_id === user.id) ||
-        false,
-      user_favorite_workouts: undefined,
-    })) || [];
+    const presetsWithFavorites =
+      ((presetWorkouts as WorkoutWithFavoritesRow[] | null) ?? []).map((workout) => ({
+        ...workout,
+        is_favorite:
+          workout.user_favorite_workouts?.some((fav) => fav.user_id === user.id) ?? false,
+        user_favorite_workouts: undefined,
+      }));
 
     const { data: favoritesData, error: favoritesError } = await supabase
       .from("user_favorite_workouts")
@@ -179,12 +218,11 @@ export async function getWorkoutLibrary() {
     }
 
     const favoritesRaw =
-      favoritesData
-        ?.map((fav: any) => ({
-          ...fav.workouts,
-          is_favorite: true,
-        }))
-        .filter((workout: any) => workout.id) || [];
+      ((favoritesData as unknown as FavoriteWorkoutRow[] | null) ?? [])
+        .map((fav) => (fav.workouts ? { ...fav.workouts, is_favorite: true } : null))
+        .filter(
+          (workout): workout is Workout & { is_favorite: true } => workout !== null
+        );
 
     const { data: customWorkouts, error: customError } = await supabase
       .from("workouts")
@@ -208,13 +246,13 @@ export async function getWorkoutLibrary() {
       };
     }
 
-    const customWithFavorites = customWorkouts?.map((workout: any) => ({
-      ...workout,
-      is_favorite:
-        workout.user_favorite_workouts?.some((fav: any) => fav.user_id === user.id) ||
-        false,
-      user_favorite_workouts: undefined,
-    })) || [];
+    const customWithFavorites =
+      ((customWorkouts as WorkoutWithFavoritesRow[] | null) ?? []).map((workout) => ({
+        ...workout,
+        is_favorite:
+          workout.user_favorite_workouts?.some((fav) => fav.user_id === user.id) ?? false,
+        user_favorite_workouts: undefined,
+      }));
 
     return {
       success: true,

@@ -2,10 +2,13 @@ import type { BuilderItem, WorkoutInterval } from "../types";
 import type {
   WorkoutProtocol,
   UserParameters,
-  ProtocolStructure,
   MainWorkStructure,
 } from "./types";
 import { replaceTemplateVariables } from "./types";
+
+function assertNever(value: never): never {
+  throw new Error(`Unknown main work type: ${JSON.stringify(value)}`);
+}
 
 /**
  * Generate BuilderItem array from a workout protocol with user parameters
@@ -65,7 +68,7 @@ function generateMainWork(
     case "sprint_intervals":
       return generateSprintIntervals(mainWork, params);
     default:
-      throw new Error(`Unknown main work type: ${(mainWork as any).type}`);
+      return assertNever(mainWork);
   }
 }
 

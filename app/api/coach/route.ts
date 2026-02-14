@@ -72,6 +72,7 @@ const sanitizeModelOverrides = (value: unknown): RuntimeModelOverrides | undefin
   const queryGeneration = toStepOverride(raw.queryGeneration);
   const embedding = toStepOverride(raw.embedding);
   const coaching = toStepOverride(raw.coaching);
+  const workoutExtraction = toStepOverride(raw.workoutExtraction);
 
   if (queryGeneration) {
     overrides.queryGeneration = queryGeneration;
@@ -81,6 +82,9 @@ const sanitizeModelOverrides = (value: unknown): RuntimeModelOverrides | undefin
   }
   if (coaching) {
     overrides.coaching = coaching;
+  }
+  if (workoutExtraction) {
+    overrides.workoutExtraction = workoutExtraction;
   }
 
   return Object.keys(overrides).length > 0 ? overrides : undefined;
@@ -103,6 +107,14 @@ const parseBooleanEnv = (value: string | undefined, fallback: boolean) => {
 const sanitizeBoolean = (value: unknown): boolean | undefined => {
   return typeof value === "boolean" ? value : undefined;
 };
+
+const ENFORCED_WORKOUT_TAG_RULES = `
+CRITICAL OUTPUT FORMAT RULES:
+- If your answer includes any concrete workout prescription (single workout OR weekly/day-by-day plan with intervals/intensities), you MUST wrap each prescribed workout block in <workout>...</workout>.
+- This includes "Day 1 / Day 2" schedules, interval prescriptions, and any executable session details.
+- Keep all coaching text outside tags, but keep full workout details inside tags.
+- Never omit tags for concrete workouts.
+`;
 
 export async function POST(request: Request) {
   try {
@@ -142,10 +154,11 @@ export async function POST(request: Request) {
       const searchQueries = await generateSearchQueries(userMessageText, userContext, modelOverrides);
       ragChunks = await retrieveKnowledge(searchQueries, { modelOverrides });
     }
-    const systemPrompt = buildCoachSystemPrompt({
+    const baseSystemPrompt = buildCoachSystemPrompt({
       userContext,
       ragChunks,
     });
+    const systemPrompt = [baseSystemPrompt, ENFORCED_WORKOUT_TAG_RULES].join("\n\n");
 
     const modelMessages = await convertToModelMessages(messages);
 

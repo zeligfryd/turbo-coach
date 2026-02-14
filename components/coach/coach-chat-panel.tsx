@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
-import { Loader2, Send, Settings2 } from "lucide-react";
+import { Cog, Loader2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -39,7 +40,7 @@ const SUGGESTIONS = [
 
 const IS_DEV = process.env.NODE_ENV === "development";
 
-type OverrideStep = "queryGeneration" | "embedding" | "coaching";
+type OverrideStep = "queryGeneration" | "embedding" | "coaching" | "workoutExtraction";
 type Provider = "openai" | "ollama";
 type DevRagSettings = {
   useDefault: boolean;
@@ -58,6 +59,10 @@ const DEFAULT_OVERRIDES: DevModelOverrides = {
     model: "text-embedding-3-small",
   },
   coaching: {
+    provider: "openai",
+    model: "gpt-4o-mini",
+  },
+  workoutExtraction: {
     provider: "openai",
     model: "gpt-4o-mini",
   },
@@ -98,11 +103,13 @@ const sanitizeOverrides = (value: unknown): DevModelOverrides => {
   const queryGeneration = sanitizeStep(raw.queryGeneration) ?? DEFAULT_OVERRIDES.queryGeneration!;
   const embedding = sanitizeStep(raw.embedding) ?? DEFAULT_OVERRIDES.embedding!;
   const coaching = sanitizeStep(raw.coaching) ?? DEFAULT_OVERRIDES.coaching!;
+  const workoutExtraction = sanitizeStep(raw.workoutExtraction) ?? DEFAULT_OVERRIDES.workoutExtraction!;
 
   return {
     queryGeneration,
     embedding,
     coaching,
+    workoutExtraction,
   };
 };
 
@@ -129,6 +136,92 @@ const getMessageText = (message: UIMessage) => {
     })
     .filter(Boolean)
     .join("\n");
+};
+
+type MessageSegment =
+  | { type: "text"; content: string }
+  | { type: "workout"; content: string; isClosed: boolean };
+
+const OPEN_WORKOUT_TAG = "<workout>";
+const CLOSE_WORKOUT_TAG = "</workout>";
+
+const stripTrailingPartialWorkoutTag = (text: string): string => {
+  if (!text) {
+    return text;
+  }
+
+  for (const tag of [OPEN_WORKOUT_TAG, CLOSE_WORKOUT_TAG]) {
+    for (let i = 1; i < tag.length; i += 1) {
+      const partial = tag.slice(0, i);
+      if (text.endsWith(partial)) {
+        return text.slice(0, -i);
+      }
+    }
+  }
+
+  return text;
+};
+
+const parseMessageSegments = (text: string): MessageSegment[] => {
+  const safeText = stripTrailingPartialWorkoutTag(text);
+  if (!safeText) {
+    return [{ type: "text", content: "" }];
+  }
+
+  const segments: MessageSegment[] = [];
+  let buffer = "";
+  let cursor = 0;
+  let inWorkout = false;
+
+  while (cursor < safeText.length) {
+    if (!inWorkout && safeText.startsWith(OPEN_WORKOUT_TAG, cursor)) {
+      if (buffer.length > 0) {
+        segments.push({ type: "text", content: buffer });
+      }
+      buffer = "";
+      inWorkout = true;
+      cursor += OPEN_WORKOUT_TAG.length;
+      continue;
+    }
+
+    if (inWorkout && safeText.startsWith(CLOSE_WORKOUT_TAG, cursor)) {
+      segments.push({
+        type: "workout",
+        content: buffer.trim(),
+        isClosed: true,
+      });
+      buffer = "";
+      inWorkout = false;
+      cursor += CLOSE_WORKOUT_TAG.length;
+      continue;
+    }
+
+    // Hide malformed closing tags rather than showing raw tags in chat.
+    if (!inWorkout && safeText.startsWith(CLOSE_WORKOUT_TAG, cursor)) {
+      cursor += CLOSE_WORKOUT_TAG.length;
+      continue;
+    }
+
+    buffer += safeText[cursor];
+    cursor += 1;
+  }
+
+  if (buffer.length > 0) {
+    if (inWorkout) {
+      segments.push({
+        type: "workout",
+        content: buffer.trim(),
+        isClosed: false,
+      });
+    } else {
+      segments.push({
+        type: "text",
+        content: buffer,
+      });
+    }
+  }
+
+  return segments.length > 0 ? segments : [{ type: "text", content: safeText }];
 };
 
 export const useCoachChatController = (options?: { persistMessages?: boolean }) => {
@@ -294,29 +387,109 @@ export const useCoachChatController = (options?: { persistMessages?: boolean }) 
 
 type CoachChatController = ReturnType<typeof useCoachChatController>;
 
-export function CoachChatPanel({ controller, className }: { controller: CoachChatController; className?: string }) {
-  const [settingsOpen, setSettingsOpen] = useState(false);
+export function CoachChatPanel({
+  controller,
+  className,
+  showSettingsTrigger = true,
+  settingsOpen: controlledSettingsOpen,
+  onSettingsOpenChange,
+}: {
+  controller: CoachChatController;
+  className?: string;
+  showSettingsTrigger?: boolean;
+  settingsOpen?: boolean;
+  onSettingsOpenChange?: (open: boolean) => void;
+}) {
+  const router = useRouter();
+  const [internalSettingsOpen, setInternalSettingsOpen] = useState(false);
+  const [loadingByWorkoutKey, setLoadingByWorkoutKey] = useState<Record<string, boolean>>({});
+  const [errorByWorkoutKey, setErrorByWorkoutKey] = useState<Record<string, string>>({});
+  const settingsOpen = controlledSettingsOpen ?? internalSettingsOpen;
+  const setSettingsOpen = onSettingsOpenChange ?? setInternalSettingsOpen;
+
+  const openInBuilder = async (key: string, workoutDescription: string) => {
+    const description = workoutDescription.trim();
+    if (!description) {
+      return;
+    }
+
+    setLoadingByWorkoutKey((prev) => ({ ...prev, [key]: true }));
+    setErrorByWorkoutKey((prev) => ({ ...prev, [key]: "" }));
+
+    try {
+      const response = await fetch("/api/coach/extract-workout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          description,
+          ...(IS_DEV
+            ? {
+                modelOverrides: controller.devOverrides,
+              }
+            : {}),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        console.error("Open in Builder extraction API error:", response.status, errorBody);
+        throw new Error("Failed to extract workout");
+      }
+
+      const data = (await response.json()) as {
+        name: string;
+        category: string;
+        description: string | null;
+        tags?: string[];
+        intervals: unknown[];
+      };
+
+      writeStorage(COACH_STORAGE_KEYS.prefillWorkout, {
+        metadata: {
+          name: data.name,
+          category: data.category,
+          description: data.description,
+          tags: Array.isArray(data.tags) ? data.tags : [],
+        },
+        items: data.intervals,
+      });
+
+      router.push("/workouts/builder?mode=create&from=coach");
+    } catch (error) {
+      console.error("Workout extraction failed:", error);
+      setErrorByWorkoutKey((prev) => ({
+        ...prev,
+        [key]: "Could not open this workout in builder. Please try again.",
+      }));
+    } finally {
+      setLoadingByWorkoutKey((prev) => ({ ...prev, [key]: false }));
+    }
+  };
 
   return (
     <div className={cn("h-full flex flex-col", className)}>
       <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
         {IS_DEV && (
           <>
-            <div className="max-w-4xl mx-auto mb-2 flex justify-end">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setSettingsOpen(true)}
-                aria-label="Open developer coach settings"
-                title="Developer coach settings"
-              >
-                <Settings2 className="h-4 w-4" />
-              </Button>
-            </div>
+            {showSettingsTrigger ? (
+              <div className="max-w-4xl mx-auto mb-2 flex justify-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setSettingsOpen(true)}
+                  aria-label="Open developer coach settings"
+                  title="Developer coach settings"
+                >
+                  <Cog className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : null}
             <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-              <DialogContent className="max-w-3xl">
+              <DialogContent className="max-w-3xl z-[90]">
                 <DialogHeader>
                   <DialogTitle>Developer coach settings</DialogTitle>
                   <DialogDescription>
@@ -362,8 +535,8 @@ export function CoachChatPanel({ controller, className }: { controller: CoachCha
                       </div>
                     </div>
                   </div>
-                  <div className="grid gap-4 md:grid-cols-3">
-                    {(["queryGeneration", "embedding", "coaching"] as const).map((step) => (
+                  <div className="grid gap-4 md:grid-cols-4">
+                    {(["queryGeneration", "embedding", "coaching", "workoutExtraction"] as const).map((step) => (
                       <div key={step} className="space-y-2">
                         <Label className="text-xs capitalize">{step}</Label>
                         <Select
@@ -435,8 +608,59 @@ export function CoachChatPanel({ controller, className }: { controller: CoachCha
                     {isUser ? (
                       <p className="whitespace-pre-wrap">{text}</p>
                     ) : (
-                      <div className="prose prose-sm max-w-none dark:prose-invert">
-                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{text}</ReactMarkdown>
+                      <div className="space-y-3">
+                        {parseMessageSegments(text).map((segment, segmentIndex) => {
+                          const segmentKey = `${message.id}-${segmentIndex}`;
+
+                          if (segment.type === "workout") {
+                            return (
+                              <div key={segmentKey} className="space-y-2">
+                                <div className="prose prose-sm max-w-none dark:prose-invert">
+                                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                                    {segment.content}
+                                  </ReactMarkdown>
+                                </div>
+                                {segment.isClosed ? (
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      disabled={loadingByWorkoutKey[segmentKey]}
+                                      onClick={() => openInBuilder(segmentKey, segment.content)}
+                                    >
+                                      {loadingByWorkoutKey[segmentKey] ? (
+                                        <>
+                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                          Extracting...
+                                        </>
+                                      ) : (
+                                        "Open in Builder"
+                                      )}
+                                    </Button>
+                                    {errorByWorkoutKey[segmentKey] ? (
+                                      <p className="text-xs text-red-600">{errorByWorkoutKey[segmentKey]}</p>
+                                    ) : null}
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground">Workout draft...</p>
+                                )}
+                              </div>
+                            );
+                          }
+
+                          if (!segment.content.trim()) {
+                            return null;
+                          }
+
+                          return (
+                            <div key={segmentKey} className="prose prose-sm max-w-none dark:prose-invert">
+                              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                                {segment.content}
+                              </ReactMarkdown>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

@@ -1,16 +1,30 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bot, Maximize2, Minimize2, Minus, X } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { Bot, Cog, Maximize2, Minimize2, Minus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { CoachChatPanel, useCoachChatController } from "@/components/coach/coach-chat-panel";
 import { readCoachDialogState, writeCoachDialogState } from "@/lib/coach/persistence";
 
 export function FloatingCoach() {
+  const pathname = usePathname();
   const chat = useCoachChatController({ persistMessages: true });
   const [isOpen, setIsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [hasHydrated, setHasHydrated] = useState(false);
 
   useEffect(() => {
@@ -30,6 +44,14 @@ export function FloatingCoach() {
   if (!hasHydrated) {
     return null;
   }
+
+  const confirmClearChat = () => {
+    chat.clearChat();
+    if (pathname !== "/coach") {
+      setIsOpen(false);
+    }
+    setClearConfirmOpen(false);
+  };
 
   return (
     <>
@@ -66,11 +88,22 @@ export function FloatingCoach() {
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                onClick={chat.clearChat}
+                onClick={() => setClearConfirmOpen(true)}
                 aria-label="Clear chat"
                 title="Clear chat"
               >
                 <X className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setSettingsOpen(true)}
+                aria-label="Open developer coach settings"
+                title="Developer coach settings"
+              >
+                <Cog className="h-4 w-4" />
               </Button>
               <Button
                 type="button"
@@ -97,10 +130,29 @@ export function FloatingCoach() {
             </div>
           </div>
           <div className="flex-1 min-h-0">
-            <CoachChatPanel controller={chat} />
+            <CoachChatPanel
+              controller={chat}
+              showSettingsTrigger={false}
+              settingsOpen={settingsOpen}
+              onSettingsOpenChange={setSettingsOpen}
+            />
           </div>
         </div>
       )}
+      <AlertDialog open={clearConfirmOpen} onOpenChange={setClearConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear chat?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This operation is not reversible. All current coach messages will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmClearChat}>Clear chat</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

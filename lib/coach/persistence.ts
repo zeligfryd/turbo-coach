@@ -5,6 +5,7 @@ export const COACH_STORAGE_KEYS = {
   messages: "coach-chat-messages",
   devModelOverrides: "coach-dev-model-overrides",
   devRagMode: "coach-dev-rag-mode",
+  prefillWorkout: "coach-prefill-workout",
 } as const;
 
 export type CoachDialogState = {

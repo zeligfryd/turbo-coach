@@ -52,6 +52,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { COACH_STORAGE_KEYS, removeStorage } from "@/lib/coach/persistence";
 
 const IntensityBarChart = dynamic(
   () => import("@/components/workouts/intensity-bar-chart").then((mod) => ({ default: mod.IntensityBarChart })),
@@ -468,6 +469,51 @@ function WorkoutBuilderContent() {
         });
     }
   }, [mode, workoutId, router]);
+
+  useEffect(() => {
+    if (mode !== "create" || searchParams.get("from") !== "coach") {
+      return;
+    }
+
+    try {
+      const raw = window.localStorage.getItem(COACH_STORAGE_KEYS.prefillWorkout);
+      if (!raw) {
+        return;
+      }
+
+      const parsed = JSON.parse(raw) as {
+        metadata?: {
+          name?: string;
+          category?: string;
+          description?: string | null;
+          tags?: string[];
+        };
+        items?: BuilderItem[];
+      };
+
+      if (!Array.isArray(parsed.items) || parsed.items.length === 0) {
+        removeStorage(COACH_STORAGE_KEYS.prefillWorkout);
+        router.replace("/workouts/builder?mode=create");
+        return;
+      }
+
+      dispatch({
+        type: "LOAD_GENERATED_WORKOUT",
+        items: parsed.items,
+        metadata: {
+          name: parsed.metadata?.name ?? "",
+          category: parsed.metadata?.category ?? "custom",
+          description: parsed.metadata?.description ?? "",
+          tags: Array.isArray(parsed.metadata?.tags) ? parsed.metadata?.tags : [],
+        },
+      });
+      removeStorage(COACH_STORAGE_KEYS.prefillWorkout);
+      router.replace("/workouts/builder?mode=create");
+    } catch (error) {
+      console.error("Failed to load coach prefill workout:", error);
+      removeStorage(COACH_STORAGE_KEYS.prefillWorkout);
+    }
+  }, [mode, router, searchParams]);
 
   // Track changes
   useEffect(() => {

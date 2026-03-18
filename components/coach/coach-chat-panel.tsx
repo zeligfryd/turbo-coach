@@ -409,6 +409,7 @@ export function CoachChatPanel({
 
   const openInBuilder = async (key: string, workoutDescription: string) => {
     const description = workoutDescription.trim();
+    const runKey = `${Date.now()}-${key}`;
     if (!description) {
       return;
     }
@@ -424,6 +425,7 @@ export function CoachChatPanel({
         },
         body: JSON.stringify({
           description,
+          runKey,
           ...(IS_DEV
             ? {
                 modelOverrides: controller.devOverrides,

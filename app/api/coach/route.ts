@@ -112,7 +112,8 @@ const ENFORCED_WORKOUT_TAG_RULES = `
 CRITICAL OUTPUT FORMAT RULES:
 - If your answer includes any concrete workout prescription (single workout OR weekly/day-by-day plan with intervals/intensities), you MUST wrap each prescribed workout block in <workout>...</workout>.
 - This includes "Day 1 / Day 2" schedules, interval prescriptions, and any executable session details.
-- Keep all coaching text outside tags, but keep full workout details inside tags.
+- You may include prose, bullets, and markdown outside workout tags.
+- Do NOT use any XML/HTML-like tags other than <workout> and </workout>.
 - Never omit tags for concrete workouts.
 `;
 

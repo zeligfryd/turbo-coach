@@ -12,6 +12,7 @@ import { BuilderItemSchema } from "@/lib/workouts/types";
 
 const ExtractionRequestSchema = z.object({
   description: z.string().min(1),
+  runKey: z.string().optional(),
   modelOverrides: z.unknown().optional(),
 });
 
@@ -82,6 +83,7 @@ const buildExtractionPrompt = (description: string) => {
     "- Use FTP-based interval structure compatible with the app.",
     "- Allowed item types are interval and repeat groups.",
     "- For interval items, include durationSeconds and intensityPercentStart (and intensityPercentEnd only for ramps).",
+    "- For range prescriptions like '105-120% FTP', use a constant interval at the midpoint (e.g. 113%) unless the text explicitly says ramp/progressive/from-to.",
     "- For repeat groups, include count and a non-empty intervals array.",
     "- Convert durations to seconds.",
     "- category should be one of: recovery, endurance, tempo, sweet_spot, threshold, vo2max, anaerobic, race_simulation, custom.",
@@ -133,6 +135,50 @@ const isRecord = (value: unknown): value is Record<string, unknown> => {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 };
 
+const RAMP_KEYWORDS = /\b(ramp|progressive|build(?:ing)?|increase|decrease|from\s+\d+.*to\s+\d+)\b/i;
+
+const toNumber = (value: unknown): number | null => {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+};
+
+const normalizeIntervalIntensity = (interval: {
+  name?: unknown;
+  intensityPercentStart?: unknown;
+  intensityPercentEnd?: unknown;
+}) => {
+  const start = toNumber(interval.intensityPercentStart);
+  const end = toNumber(interval.intensityPercentEnd);
+  const name = typeof interval.name === "string" ? interval.name : "";
+
+  if (start === null) {
+    return {
+      intensityPercentStart: interval.intensityPercentStart,
+      intensityPercentEnd: interval.intensityPercentEnd,
+    };
+  }
+
+  if (end === null || end === start) {
+    return {
+      intensityPercentStart: start,
+      intensityPercentEnd: undefined,
+    };
+  }
+
+  // Most coach-prescribed ranges like "105-120% FTP" mean a steady target zone.
+  // Keep true ramps only when the interval text explicitly indicates ramp behavior.
+  if (!RAMP_KEYWORDS.test(name)) {
+    return {
+      intensityPercentStart: Math.round((start + end) / 2),
+      intensityPercentEnd: undefined,
+    };
+  }
+
+  return {
+    intensityPercentStart: start,
+    intensityPercentEnd: end,
+  };
+};
+
 const normalizeIntervalLikeItem = (item: unknown): unknown => {
   if (!isRecord(item)) {
     return item;
@@ -150,13 +196,14 @@ const normalizeIntervalLikeItem = (item: unknown): unknown => {
 
   // Common LLM output: raw interval object.
   if ("durationSeconds" in item) {
+    const normalizedIntensity = normalizeIntervalIntensity(item);
     return {
       type: "interval",
       data: {
         name: typeof item.name === "string" ? item.name : undefined,
         durationSeconds: item.durationSeconds,
-        intensityPercentStart: item.intensityPercentStart,
-        intensityPercentEnd: item.intensityPercentEnd,
+        intensityPercentStart: normalizedIntensity.intensityPercentStart,
+        intensityPercentEnd: normalizedIntensity.intensityPercentEnd,
       },
     };
   }
@@ -167,21 +214,43 @@ const normalizeIntervalLikeItem = (item: unknown): unknown => {
       type: "repeat",
       data: {
         count: item.count,
-        intervals: item.intervals.map((interval) =>
-          isRecord(interval)
-            ? {
-                name: typeof interval.name === "string" ? interval.name : undefined,
-                durationSeconds: interval.durationSeconds,
-                intensityPercentStart: interval.intensityPercentStart,
-                intensityPercentEnd: interval.intensityPercentEnd,
-              }
-            : interval
-        ),
+        intervals: item.intervals.map((interval) => {
+          if (!isRecord(interval)) {
+            return interval;
+          }
+          const normalizedIntensity = normalizeIntervalIntensity(interval);
+          return {
+            name: typeof interval.name === "string" ? interval.name : undefined,
+            durationSeconds: interval.durationSeconds,
+            intensityPercentStart: normalizedIntensity.intensityPercentStart,
+            intensityPercentEnd: normalizedIntensity.intensityPercentEnd,
+          };
+        }),
       },
     };
   }
 
   return item;
+};
+
+const collectIntervalCandidates = (value: unknown): unknown[] => {
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => collectIntervalCandidates(entry));
+  }
+  if (!isRecord(value)) {
+    return [];
+  }
+
+  if (
+    ("durationSeconds" in value && typeof value.durationSeconds === "number") ||
+    ("count" in value && Array.isArray(value.intervals)) ||
+    value.type === "interval" ||
+    value.type === "repeat"
+  ) {
+    return [value];
+  }
+
+  return Object.values(value).flatMap((entry) => collectIntervalCandidates(entry));
 };
 
 const normalizeExtractionCandidate = (value: unknown): unknown => {
@@ -191,7 +260,9 @@ const normalizeExtractionCandidate = (value: unknown): unknown => {
 
   // Some models return { workout: { ...fields } } instead of top-level fields.
   const source = isRecord(value.workout) ? value.workout : value;
-  const intervals = Array.isArray(source.intervals) ? source.intervals : [];
+  const directIntervals = Array.isArray(source.intervals) ? source.intervals : [];
+  const fallbackIntervals = directIntervals.length > 0 ? [] : collectIntervalCandidates(source);
+  const intervals = directIntervals.length > 0 ? directIntervals : fallbackIntervals;
 
   return {
     name: typeof source.name === "string" ? source.name : "Coach Workout",
@@ -226,6 +297,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
+    const runKey = (payload.data as { runKey?: unknown }).runKey;
     const isDev = process.env.NODE_ENV === "development";
     const modelOverrides = isDev ? sanitizeModelOverrides(payload.data.modelOverrides) : undefined;
     const { models } = resolveModels(modelOverrides);

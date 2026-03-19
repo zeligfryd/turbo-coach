@@ -16,8 +16,9 @@ import {
   startOfMonth,
   startOfWeekMonday,
 } from "./utils";
-import type { ScheduledWorkout } from "./types";
-import { getScheduledWorkouts, removeScheduledWorkout, scheduleWorkout } from "@/app/calendar/actions";
+import type { ScheduledWorkout, CalendarActivity } from "./types";
+import { getScheduledWorkouts, getCalendarActivities, getCalendarWellness, removeScheduledWorkout, scheduleWorkout } from "@/app/calendar/actions";
+import type { CalendarWellness } from "@/app/calendar/actions";
 
 function getMonthKey(date: Date) {
   const year = date.getFullYear();
@@ -44,6 +45,8 @@ export function CalendarClient() {
   const [selectedMonthKey, setSelectedMonthKey] = useState(getMonthKey(today));
   const [viewingMonthKey, setViewingMonthKey] = useState(getMonthKey(today));
   const [scheduledByDate, setScheduledByDate] = useState<Record<string, ScheduledWorkout[]>>({});
+  const [activitiesByDate, setActivitiesByDate] = useState<Record<string, CalendarActivity[]>>({});
+  const [wellnessByDate, setWellnessByDate] = useState<Record<string, CalendarWellness>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
@@ -82,15 +85,35 @@ export function CalendarClient() {
 
   const fetchScheduled = useCallback(async () => {
     setIsLoading(true);
-    const result = await getScheduledWorkouts(range.startDate, range.endDate);
-    if (result.success) {
+    const [workoutsResult, activitiesResult, wellnessResult] = await Promise.all([
+      getScheduledWorkouts(range.startDate, range.endDate),
+      getCalendarActivities(range.startDate, range.endDate),
+      getCalendarWellness(range.startDate, range.endDate),
+    ]);
+    if (workoutsResult.success) {
       const grouped: Record<string, ScheduledWorkout[]> = {};
-      result.workouts.forEach((item: ScheduledWorkout) => {
+      workoutsResult.workouts.forEach((item: ScheduledWorkout) => {
         const key = item.scheduled_date;
         grouped[key] = grouped[key] || [];
         grouped[key].push(item);
       });
       setScheduledByDate(grouped);
+    }
+    if (activitiesResult.success) {
+      const grouped: Record<string, CalendarActivity[]> = {};
+      activitiesResult.activities.forEach((item: CalendarActivity) => {
+        const key = item.activity_date;
+        grouped[key] = grouped[key] || [];
+        grouped[key].push(item);
+      });
+      setActivitiesByDate(grouped);
+    }
+    if (wellnessResult.success) {
+      const byDate: Record<string, CalendarWellness> = {};
+      wellnessResult.wellness.forEach((item: CalendarWellness) => {
+        byDate[item.date] = item;
+      });
+      setWellnessByDate(byDate);
     }
     setIsLoading(false);
   }, [range.startDate, range.endDate]);
@@ -315,6 +338,8 @@ export function CalendarClient() {
           <CalendarGrid
             weeks={weeks}
             scheduledByDate={scheduledByDate}
+            activitiesByDate={activitiesByDate}
+            wellnessByDate={wellnessByDate}
             onAdd={handleAdd}
             onRemove={handleRemove}
           />
@@ -323,6 +348,8 @@ export function CalendarClient() {
           <CalendarAgenda
             weeks={weeks}
             scheduledByDate={scheduledByDate}
+            activitiesByDate={activitiesByDate}
+            wellnessByDate={wellnessByDate}
             onAdd={handleAdd}
             onRemove={handleRemove}
           />

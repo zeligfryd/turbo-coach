@@ -15,11 +15,33 @@ type ScheduledWorkoutItem = {
   workout: WorkoutItem | WorkoutItem[] | null;
 };
 
+type RecentActivity = {
+  activity_date: string;
+  name: string | null;
+  type: string | null;
+  moving_time: number | null;
+  icu_training_load: number | null;
+  avg_power: number | null;
+  normalized_power: number | null;
+  avg_hr: number | null;
+  distance: number | null;
+};
+
+type WellnessDay = {
+  date: string;
+  ctl: number | null;
+  atl: number | null;
+  tsb: number | null;
+  ramp_rate: number | null;
+};
+
 export type CoachUserContext = {
   ftp: number | null;
   weight: number | null;
   recentScheduledWorkouts: ScheduledWorkoutItem[];
   upcomingScheduledWorkouts: ScheduledWorkoutItem[];
+  recentActivities: RecentActivity[];
+  wellnessTrend: WellnessDay[];
 };
 
 const formatIntervalSummary = (intervals: unknown): string => {
@@ -109,8 +131,13 @@ export async function loadCoachUserContext(userId: string): Promise<CoachUserCon
 
   const toDate = (value: Date) => value.toISOString().slice(0, 10);
 
-  const [{ data: profile }, { data: recentScheduledWorkouts }, { data: upcomingScheduledWorkouts }] =
-    await Promise.all([
+  const [
+    { data: profile },
+    { data: recentScheduledWorkouts },
+    { data: upcomingScheduledWorkouts },
+    { data: recentActivitiesData },
+    { data: wellnessData },
+  ] = await Promise.all([
       supabase.from("users").select("ftp, weight").eq("id", userId).maybeSingle(),
       supabase
         .from("scheduled_workouts")
@@ -154,6 +181,24 @@ export async function loadCoachUserContext(userId: string): Promise<CoachUserCon
         .lte("scheduled_date", toDate(upcomingEnd))
         .order("scheduled_date", { ascending: true })
         .limit(10),
+      supabase
+        .from("icu_activities")
+        .select(
+          "activity_date, name, type, moving_time, icu_training_load, avg_power, normalized_power, avg_hr, distance"
+        )
+        .eq("user_id", userId)
+        .gte("activity_date", toDate(recentStart))
+        .lte("activity_date", toDate(today))
+        .order("activity_date", { ascending: false })
+        .limit(14),
+      supabase
+        .from("wellness")
+        .select("date, ctl, atl, tsb, ramp_rate")
+        .eq("user_id", userId)
+        .gte("date", toDate(recentStart))
+        .lte("date", toDate(today))
+        .order("date", { ascending: false })
+        .limit(14),
     ]);
 
   return {
@@ -161,8 +206,47 @@ export async function loadCoachUserContext(userId: string): Promise<CoachUserCon
     weight: profile?.weight ?? null,
     recentScheduledWorkouts: (recentScheduledWorkouts as ScheduledWorkoutItem[] | null) ?? [],
     upcomingScheduledWorkouts: (upcomingScheduledWorkouts as ScheduledWorkoutItem[] | null) ?? [],
+    recentActivities: (recentActivitiesData as RecentActivity[] | null) ?? [],
+    wellnessTrend: (wellnessData as WellnessDay[] | null) ?? [],
   };
 }
+
+const formatRecentActivities = (activities: RecentActivity[]): string => {
+  if (activities.length === 0) {
+    return "Recent actual activities: none synced.";
+  }
+
+  const lines = activities.map((a) => {
+    const duration = a.moving_time ? `${Math.round(a.moving_time / 60)}m` : "n/a";
+    const load =
+      a.icu_training_load != null ? `Load ${Math.round(a.icu_training_load)}` : "";
+    const power = a.avg_power != null ? `avg ${a.avg_power}W` : "";
+    const np = a.normalized_power != null ? `NP ${a.normalized_power}W` : "";
+    const hr = a.avg_hr != null ? `${a.avg_hr}bpm` : "";
+    const dist = a.distance != null ? `${(a.distance / 1000).toFixed(1)}km` : "";
+    const metrics = [duration, dist, load, power, np, hr].filter(Boolean).join(", ");
+    return `- ${a.activity_date}: ${a.name ?? a.type ?? "Activity"} (${metrics})`;
+  });
+
+  return `Recent actual activities:\n${lines.join("\n")}`;
+};
+
+const formatWellnessTrend = (days: WellnessDay[]): string => {
+  if (days.length === 0) {
+    return "Fitness/fatigue trend: no wellness data synced.";
+  }
+
+  const lines = days.map((d) => {
+    const ctl = d.ctl != null ? `CTL ${Math.round(d.ctl)}` : "";
+    const atl = d.atl != null ? `ATL ${Math.round(d.atl)}` : "";
+    const tsb = d.tsb != null ? `TSB ${Math.round(d.tsb)}` : "";
+    const ramp = d.ramp_rate != null ? `ramp ${d.ramp_rate.toFixed(1)}` : "";
+    const parts = [ctl, atl, tsb, ramp].filter(Boolean).join(", ");
+    return `- ${d.date}: ${parts}`;
+  });
+
+  return `Fitness/fatigue trend (last 14 days):\n${lines.join("\n")}`;
+};
 
 export const formatCoachUserContext = (context: CoachUserContext): string => {
   const profileLines = [
@@ -175,5 +259,7 @@ export const formatCoachUserContext = (context: CoachUserContext): string => {
     profileLines.map((line) => `- ${line}`).join("\n"),
     formatScheduledWorkouts(context.recentScheduledWorkouts, "Recent"),
     formatScheduledWorkouts(context.upcomingScheduledWorkouts, "Upcoming"),
+    formatRecentActivities(context.recentActivities),
+    formatWellnessTrend(context.wellnessTrend),
   ].join("\n\n");
 };

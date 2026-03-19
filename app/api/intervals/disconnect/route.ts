@@ -1,0 +1,35 @@
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+
+export async function POST() {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
+    // Delete only intervals.icu-sourced activities and wellness data
+    await supabase.from("icu_activities").delete().eq("user_id", user.id).eq("source", "intervals.icu");
+    await supabase.from("wellness").delete().eq("user_id", user.id).eq("source", "intervals.icu");
+
+    // Delete the connection
+    const { error } = await supabase
+      .from("icu_connections")
+      .delete()
+      .eq("user_id", user.id);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unexpected error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

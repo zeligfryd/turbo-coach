@@ -1,11 +1,14 @@
 import { CalendarAgendaDay } from "./calendar-agenda-day";
 import { CalendarAgendaWeekSummary } from "./calendar-agenda-week-summary";
-import type { ScheduledWorkout } from "./types";
+import type { ScheduledWorkout, CalendarActivity } from "./types";
+import type { CalendarWellness } from "@/app/calendar/actions";
 import { formatDateKey } from "./utils";
 
 interface CalendarAgendaProps {
   weeks: Date[][];
   scheduledByDate: Record<string, ScheduledWorkout[]>;
+  activitiesByDate: Record<string, CalendarActivity[]>;
+  wellnessByDate: Record<string, CalendarWellness>;
   onAdd: (dateKey: string) => void;
   onRemove: (scheduledWorkoutId: string) => void;
 }
@@ -21,6 +24,8 @@ function formatWeekRangeLabel(week: Date[]) {
 export function CalendarAgenda({
   weeks,
   scheduledByDate,
+  activitiesByDate,
+  wellnessByDate,
   onAdd,
   onRemove,
 }: CalendarAgendaProps) {
@@ -28,10 +33,11 @@ export function CalendarAgenda({
     <section className="space-y-4">
       {weeks.map((week, weekIndex) => {
         const weekWorkouts: ScheduledWorkout[] = [];
+        const weekActivities: CalendarActivity[] = [];
         week.forEach((day) => {
           const key = formatDateKey(day);
-          const dayItems = scheduledByDate[key] ?? [];
-          weekWorkouts.push(...dayItems);
+          weekWorkouts.push(...(scheduledByDate[key] ?? []));
+          weekActivities.push(...(activitiesByDate[key] ?? []));
         });
 
         const weekStartKey = formatDateKey(week[0]);
@@ -49,11 +55,13 @@ export function CalendarAgenda({
               {week.map((day) => {
                 const key = formatDateKey(day);
                 const items = scheduledByDate[key] ?? [];
+                const activities = activitiesByDate[key] ?? [];
                 return (
                   <CalendarAgendaDay
                     key={key}
                     date={day}
                     workouts={items}
+                    activities={activities}
                     onAdd={onAdd}
                     onRemove={onRemove}
                   />
@@ -61,7 +69,11 @@ export function CalendarAgenda({
               })}
             </div>
 
-            <CalendarAgendaWeekSummary weekWorkouts={weekWorkouts} />
+            <CalendarAgendaWeekSummary
+              weekWorkouts={weekWorkouts}
+              weekActivities={weekActivities}
+              endOfWeekWellness={wellnessByDate[formatDateKey(week[week.length - 1])] ?? null}
+            />
           </div>
         );
       })}

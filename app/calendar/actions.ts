@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { validateWorkout, validateWorkouts } from "@/lib/workouts/types";
 import type { Workout } from "@/lib/workouts/types";
-import type { ScheduledWorkout } from "@/components/calendar/types";
+import type { ScheduledWorkout, CalendarActivity } from "@/components/calendar/types";
 
 type ScheduledWorkoutRow = {
   id: string;
@@ -267,6 +267,121 @@ export async function getWorkoutLibrary() {
       presets: [],
       favorites: [],
       custom: [],
+    };
+  }
+}
+
+function computeTss(
+  movingTime: number | null,
+  normalizedPower: number | null,
+  avgPower: number | null,
+  ftp: number | null
+): number | null {
+  if (!ftp || !movingTime) return null;
+  const power = normalizedPower ?? avgPower;
+  if (!power) return null;
+  return Math.round((movingTime * power * power) / (ftp * ftp * 3600) * 100);
+}
+
+type ActivityRow = {
+  id: string;
+  activity_date: string;
+  name: string | null;
+  type: string | null;
+  moving_time: number | null;
+  icu_training_load: number | null;
+  avg_power: number | null;
+  normalized_power: number | null;
+  avg_hr: number | null;
+  distance: number | null;
+  elevation_gain: number | null;
+  source: string;
+};
+
+export async function getCalendarActivities(startDate: string, endDate: string) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return { success: false, error: "Not authenticated", activities: [] };
+    }
+
+    const [{ data, error }, { data: profile }] = await Promise.all([
+      supabase
+        .from("icu_activities")
+        .select(
+          "id, activity_date, name, type, moving_time, icu_training_load, avg_power, normalized_power, avg_hr, distance, elevation_gain, source"
+        )
+        .eq("user_id", user.id)
+        .gte("activity_date", startDate)
+        .lte("activity_date", endDate)
+        .order("activity_date", { ascending: true }),
+      supabase.from("users").select("ftp").eq("id", user.id).maybeSingle(),
+    ]);
+
+    if (error) {
+      return { success: false, error: error.message, activities: [] };
+    }
+
+    const ftp = profile?.ftp ?? null;
+    const activities: CalendarActivity[] = ((data as ActivityRow[]) ?? []).map((row) => ({
+      ...row,
+      icu_training_load:
+        row.icu_training_load ?? computeTss(row.moving_time, row.normalized_power, row.avg_power, ftp),
+    }));
+
+    return { success: true, activities };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+      activities: [],
+    };
+  }
+}
+
+export type CalendarWellness = {
+  date: string;
+  ctl: number | null;
+  atl: number | null;
+  tsb: number | null;
+  ramp_rate: number | null;
+};
+
+export async function getCalendarWellness(startDate: string, endDate: string) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return { success: false, error: "Not authenticated", wellness: [] };
+    }
+
+    const { data, error } = await supabase
+      .from("wellness")
+      .select("date, ctl, atl, tsb, ramp_rate")
+      .eq("user_id", user.id)
+      .gte("date", startDate)
+      .lte("date", endDate)
+      .order("date", { ascending: true });
+
+    if (error) {
+      return { success: false, error: error.message, wellness: [] };
+    }
+
+    return { success: true, wellness: (data as CalendarWellness[]) ?? [] };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+      wellness: [],
     };
   }
 }

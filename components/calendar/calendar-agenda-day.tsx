@@ -1,7 +1,7 @@
-import { Plus, X } from "lucide-react";
+import { Plus, X, CheckCircle } from "lucide-react";
 import { MiniIntensityChart } from "@/components/workouts/mini-intensity-chart";
 import { flattenBuilderItems } from "@/lib/workouts/utils";
-import type { ScheduledWorkout } from "./types";
+import type { ScheduledWorkout, CalendarActivity } from "./types";
 import {
   getCalendarDayLabelParts,
   formatDateKey,
@@ -12,11 +12,12 @@ import {
 interface CalendarAgendaDayProps {
   date: Date;
   workouts: ScheduledWorkout[];
+  activities?: CalendarActivity[];
   onAdd: (dateKey: string) => void;
   onRemove: (scheduledWorkoutId: string) => void;
 }
 
-export function CalendarAgendaDay({ date, workouts, onAdd, onRemove }: CalendarAgendaDayProps) {
+export function CalendarAgendaDay({ date, workouts, activities = [], onAdd, onRemove }: CalendarAgendaDayProps) {
   const dateKey = formatDateKey(date);
   const weekday = date.toLocaleString("en-US", { weekday: "short" });
   const { monthPrefix, dayOfMonth } = getCalendarDayLabelParts(date);
@@ -80,7 +81,46 @@ export function CalendarAgendaDay({ date, workouts, onAdd, onRemove }: CalendarA
               </div>
             );
           })}
-          {workouts.length === 0 && (
+
+          {activities.map((activity) => {
+            const durationStr = activity.moving_time ? formatHoursFromSeconds(activity.moving_time) : null;
+            const distanceKm = activity.distance != null ? (activity.distance / 1000).toFixed(1) : null;
+            const topLine = [durationStr, distanceKm ? `${distanceKm} km` : null].filter(Boolean).join(" · ");
+            const midParts = [
+              activity.avg_hr != null ? `${activity.avg_hr}bpm` : null,
+              activity.avg_power != null ? `${activity.avg_power}w` : null,
+            ].filter(Boolean);
+            const tss = activity.icu_training_load != null ? Math.round(activity.icu_training_load) : null;
+
+            return (
+              <div
+                key={activity.id}
+                className="rounded-md bg-green-500/10 border border-green-500/20 px-1.5 py-1 text-xs shadow-sm"
+              >
+                <div className="flex items-center gap-1 min-w-0">
+                  <CheckCircle className="h-3 w-3 text-green-600 shrink-0" />
+                  <span className="truncate text-[11px] font-bold leading-tight">
+                    {topLine || "—"}
+                  </span>
+                </div>
+                {midParts.length > 0 && (
+                  <div className="text-[10px] text-blue-600 mt-0.5">
+                    {midParts.join(" ")}
+                  </div>
+                )}
+                {tss != null && (
+                  <div className="text-[10px] text-muted-foreground mt-0.5">
+                    Load {tss}
+                  </div>
+                )}
+                <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                  {activity.name ?? activity.type ?? "Activity"}
+                </div>
+              </div>
+            );
+          })}
+
+          {workouts.length === 0 && activities.length === 0 && (
             <div className="text-xs text-muted-foreground">No workouts</div>
           )}
         </div>

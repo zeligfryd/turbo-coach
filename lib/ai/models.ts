@@ -1,7 +1,7 @@
 import { createOpenAI } from "@ai-sdk/openai";
 
 export type ModelProvider = "openai" | "ollama";
-export type ModelStep = "queryGeneration" | "embedding" | "coaching" | "workoutExtraction";
+export type ModelStep = "queryGeneration" | "embedding" | "coaching" | "workoutExtraction" | "memoryExtraction";
 
 export type StepConfig = {
   provider: ModelProvider;
@@ -25,6 +25,10 @@ const DEFAULT_CONFIG: ModelsConfig = {
     model: "gpt-4o-mini",
   },
   workoutExtraction: {
+    provider: "openai",
+    model: "gpt-4o-mini",
+  },
+  memoryExtraction: {
     provider: "openai",
     model: "gpt-4o-mini",
   },
@@ -80,6 +84,7 @@ export const getModelConfig = (overrides?: RuntimeModelOverrides): ModelsConfig 
     embedding: resolveStepConfig("embedding", overrides),
     coaching: resolveStepConfig("coaching", overrides),
     workoutExtraction: resolveStepConfig("workoutExtraction", overrides),
+    memoryExtraction: resolveStepConfig("memoryExtraction", overrides),
   };
 };
 
@@ -91,9 +96,8 @@ export const resolveModels = (overrides?: RuntimeModelOverrides) => {
       embedding: getEmbeddingModel(config.embedding),
       coaching: getLanguageModel(config.coaching),
       workoutExtraction: getLanguageModel(config.workoutExtraction),
+      memoryExtraction: getLanguageModel(config.memoryExtraction),
     },
     config,
   };
 };
-
-export const modelConfig = getModelConfig();

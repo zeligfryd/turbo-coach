@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
@@ -24,12 +24,18 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import {
   COACH_STORAGE_KEYS,
-  clearCoachMessages,
   readCoachMessages,
   readStorage,
-  writeCoachMessages,
+  removeCoachMessagesKey,
   writeStorage,
 } from "@/lib/coach/persistence";
+import {
+  createConversation,
+  getConversation,
+  saveConversationMessages,
+  triggerMemoryExtraction,
+} from "@/app/coach/actions";
+import { extractMessageText } from "@/lib/ai/utils";
 import type { RuntimeModelOverrides } from "@/lib/ai/models";
 
 const SUGGESTIONS = [
@@ -113,30 +119,7 @@ const sanitizeOverrides = (value: unknown): DevModelOverrides => {
   };
 };
 
-const getMessageText = (message: UIMessage) => {
-  const content = (message as { content?: unknown }).content;
-  if (typeof content === "string" && content.trim().length > 0) {
-    return content;
-  }
-
-  const parts = (message as { parts?: unknown }).parts;
-  if (!Array.isArray(parts)) {
-    return "";
-  }
-
-  return parts
-    .map((part) => {
-      if (!part || typeof part !== "object") {
-        return "";
-      }
-      if ("text" in part && typeof part.text === "string") {
-        return part.text;
-      }
-      return "";
-    })
-    .filter(Boolean)
-    .join("\n");
-};
+const getMessageText = (message: UIMessage) => extractMessageText(message);
 
 type MessageSegment =
   | { type: "text"; content: string }
@@ -224,12 +207,27 @@ const parseMessageSegments = (text: string): MessageSegment[] => {
   return segments.length > 0 ? segments : [{ type: "text", content: safeText }];
 };
 
-export const useCoachChatController = (options?: { persistMessages?: boolean }) => {
-  const persistMessages = options?.persistMessages ?? true;
+type ControllerOptions = {
+  conversationId?: string | null;
+  onConversationCreated?: (id: string) => void;
+  onConversationUpdated?: () => void;
+};
+
+export const useCoachChatController = (options?: ControllerOptions) => {
   const [input, setInput] = useState("");
-  const [didHydrateMessages, setDidHydrateMessages] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(
+    options?.conversationId ?? null
+  );
+  const [isLoadingConversation, setIsLoadingConversation] = useState(false);
+  const [loadConversationError, setLoadConversationError] = useState<string | null>(null);
+  const [didMigrateLegacy, setDidMigrateLegacy] = useState(false);
   const [devOverrides, setDevOverrides] = useState<DevModelOverrides>(DEFAULT_OVERRIDES);
   const [devRagSettings, setDevRagSettings] = useState<DevRagSettings>(DEFAULT_RAG_SETTINGS);
+  const prevStatusRef = useRef<string>("");
+  const savingRef = useRef(false);
+  // Stable ref for callbacks to avoid effect re-runs when parent re-renders
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
 
   const transport = useMemo(
     () =>
@@ -249,7 +247,7 @@ export const useCoachChatController = (options?: { persistMessages?: boolean }) 
     [devOverrides, devRagSettings]
   );
 
-  const { messages, sendMessage, status, error, setMessages } = useChat({
+  const { messages, sendMessage, stop, status, error, setMessages } = useChat({
     transport,
   });
 
@@ -258,6 +256,7 @@ export const useCoachChatController = (options?: { persistMessages?: boolean }) 
     [status]
   );
 
+  // Dev settings hydration
   useEffect(() => {
     if (!IS_DEV) {
       return;
@@ -265,7 +264,6 @@ export const useCoachChatController = (options?: { persistMessages?: boolean }) 
     const saved = readStorage<DevModelOverrides>(COACH_STORAGE_KEYS.devModelOverrides, DEFAULT_OVERRIDES);
     setDevOverrides(sanitizeOverrides(saved));
     const savedRagSetting = readStorage<unknown>(COACH_STORAGE_KEYS.devRagMode, DEFAULT_RAG_SETTINGS);
-    // Backward compatibility for previous persisted string mode values.
     if (typeof savedRagSetting === "string") {
       if (savedRagSetting === "inherit") {
         setDevRagSettings({ useDefault: true, enabled: true });
@@ -302,24 +300,102 @@ export const useCoachChatController = (options?: { persistMessages?: boolean }) 
     writeStorage(COACH_STORAGE_KEYS.devRagMode, devRagSettings);
   }, [devRagSettings]);
 
+  // Load conversation from DB when conversationId changes
   useEffect(() => {
-    if (!persistMessages) {
-      setDidHydrateMessages(true);
+    if (!conversationId) {
       return;
     }
-    const persisted = readCoachMessages();
-    if (persisted.length > 0) {
-      setMessages(persisted);
-    }
-    setDidHydrateMessages(true);
-  }, [persistMessages, setMessages]);
 
+    let cancelled = false;
+    setIsLoadingConversation(true);
+    setLoadConversationError(null);
+
+    getConversation(conversationId).then((result) => {
+      if (cancelled) return;
+      setIsLoadingConversation(false);
+      if (result.success && result.conversation) {
+        const msgs = result.conversation.messages as UIMessage[];
+        if (msgs.length > 0) {
+          setMessages(msgs);
+        }
+      } else {
+        setLoadConversationError(result.error ?? "Failed to load conversation");
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId, setMessages]);
+
+  // One-time localStorage migration
   useEffect(() => {
-    if (!persistMessages || !didHydrateMessages) {
+    if (didMigrateLegacy) return;
+    setDidMigrateLegacy(true);
+
+    const legacy = readCoachMessages();
+    if (legacy.length === 0) return;
+
+    const firstUserMsg = legacy.find((m) => m.role === "user");
+    const title = firstUserMsg
+      ? getMessageText(firstUserMsg).slice(0, 80) || "Migrated conversation"
+      : "Migrated conversation";
+
+    createConversation(title).then((result) => {
+      if (!result.success || !result.id) return;
+      saveConversationMessages(result.id, legacy, title).then(() => {
+        removeCoachMessagesKey();
+        setConversationId(result.id);
+        setMessages(legacy);
+        optionsRef.current?.onConversationCreated?.(result.id!);
+      });
+    });
+  }, [didMigrateLegacy, setMessages]);
+
+  // Save after assistant response completes (streaming → ready)
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = status;
+
+    if (prev !== "streaming" || status !== "ready") {
       return;
     }
-    writeCoachMessages(messages);
-  }, [didHydrateMessages, messages, persistMessages]);
+    if (messages.length === 0 || savingRef.current) {
+      return;
+    }
+
+    savingRef.current = true;
+
+    const firstUserMsg = messages.find((m) => m.role === "user");
+    const title = firstUserMsg
+      ? getMessageText(firstUserMsg).slice(0, 80) || "New conversation"
+      : "New conversation";
+
+    const doSave = async () => {
+      try {
+        let savedId = conversationId;
+        if (!savedId) {
+          const result = await createConversation(title);
+          if (!result.success || !result.id) return;
+          savedId = result.id;
+          setConversationId(savedId);
+          await saveConversationMessages(savedId, messages, title);
+          optionsRef.current?.onConversationCreated?.(savedId);
+        } else {
+          await saveConversationMessages(savedId, messages);
+          optionsRef.current?.onConversationUpdated?.();
+        }
+        // Fire-and-forget memory extraction
+        triggerMemoryExtraction(savedId, messages).catch(console.warn);
+      } catch (err) {
+        console.warn("Failed to save conversation:", err);
+      } finally {
+        savingRef.current = false;
+      }
+    };
+
+    doSave();
+  }, [status, messages, conversationId]);
 
   const updateProvider = (step: OverrideStep, provider: Provider) => {
     setDevOverrides((prev) => ({
@@ -359,13 +435,29 @@ export const useCoachChatController = (options?: { persistMessages?: boolean }) 
     await sendMessage({ text });
   };
 
-  const clearChat = () => {
+  const saveCurrentBeforeSwitch = useCallback(() => {
+    stop();
+    if (conversationId && messages.length > 0 && !savingRef.current) {
+      saveConversationMessages(conversationId, messages).catch(console.warn);
+    }
+  }, [stop, conversationId, messages]);
+
+  const startNewConversation = useCallback(() => {
+    saveCurrentBeforeSwitch();
     setMessages([]);
     setInput("");
-    if (persistMessages) {
-      clearCoachMessages();
-    }
-  };
+    setConversationId(null);
+  }, [saveCurrentBeforeSwitch, setMessages]);
+
+  const loadConversation = useCallback(
+    (id: string) => {
+      saveCurrentBeforeSwitch();
+      setMessages([]);
+      setInput("");
+      setConversationId(id);
+    },
+    [saveCurrentBeforeSwitch, setMessages]
+  );
 
   return {
     input,
@@ -374,6 +466,9 @@ export const useCoachChatController = (options?: { persistMessages?: boolean }) 
     status,
     error,
     isGenerating,
+    isLoadingConversation,
+    loadConversationError,
+    conversationId,
     devOverrides,
     devRagSettings,
     setDevRagSettings,
@@ -381,7 +476,8 @@ export const useCoachChatController = (options?: { persistMessages?: boolean }) 
     updateModel,
     onSubmit,
     sendSuggestion,
-    clearChat,
+    startNewConversation,
+    loadConversation,
   };
 };
 
@@ -401,9 +497,39 @@ export function CoachChatPanel({
   onSettingsOpenChange?: (open: boolean) => void;
 }) {
   const router = useRouter();
+  const scrollEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const userScrolledUpRef = useRef(false);
   const [internalSettingsOpen, setInternalSettingsOpen] = useState(false);
   const [loadingByWorkoutKey, setLoadingByWorkoutKey] = useState<Record<string, boolean>>({});
   const [errorByWorkoutKey, setErrorByWorkoutKey] = useState<Record<string, string>>({});
+
+  // Track whether user has scrolled away from the bottom
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const handleScroll = () => {
+      const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+      userScrolledUpRef.current = distanceFromBottom > 80;
+    };
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // Auto-scroll only when user is near the bottom (or on conversation switch)
+  useEffect(() => {
+    if (!userScrolledUpRef.current) {
+      scrollEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [controller.messages, controller.status]);
+
+  // Always scroll to bottom when loading a different conversation
+  useEffect(() => {
+    if (!controller.isLoadingConversation) {
+      userScrolledUpRef.current = false;
+      scrollEndRef.current?.scrollIntoView({ behavior: "instant" });
+    }
+  }, [controller.isLoadingConversation]);
   const settingsOpen = controlledSettingsOpen ?? internalSettingsOpen;
   const setSettingsOpen = onSettingsOpenChange ?? setInternalSettingsOpen;
 
@@ -472,7 +598,7 @@ export function CoachChatPanel({
 
   return (
     <div className={cn("h-full flex flex-col", className)}>
-      <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
         {IS_DEV && (
           <>
             {showSettingsTrigger ? (
@@ -568,7 +694,22 @@ export function CoachChatPanel({
           </>
         )}
 
-        {controller.messages.length === 0 && (
+        {controller.isLoadingConversation && (
+          <div className="max-w-4xl mx-auto mt-8 flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading conversation...
+          </div>
+        )}
+
+        {controller.loadConversationError && (
+          <div className="max-w-4xl mx-auto mt-8">
+            <p className="text-sm text-red-600">
+              Could not load conversation: {controller.loadConversationError}
+            </p>
+          </div>
+        )}
+
+        {!controller.isLoadingConversation && controller.messages.length === 0 && (
           <div className="max-w-3xl mx-auto mt-8">
             <h1 className="text-2xl font-semibold tracking-tight">Coach</h1>
             <p className="text-muted-foreground mt-2">
@@ -591,7 +732,7 @@ export function CoachChatPanel({
           </div>
         )}
 
-        {controller.messages.length > 0 && (
+        {!controller.isLoadingConversation && controller.messages.length > 0 && (
           <div className="max-w-4xl mx-auto space-y-4 pb-8">
             {controller.messages.map((message) => {
               const text = getMessageText(message);
@@ -677,15 +818,25 @@ export function CoachChatPanel({
             )}
           </div>
         )}
+        <div ref={scrollEndRef} />
       </div>
 
       <div className="border-t bg-background px-4 py-4 sm:px-6">
-        <form onSubmit={controller.onSubmit} className="max-w-4xl mx-auto flex gap-2">
-          <Input
+        <form onSubmit={controller.onSubmit} className="max-w-4xl mx-auto flex gap-2 items-end">
+          <textarea
             value={controller.input}
             onChange={(event) => controller.setInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                controller.onSubmit(event as unknown as React.FormEvent<HTMLFormElement>);
+              }
+            }}
             placeholder="Ask your coach anything about your training..."
             disabled={controller.isGenerating}
+            rows={1}
+            className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 max-h-32 overflow-y-auto"
+            style={{ fieldSizing: "content" } as React.CSSProperties}
           />
           <Button type="submit" disabled={controller.isGenerating || controller.input.trim().length === 0}>
             {controller.isGenerating ? (

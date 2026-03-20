@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { CoachUserContext } from "@/lib/ai/context";
+import type { CoachUserContext, CoachMemoryItem } from "@/lib/ai/context";
 import { formatCoachUserContext } from "@/lib/ai/context";
 
 export type CoachKnowledgeChunk = {
@@ -34,12 +34,48 @@ const formatRagContext = (chunks: CoachKnowledgeChunk[]): string => {
   return `Retrieved cycling knowledge:\n${lines.join("\n\n")}`;
 };
 
+const CATEGORY_LABELS: Record<string, string> = {
+  goals: "Goals",
+  preferences: "Preferences",
+  limitations: "Limitations & injuries",
+  training_patterns: "Training patterns",
+  insights: "Coach insights",
+  biographical: "Biographical",
+};
+
+const formatMemories = (memories: CoachMemoryItem[]): string => {
+  if (memories.length === 0) {
+    return "";
+  }
+
+  const grouped = new Map<string, string[]>();
+  for (const m of memories) {
+    const list = grouped.get(m.category) ?? [];
+    list.push(m.content);
+    grouped.set(m.category, list);
+  }
+
+  const sections = Array.from(grouped.entries()).map(([category, items]) => {
+    const label = CATEGORY_LABELS[category] ?? category;
+    return `**${label}:**\n${items.map((c) => `- ${c}`).join("\n")}`;
+  });
+
+  return `Athlete memory (persistent facts from past conversations):\n${sections.join("\n\n")}`;
+};
+
 export const buildCoachSystemPrompt = (params: {
   userContext: CoachUserContext;
   ragChunks: CoachKnowledgeChunk[];
 }) => {
   const userContext = formatCoachUserContext(params.userContext);
   const ragContext = formatRagContext(params.ragChunks);
+  const memoriesContext = formatMemories(params.userContext.memories);
 
-  return [BASE_COACH_PROMPT, userContext, ragContext].join("\n\n");
+  const parts = [BASE_COACH_PROMPT, userContext];
+  if (memoriesContext) {
+    parts.push(memoriesContext);
+  }
+  parts.push(ragContext);
+
+  return parts.join("\n\n");
 };

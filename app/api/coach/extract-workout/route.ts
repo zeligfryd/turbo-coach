@@ -1,12 +1,8 @@
 import { generateText } from "ai";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import {
-  resolveModels,
-  type ModelProvider,
-  type RuntimeModelOverrides,
-  type StepConfig,
-} from "@/lib/ai/models";
+import { resolveModels } from "@/lib/ai/models";
+import { sanitizeModelOverrides } from "@/lib/ai/utils";
 import { createClient } from "@/lib/supabase/server";
 import { BuilderItemSchema } from "@/lib/workouts/types";
 
@@ -23,57 +19,6 @@ const WorkoutExtractionSchema = z.object({
   tags: z.array(z.string()).optional().default([]),
   intervals: z.array(BuilderItemSchema),
 });
-
-const isModelProvider = (value: unknown): value is ModelProvider => {
-  return value === "openai" || value === "ollama";
-};
-
-const toStepOverride = (value: unknown): Partial<StepConfig> | undefined => {
-  if (!value || typeof value !== "object") {
-    return undefined;
-  }
-
-  const raw = value as { provider?: unknown; model?: unknown };
-  const override: Partial<StepConfig> = {};
-
-  if (isModelProvider(raw.provider)) {
-    override.provider = raw.provider;
-  }
-  if (typeof raw.model === "string" && raw.model.trim().length > 0) {
-    override.model = raw.model.trim();
-  }
-
-  return Object.keys(override).length > 0 ? override : undefined;
-};
-
-const sanitizeModelOverrides = (value: unknown): RuntimeModelOverrides | undefined => {
-  if (!value || typeof value !== "object") {
-    return undefined;
-  }
-
-  const raw = value as Record<string, unknown>;
-  const overrides: RuntimeModelOverrides = {};
-
-  const queryGeneration = toStepOverride(raw.queryGeneration);
-  const embedding = toStepOverride(raw.embedding);
-  const coaching = toStepOverride(raw.coaching);
-  const workoutExtraction = toStepOverride(raw.workoutExtraction);
-
-  if (queryGeneration) {
-    overrides.queryGeneration = queryGeneration;
-  }
-  if (embedding) {
-    overrides.embedding = embedding;
-  }
-  if (coaching) {
-    overrides.coaching = coaching;
-  }
-  if (workoutExtraction) {
-    overrides.workoutExtraction = workoutExtraction;
-  }
-
-  return Object.keys(overrides).length > 0 ? overrides : undefined;
-};
 
 const buildExtractionPrompt = (description: string) => {
   return [
@@ -297,7 +242,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const runKey = (payload.data as { runKey?: unknown }).runKey;
     const isDev = process.env.NODE_ENV === "development";
     const modelOverrides = isDev ? sanitizeModelOverrides(payload.data.modelOverrides) : undefined;
     const { models } = resolveModels(modelOverrides);

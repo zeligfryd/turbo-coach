@@ -162,11 +162,8 @@ export async function retrieveKnowledge(
   const matchThreshold = options?.matchThreshold ?? 0.45;
   const maxChunks = options?.maxChunks ?? 8;
 
-  const allRows: MatchKnowledgeChunkRow[] = [];
-
-  for (let i = 0; i < queries.length; i++) {
-    const query = queries[i];
-    try {
+  const results = await Promise.allSettled(
+    queries.map(async (query, i) => {
       if (LOG_AI_STEPS) {
         console.log(`[AI Step: Embedding] input query ${i + 1}/${queries.length}:`, query);
       }
@@ -186,14 +183,19 @@ export async function retrieveKnowledge(
 
       if (error) {
         console.warn("Knowledge retrieval RPC failed.", error.message);
-        continue;
+        return [];
       }
 
-      if (Array.isArray(data)) {
-        allRows.push(...(data as MatchKnowledgeChunkRow[]));
-      }
-    } catch (error) {
-      console.warn(`Knowledge retrieval failed for query "${query}".`, error);
+      return Array.isArray(data) ? (data as MatchKnowledgeChunkRow[]) : [];
+    })
+  );
+
+  const allRows: MatchKnowledgeChunkRow[] = [];
+  for (const result of results) {
+    if (result.status === "fulfilled") {
+      allRows.push(...result.value);
+    } else {
+      console.warn("Knowledge retrieval failed for a query.", result.reason);
     }
   }
 

@@ -35,6 +35,12 @@ type WellnessDay = {
   ramp_rate: number | null;
 };
 
+export type CoachMemoryItem = {
+  id: string;
+  category: string;
+  content: string;
+};
+
 export type CoachUserContext = {
   ftp: number | null;
   weight: number | null;
@@ -42,6 +48,7 @@ export type CoachUserContext = {
   upcomingScheduledWorkouts: ScheduledWorkoutItem[];
   recentActivities: RecentActivity[];
   wellnessTrend: WellnessDay[];
+  memories: CoachMemoryItem[];
 };
 
 const formatIntervalSummary = (intervals: unknown): string => {
@@ -120,7 +127,15 @@ const formatScheduledWorkouts = (
   return `${label} scheduled workouts:\n${lines.join("\n")}`;
 };
 
+const contextCache = new Map<string, { data: CoachUserContext; expiresAt: number }>();
+const CONTEXT_TTL_MS = 60_000;
+
 export async function loadCoachUserContext(userId: string): Promise<CoachUserContext> {
+  const cached = contextCache.get(userId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.data;
+  }
+
   const supabase = await createClient();
 
   const today = new Date();
@@ -137,6 +152,7 @@ export async function loadCoachUserContext(userId: string): Promise<CoachUserCon
     { data: upcomingScheduledWorkouts },
     { data: recentActivitiesData },
     { data: wellnessData },
+    { data: memoriesData },
   ] = await Promise.all([
       supabase.from("users").select("ftp, weight").eq("id", userId).maybeSingle(),
       supabase
@@ -199,16 +215,31 @@ export async function loadCoachUserContext(userId: string): Promise<CoachUserCon
         .lte("date", toDate(today))
         .order("date", { ascending: false })
         .limit(14),
+      supabase
+        .from("coach_memories")
+        .select("id, category, content")
+        .eq("user_id", userId)
+        .order("updated_at", { ascending: false })
+        .limit(50),
     ]);
 
-  return {
+  const memories = (memoriesData as CoachMemoryItem[] | null) ?? [];
+  if (memories.length > 0) {
+    console.log("[Memory] Loaded", memories.length, "memories for context");
+  }
+
+  const context: CoachUserContext = {
     ftp: profile?.ftp ?? null,
     weight: profile?.weight ?? null,
     recentScheduledWorkouts: (recentScheduledWorkouts as ScheduledWorkoutItem[] | null) ?? [],
     upcomingScheduledWorkouts: (upcomingScheduledWorkouts as ScheduledWorkoutItem[] | null) ?? [],
     recentActivities: (recentActivitiesData as RecentActivity[] | null) ?? [],
     wellnessTrend: (wellnessData as WellnessDay[] | null) ?? [],
+    memories,
   };
+
+  contextCache.set(userId, { data: context, expiresAt: Date.now() + CONTEXT_TTL_MS });
+  return context;
 }
 
 const formatRecentActivities = (activities: RecentActivity[]): string => {

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
-import { Bot, Cog, Maximize2, Minimize2, Minus, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Bot, Cog, ExternalLink, Maximize2, Minimize2, Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -16,16 +16,37 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { CoachChatPanel, useCoachChatController } from "@/components/coach/coach-chat-panel";
-import { readCoachDialogState, writeCoachDialogState } from "@/lib/coach/persistence";
+import {
+  readCoachDialogState,
+  writeCoachDialogState,
+  readActiveConversationId,
+  writeActiveConversationId,
+  clearActiveConversationId,
+} from "@/lib/coach/persistence";
 
 export function FloatingCoach() {
-  const pathname = usePathname();
-  const chat = useCoachChatController({ persistMessages: true });
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [newChatConfirmOpen, setNewChatConfirmOpen] = useState(false);
   const [hasHydrated, setHasHydrated] = useState(false);
+  const [activeConvId, setActiveConvId] = useState<string | null>(null);
+
+  // Read active conversation ID from localStorage on mount
+  useEffect(() => {
+    setActiveConvId(readActiveConversationId());
+  }, []);
+
+  const onConversationCreated = useCallback((id: string) => {
+    setActiveConvId(id);
+    writeActiveConversationId(id);
+  }, []);
+
+  const chat = useCoachChatController({
+    conversationId: activeConvId,
+    onConversationCreated,
+  });
 
   useEffect(() => {
     const state = readCoachDialogState();
@@ -45,12 +66,19 @@ export function FloatingCoach() {
     return null;
   }
 
-  const confirmClearChat = () => {
-    chat.clearChat();
-    if (pathname !== "/coach") {
-      setIsOpen(false);
+  const handleNewChat = () => {
+    if (chat.messages.length > 0) {
+      setNewChatConfirmOpen(true);
+    } else {
+      startNewChat();
     }
-    setClearConfirmOpen(false);
+  };
+
+  const startNewChat = () => {
+    chat.startNewConversation();
+    setActiveConvId(null);
+    clearActiveConversationId();
+    setNewChatConfirmOpen(false);
   };
 
   return (
@@ -88,23 +116,39 @@ export function FloatingCoach() {
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => setClearConfirmOpen(true)}
-                aria-label="Clear chat"
-                title="Clear chat"
+                onClick={handleNewChat}
+                aria-label="New chat"
+                title="New chat"
               >
-                <X className="h-4 w-4" />
+                <Plus className="h-4 w-4" />
               </Button>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => setSettingsOpen(true)}
-                aria-label="Open developer coach settings"
-                title="Developer coach settings"
+                onClick={() => {
+                  router.push("/coach");
+                  setIsOpen(false);
+                }}
+                aria-label="View all chats"
+                title="View all chats"
               >
-                <Cog className="h-4 w-4" />
+                <ExternalLink className="h-4 w-4" />
               </Button>
+              {process.env.NODE_ENV === "development" && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setSettingsOpen(true)}
+                  aria-label="Open developer coach settings"
+                  title="Developer coach settings"
+                >
+                  <Cog className="h-4 w-4" />
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="ghost"
@@ -139,17 +183,17 @@ export function FloatingCoach() {
           </div>
         </div>
       )}
-      <AlertDialog open={clearConfirmOpen} onOpenChange={setClearConfirmOpen}>
+      <AlertDialog open={newChatConfirmOpen} onOpenChange={setNewChatConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Clear chat?</AlertDialogTitle>
+            <AlertDialogTitle>Start new chat?</AlertDialogTitle>
             <AlertDialogDescription>
-              This operation is not reversible. All current coach messages will be permanently removed.
+              Your current conversation is saved. You can find it again on the Coach page.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmClearChat}>Clear chat</AlertDialogAction>
+            <AlertDialogAction onClick={startNewChat}>New chat</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

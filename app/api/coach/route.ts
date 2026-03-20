@@ -1,94 +1,15 @@
 import { convertToModelMessages, streamText, type UIMessage } from "ai";
 import { NextResponse } from "next/server";
 import { loadCoachUserContext } from "@/lib/ai/context";
-import {
-  resolveModels,
-  type ModelProvider,
-  type RuntimeModelOverrides,
-  type StepConfig,
-} from "@/lib/ai/models";
+import { resolveModels } from "@/lib/ai/models";
 import { buildCoachSystemPrompt } from "@/lib/ai/prompt";
 import { generateSearchQueries, retrieveKnowledge } from "@/lib/ai/rag";
+import { extractMessageText, sanitizeModelOverrides } from "@/lib/ai/utils";
 import { createClient } from "@/lib/supabase/server";
 
 /** Set to false to disable temporary AI step logging (inputs/outputs, excluding long system prompt). */
 const LOG_AI_STEPS = true;
 
-const extractMessageText = (message: UIMessage): string => {
-  const content = (message as { content?: unknown }).content;
-  if (typeof content === "string") {
-    return content;
-  }
-
-  const parts = (message as { parts?: unknown }).parts;
-  if (Array.isArray(parts)) {
-    return parts
-      .map((part) => {
-        if (!part || typeof part !== "object") {
-          return "";
-        }
-        if ("text" in part && typeof part.text === "string") {
-          return part.text;
-        }
-        return "";
-      })
-      .filter(Boolean)
-      .join("\n");
-  }
-
-  return "";
-};
-
-const isModelProvider = (value: unknown): value is ModelProvider => {
-  return value === "openai" || value === "ollama";
-};
-
-const toStepOverride = (value: unknown): Partial<StepConfig> | undefined => {
-  if (!value || typeof value !== "object") {
-    return undefined;
-  }
-
-  const raw = value as { provider?: unknown; model?: unknown };
-  const override: Partial<StepConfig> = {};
-
-  if (isModelProvider(raw.provider)) {
-    override.provider = raw.provider;
-  }
-  if (typeof raw.model === "string" && raw.model.trim().length > 0) {
-    override.model = raw.model.trim();
-  }
-
-  return Object.keys(override).length > 0 ? override : undefined;
-};
-
-const sanitizeModelOverrides = (value: unknown): RuntimeModelOverrides | undefined => {
-  if (!value || typeof value !== "object") {
-    return undefined;
-  }
-
-  const raw = value as Record<string, unknown>;
-  const overrides: RuntimeModelOverrides = {};
-
-  const queryGeneration = toStepOverride(raw.queryGeneration);
-  const embedding = toStepOverride(raw.embedding);
-  const coaching = toStepOverride(raw.coaching);
-  const workoutExtraction = toStepOverride(raw.workoutExtraction);
-
-  if (queryGeneration) {
-    overrides.queryGeneration = queryGeneration;
-  }
-  if (embedding) {
-    overrides.embedding = embedding;
-  }
-  if (coaching) {
-    overrides.coaching = coaching;
-  }
-  if (workoutExtraction) {
-    overrides.workoutExtraction = workoutExtraction;
-  }
-
-  return Object.keys(overrides).length > 0 ? overrides : undefined;
-};
 
 const parseBooleanEnv = (value: string | undefined, fallback: boolean) => {
   if (value == null) {
@@ -112,8 +33,9 @@ const ENFORCED_WORKOUT_TAG_RULES = `
 CRITICAL OUTPUT FORMAT RULES:
 - If your answer includes any concrete workout prescription (single workout OR weekly/day-by-day plan with intervals/intensities), you MUST wrap each prescribed workout block in <workout>...</workout>.
 - This includes "Day 1 / Day 2" schedules, interval prescriptions, and any executable session details.
+- Inside <workout> tags, use ONLY plain markdown (headings, bold, bullets, text). NEVER use XML/HTML tags like <name>, <category>, <interval>, <intervals>, or any other angle-bracket tags inside workout blocks.
 - You may include prose, bullets, and markdown outside workout tags.
-- Do NOT use any XML/HTML-like tags other than <workout> and </workout>.
+- The ONLY tags allowed in your entire response are <workout> and </workout>. No other angle-bracket tags anywhere.
 - Never omit tags for concrete workouts.
 `;
 

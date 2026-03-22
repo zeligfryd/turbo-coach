@@ -17,8 +17,10 @@ import {
   startOfWeekMonday,
 } from "./utils";
 import type { ScheduledWorkout, CalendarActivity } from "./types";
-import { getScheduledWorkouts, getCalendarActivities, getCalendarWellness, removeScheduledWorkout, scheduleWorkout } from "@/app/calendar/actions";
+import type { Workout } from "@/lib/workouts/types";
+import { getScheduledWorkouts, getCalendarActivities, getCalendarWellness, getUserFtp, removeScheduledWorkout, scheduleWorkout } from "@/app/calendar/actions";
 import type { CalendarWellness } from "@/app/calendar/actions";
+import { WorkoutDetailModal } from "@/components/workouts/workout-detail-modal";
 
 function getMonthKey(date: Date) {
   const year = date.getFullYear();
@@ -50,6 +52,8 @@ export function CalendarClient() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
+  const [userFtp, setUserFtp] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const pendingPrependAdjust = useRef<number | null>(null);
   const pendingScrollToDate = useRef<string | null>(null);
@@ -121,6 +125,10 @@ export function CalendarClient() {
   useEffect(() => {
     fetchScheduled();
   }, [fetchScheduled]);
+
+  useEffect(() => {
+    getUserFtp().then(setUserFtp);
+  }, []);
 
   const updateViewingMonth = useCallback(() => {
     const container = scrollRef.current;
@@ -342,6 +350,7 @@ export function CalendarClient() {
             wellnessByDate={wellnessByDate}
             onAdd={handleAdd}
             onRemove={handleRemove}
+            onWorkoutClick={setSelectedWorkout}
           />
         </div>
         <div className="md:hidden">
@@ -352,6 +361,7 @@ export function CalendarClient() {
             wellnessByDate={wellnessByDate}
             onAdd={handleAdd}
             onRemove={handleRemove}
+            onWorkoutClick={setSelectedWorkout}
           />
         </div>
       </div>
@@ -360,6 +370,12 @@ export function CalendarClient() {
         open={isPickerOpen}
         onClose={() => setIsPickerOpen(false)}
         onSelectWorkout={handleSchedule}
+      />
+
+      <WorkoutDetailModal
+        workout={selectedWorkout}
+        onClose={() => setSelectedWorkout(null)}
+        userFtp={userFtp}
       />
     </div>
   );

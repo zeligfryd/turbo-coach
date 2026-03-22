@@ -7,7 +7,7 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
-import { Cog, Loader2, Send } from "lucide-react";
+import { CalendarPlus, Check, Cog, Database, Lightbulb, Loader2, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -30,10 +30,14 @@ import {
   writeStorage,
 } from "@/lib/coach/persistence";
 import {
+  createAndScheduleCoachWorkout,
   createConversation,
   getConversation,
+  getUnreadInsights,
+  markInsightRead,
   saveConversationMessages,
   triggerMemoryExtraction,
+  type CoachInsight,
 } from "@/app/coach/actions";
 import { extractMessageText } from "@/lib/ai/utils";
 import type { RuntimeModelOverrides } from "@/lib/ai/models";
@@ -207,6 +211,46 @@ const parseMessageSegments = (text: string): MessageSegment[] => {
   return segments.length > 0 ? segments : [{ type: "text", content: safeText }];
 };
 
+const TOOL_LABELS: Record<string, string> = {
+  searchActivities: "Searching activities",
+  getWellnessTrend: "Retrieving fitness trend",
+  getTrainingLoad: "Calculating training load",
+  getWorkoutCompliance: "Checking workout compliance",
+  getComplianceRate: "Checking training consistency",
+  comparePeriods: "Comparing periods",
+  getPeakPowers: "Analysing peak powers",
+  scheduleWorkout: "Scheduling workout",
+  scheduleDescribedWorkout: "Scheduling workout",
+};
+
+type ToolPartInfo = {
+  toolCallId: string;
+  toolName: string;
+  state: string;
+  output?: unknown;
+};
+
+const extractToolParts = (message: UIMessage): ToolPartInfo[] => {
+  if (!message.parts) return [];
+  const results: ToolPartInfo[] = [];
+  for (const p of message.parts) {
+    const raw = p as Record<string, unknown>;
+    const type = (raw.type as string) ?? "";
+    if (!type.startsWith("tool-") && type !== "dynamic-tool") continue;
+    const toolName =
+      type === "dynamic-tool"
+        ? (raw.toolName as string) ?? "unknown"
+        : type.replace(/^tool-/, "");
+    results.push({
+      toolCallId: raw.toolCallId as string,
+      toolName,
+      state: raw.state as string,
+      output: raw.output,
+    });
+  }
+  return results;
+};
+
 type ControllerOptions = {
   conversationId?: string | null;
   onConversationCreated?: (id: string) => void;
@@ -221,6 +265,7 @@ export const useCoachChatController = (options?: ControllerOptions) => {
   const [isLoadingConversation, setIsLoadingConversation] = useState(false);
   const [loadConversationError, setLoadConversationError] = useState<string | null>(null);
   const [didMigrateLegacy, setDidMigrateLegacy] = useState(false);
+  const [insights, setInsights] = useState<CoachInsight[]>([]);
   const [devOverrides, setDevOverrides] = useState<DevModelOverrides>(DEFAULT_OVERRIDES);
   const [devRagSettings, setDevRagSettings] = useState<DevRagSettings>(DEFAULT_RAG_SETTINGS);
   const prevStatusRef = useRef<string>("");
@@ -255,6 +300,18 @@ export const useCoachChatController = (options?: ControllerOptions) => {
     () => status === "submitted" || status === "streaming",
     [status]
   );
+
+  // Load unread insights on mount
+  useEffect(() => {
+    getUnreadInsights().then((result) => {
+      if (result.success) setInsights(result.insights);
+    });
+  }, []);
+
+  const dismissInsight = useCallback((id: string) => {
+    setInsights((prev) => prev.filter((i) => i.id !== id));
+    markInsightRead(id).catch(console.warn);
+  }, []);
 
   // Dev settings hydration
   useEffect(() => {
@@ -478,6 +535,8 @@ export const useCoachChatController = (options?: ControllerOptions) => {
     sendSuggestion,
     startNewConversation,
     loadConversation,
+    insights,
+    dismissInsight,
   };
 };
 
@@ -501,8 +560,12 @@ export function CoachChatPanel({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
   const [internalSettingsOpen, setInternalSettingsOpen] = useState(false);
-  const [loadingByWorkoutKey, setLoadingByWorkoutKey] = useState<Record<string, boolean>>({});
+  const [loadingByWorkoutKey, setLoadingByWorkoutKey] = useState<Record<string, "builder" | "schedule" | false>>({});
   const [errorByWorkoutKey, setErrorByWorkoutKey] = useState<Record<string, string>>({});
+  const [schedulingKey, setSchedulingKey] = useState<string | null>(null);
+  const [scheduledKeys, setScheduledKeys] = useState<Record<string, string>>({});
+  type ExtractedWorkout = { name: string; category: string; description: string | null; tags: string[]; intervals: unknown[] };
+  const extractionCacheRef = useRef<Record<string, ExtractedWorkout>>({});
 
   // Track whether user has scrolled away from the bottom
   useEffect(() => {
@@ -533,46 +596,40 @@ export function CoachChatPanel({
   const settingsOpen = controlledSettingsOpen ?? internalSettingsOpen;
   const setSettingsOpen = onSettingsOpenChange ?? setInternalSettingsOpen;
 
-  const openInBuilder = async (key: string, workoutDescription: string) => {
-    const description = workoutDescription.trim();
-    const runKey = `${Date.now()}-${key}`;
-    if (!description) {
-      return;
+  /** Extract a workout from its description, using the cache if available. */
+  const extractWorkout = async (key: string, workoutDescription: string): Promise<ExtractedWorkout> => {
+    const cached = extractionCacheRef.current[key];
+    if (cached) return cached;
+
+    const response = await fetch("/api/coach/extract-workout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        description: workoutDescription.trim(),
+        runKey: `${Date.now()}-${key}`,
+        ...(IS_DEV ? { modelOverrides: controller.devOverrides } : {}),
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error("Workout extraction API error:", response.status, errorBody);
+      throw new Error("Failed to extract workout");
     }
 
-    setLoadingByWorkoutKey((prev) => ({ ...prev, [key]: true }));
+    const data = (await response.json()) as ExtractedWorkout;
+    extractionCacheRef.current[key] = data;
+    return data;
+  };
+
+  const openInBuilder = async (key: string, workoutDescription: string) => {
+    if (!workoutDescription.trim()) return;
+
+    setLoadingByWorkoutKey((prev) => ({ ...prev, [key]: "builder" }));
     setErrorByWorkoutKey((prev) => ({ ...prev, [key]: "" }));
 
     try {
-      const response = await fetch("/api/coach/extract-workout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          description,
-          runKey,
-          ...(IS_DEV
-            ? {
-                modelOverrides: controller.devOverrides,
-              }
-            : {}),
-        }),
-      });
-
-      if (!response.ok) {
-        const errorBody = await response.text();
-        console.error("Open in Builder extraction API error:", response.status, errorBody);
-        throw new Error("Failed to extract workout");
-      }
-
-      const data = (await response.json()) as {
-        name: string;
-        category: string;
-        description: string | null;
-        tags?: string[];
-        intervals: unknown[];
-      };
+      const data = await extractWorkout(key, workoutDescription);
 
       writeStorage(COACH_STORAGE_KEYS.prefillWorkout, {
         metadata: {
@@ -589,12 +646,91 @@ export function CoachChatPanel({
       console.error("Workout extraction failed:", error);
       setErrorByWorkoutKey((prev) => ({
         ...prev,
-        [key]: "Could not open this workout in builder. Please try again.",
+        [key]: "Could not extract workout. Please try again.",
       }));
     } finally {
       setLoadingByWorkoutKey((prev) => ({ ...prev, [key]: false }));
     }
   };
+
+  const scheduleWorkout = async (key: string, workoutDescription: string, date: string) => {
+    if (!workoutDescription.trim() || !date) return;
+
+    setLoadingByWorkoutKey((prev) => ({ ...prev, [key]: "schedule" }));
+    setErrorByWorkoutKey((prev) => ({ ...prev, [key]: "" }));
+    setSchedulingKey(null);
+
+    try {
+      const data = await extractWorkout(key, workoutDescription);
+      const result = await createAndScheduleCoachWorkout(data, date);
+      if (!result.success) {
+        throw new Error(result.error ?? "Failed to schedule workout");
+      }
+      setScheduledKeys((prev) => ({ ...prev, [key]: date }));
+    } catch (error) {
+      console.error("Workout scheduling failed:", error);
+      setErrorByWorkoutKey((prev) => ({
+        ...prev,
+        [key]: "Could not schedule this workout. Please try again.",
+      }));
+    } finally {
+      setLoadingByWorkoutKey((prev) => ({ ...prev, [key]: false }));
+    }
+  };
+
+  // Auto-schedule: after the stream completes, check for pending scheduleDescribedWorkout tool calls
+  const prevStreamStatusRef = useRef(controller.status);
+  const autoSchedulingRef = useRef(false);
+  useEffect(() => {
+    const prev = prevStreamStatusRef.current;
+    prevStreamStatusRef.current = controller.status;
+
+    if (prev !== "streaming" || controller.status !== "ready") return;
+    if (autoSchedulingRef.current) return;
+
+    // Find the last assistant message
+    const lastAssistantMsg = [...controller.messages].reverse().find((m) => m.role === "assistant");
+    if (!lastAssistantMsg) return;
+
+    // Check for a pending scheduleDescribedWorkout tool result
+    const toolParts = extractToolParts(lastAssistantMsg);
+    const pendingSchedule = toolParts.find(
+      (tp) =>
+        tp.toolName === "scheduleDescribedWorkout" &&
+        tp.state === "output-available" &&
+        (tp.output as Record<string, unknown>)?.pending === true
+    );
+    if (!pendingSchedule) return;
+
+    const scheduledDate = (pendingSchedule.output as Record<string, unknown>).date as string;
+    if (!scheduledDate) return;
+
+    // Extract the <workout> content from the same message
+    const messageText = getMessageText(lastAssistantMsg);
+    const workoutSegments = parseMessageSegments(messageText).filter(
+      (s): s is Extract<MessageSegment, { type: "workout" }> => s.type === "workout" && s.isClosed
+    );
+    const lastWorkout = workoutSegments[workoutSegments.length - 1];
+    if (!lastWorkout) return;
+
+    // Use a stable key for this workout segment
+    const segmentKey = `${lastAssistantMsg.id}-auto-schedule`;
+
+    autoSchedulingRef.current = true;
+    (async () => {
+      try {
+        const data = await extractWorkout(segmentKey, lastWorkout.content);
+        const result = await createAndScheduleCoachWorkout(data, scheduledDate);
+        if (result.success) {
+          setScheduledKeys((prev) => ({ ...prev, [segmentKey]: scheduledDate }));
+        }
+      } catch (err) {
+        console.warn("Auto-schedule failed:", err);
+      } finally {
+        autoSchedulingRef.current = false;
+      }
+    })();
+  }, [controller.status, controller.messages]);
 
   return (
     <div className={cn("h-full flex flex-col", className)}>
@@ -694,6 +830,41 @@ export function CoachChatPanel({
           </>
         )}
 
+        {controller.insights.length > 0 && (
+          <div className="max-w-4xl mx-auto space-y-2 mb-4">
+            {controller.insights.map((insight) => (
+              <div
+                key={insight.id}
+                className={cn(
+                  "relative rounded-lg border p-3 text-sm",
+                  insight.type === "weekly_summary"
+                    ? "bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800"
+                    : "bg-amber-50 border-amber-200 dark:bg-amber-950 dark:border-amber-800"
+                )}
+              >
+                <button
+                  type="button"
+                  className="absolute top-2 right-2 text-muted-foreground hover:text-foreground"
+                  onClick={() => controller.dismissInsight(insight.id)}
+                  aria-label="Dismiss"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+                <div className="flex items-start gap-2 pr-6">
+                  <Lightbulb className="h-4 w-4 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-medium text-xs mb-1">
+                      {insight.type === "weekly_summary" ? "Weekly Summary" : "Ride Analysis"}
+                      {insight.metadata?.activity_name ? ` — ${insight.metadata.activity_name}` : ""}
+                    </p>
+                    <p className="whitespace-pre-wrap">{insight.content}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {controller.isLoadingConversation && (
           <div className="max-w-4xl mx-auto mt-8 flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -752,65 +923,173 @@ export function CoachChatPanel({
                       <p className="whitespace-pre-wrap">{text}</p>
                     ) : (
                       <div className="space-y-3">
-                        {parseMessageSegments(text).map((segment, segmentIndex) => {
-                          const segmentKey = `${message.id}-${segmentIndex}`;
-
-                          if (segment.type === "workout") {
-                            return (
-                              <div key={segmentKey} className="space-y-2">
-                                <div className="prose prose-sm max-w-none dark:prose-invert">
-                                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
-                                    {segment.content}
-                                  </ReactMarkdown>
-                                </div>
-                                {segment.isClosed ? (
-                                  <div className="flex items-center gap-2">
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      disabled={loadingByWorkoutKey[segmentKey]}
-                                      onClick={() => openInBuilder(segmentKey, segment.content)}
-                                    >
-                                      {loadingByWorkoutKey[segmentKey] ? (
-                                        <>
-                                          <Loader2 className="h-4 w-4 animate-spin" />
-                                          Extracting...
-                                        </>
-                                      ) : (
-                                        "Open in Builder"
-                                      )}
-                                    </Button>
-                                    {errorByWorkoutKey[segmentKey] ? (
-                                      <p className="text-xs text-red-600">{errorByWorkoutKey[segmentKey]}</p>
-                                    ) : null}
-                                  </div>
-                                ) : (
-                                  <p className="text-xs text-muted-foreground">Workout draft...</p>
-                                )}
-                              </div>
-                            );
-                          }
-
-                          if (!segment.content.trim()) {
-                            return null;
-                          }
+                        {(() => {
+                          const toolParts = extractToolParts(message);
+                          const hasToolCalls = toolParts.length > 0;
+                          const isToolRunning = toolParts.some(
+                            (t) => t.state === "input-streaming" || t.state === "input-available"
+                          );
 
                           return (
-                            <div key={segmentKey} className="prose prose-sm max-w-none dark:prose-invert">
-                              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
-                                {segment.content}
-                              </ReactMarkdown>
-                            </div>
+                            <>
+                              {hasToolCalls && (
+                                <div className="flex flex-wrap gap-2">
+                                  {toolParts.map((tp) => {
+                                    const label = TOOL_LABELS[tp.toolName] ?? tp.toolName;
+                                    const done = tp.state === "output-available";
+                                    const errored = tp.state === "output-error";
+                                    return (
+                                      <span
+                                        key={tp.toolCallId}
+                                        className={cn(
+                                          "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs",
+                                          done
+                                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                                            : errored
+                                              ? "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300"
+                                              : "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+                                        )}
+                                      >
+                                        {done ? (
+                                          <Database className="h-3 w-3" />
+                                        ) : errored ? (
+                                          <Database className="h-3 w-3" />
+                                        ) : (
+                                          <Loader2 className="h-3 w-3 animate-spin" />
+                                        )}
+                                        {label}{done ? "" : "..."}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
+                              {/* Show thinking indicator when tool is running and no text yet */}
+                              {isToolRunning && !text.trim() && (
+                                <p className="text-xs text-muted-foreground">Retrieving data...</p>
+                              )}
+
+                              {parseMessageSegments(text).map((segment, segmentIndex) => {
+                                const segmentKey = `${message.id}-${segmentIndex}`;
+
+                                if (segment.type === "workout") {
+                                  return (
+                                    <div key={segmentKey} className="space-y-2">
+                                      <div className="prose prose-sm max-w-none dark:prose-invert">
+                                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                                          {segment.content}
+                                        </ReactMarkdown>
+                                      </div>
+                                      {segment.isClosed ? (
+                                        <div className="space-y-2">
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <Button
+                                              type="button"
+                                              variant="outline"
+                                              size="sm"
+                                              disabled={!!loadingByWorkoutKey[segmentKey]}
+                                              onClick={() => openInBuilder(segmentKey, segment.content)}
+                                            >
+                                              {loadingByWorkoutKey[segmentKey] === "builder" ? (
+                                                <>
+                                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                                  Extracting...
+                                                </>
+                                              ) : (
+                                                "Open in Builder"
+                                              )}
+                                            </Button>
+                                            {scheduledKeys[segmentKey] ? (
+                                              <span className="inline-flex items-center gap-1 text-xs text-green-600">
+                                                <Check className="h-3.5 w-3.5" />
+                                                Scheduled for {scheduledKeys[segmentKey]}
+                                              </span>
+                                            ) : loadingByWorkoutKey[segmentKey] === "schedule" ? (
+                                              <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                Scheduling...
+                                              </span>
+                                            ) : schedulingKey === segmentKey ? (
+                                              <div className="inline-flex items-center gap-1.5">
+                                                <input
+                                                  type="date"
+                                                  className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+                                                  defaultValue={new Date().toISOString().slice(0, 10)}
+                                                  autoFocus
+                                                  onKeyDown={(e) => {
+                                                    if (e.key === "Escape") setSchedulingKey(null);
+                                                    if (e.key === "Enter") {
+                                                      scheduleWorkout(segmentKey, segment.content, e.currentTarget.value);
+                                                    }
+                                                  }}
+                                                  onChange={(e) => {
+                                                    if (e.target.value) {
+                                                      scheduleWorkout(segmentKey, segment.content, e.target.value);
+                                                    }
+                                                  }}
+                                                />
+                                                <Button
+                                                  type="button"
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  className="h-8 w-8 p-0"
+                                                  onClick={() => setSchedulingKey(null)}
+                                                >
+                                                  <X className="h-3.5 w-3.5" />
+                                                </Button>
+                                              </div>
+                                            ) : (
+                                              <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                disabled={!!loadingByWorkoutKey[segmentKey]}
+                                                onClick={() => setSchedulingKey(segmentKey)}
+                                              >
+                                                <CalendarPlus className="h-4 w-4" />
+                                                Schedule
+                                              </Button>
+                                            )}
+                                          </div>
+                                          {errorByWorkoutKey[segmentKey] ? (
+                                            <p className="text-xs text-red-600">{errorByWorkoutKey[segmentKey]}</p>
+                                          ) : null}
+                                        </div>
+                                      ) : (
+                                        <p className="text-xs text-muted-foreground">Workout draft...</p>
+                                      )}
+                                    </div>
+                                  );
+                                }
+
+                                if (!segment.content.trim()) {
+                                  return null;
+                                }
+
+                                return (
+                                  <div key={segmentKey} className="prose prose-sm max-w-none dark:prose-invert">
+                                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                                      {segment.content}
+                                    </ReactMarkdown>
+                                  </div>
+                                );
+                              })}
+                            </>
                           );
-                        })}
+                        })()}
                       </div>
                     )}
                   </div>
                 </div>
               );
             })}
-            {controller.isGenerating && (
+            {controller.isGenerating && controller.messages.length > 0 &&
+              !controller.messages[controller.messages.length - 1]?.parts?.some(
+                (p) => {
+                  const t = (p as { type?: string }).type ?? "";
+                  return t.startsWith("tool-") || t === "dynamic-tool";
+                }
+              ) && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Coach is thinking...

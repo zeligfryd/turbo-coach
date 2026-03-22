@@ -1,6 +1,7 @@
 import { CalendarDay } from "./calendar-day";
 import { CalendarWeekSummary } from "./calendar-week-summary";
 import type { ScheduledWorkout, CalendarActivity } from "./types";
+import type { Workout } from "@/lib/workouts/types";
 import type { CalendarWellness } from "@/app/calendar/actions";
 import { formatDateKey } from "./utils";
 
@@ -11,6 +12,7 @@ interface CalendarGridProps {
   wellnessByDate: Record<string, CalendarWellness>;
   onAdd: (dateKey: string) => void;
   onRemove: (scheduledWorkoutId: string) => void;
+  onWorkoutClick?: (workout: Workout) => void;
 }
 
 const weekDayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Week"];
@@ -22,6 +24,7 @@ export function CalendarGrid({
   wellnessByDate,
   onAdd,
   onRemove,
+  onWorkoutClick,
 }: CalendarGridProps) {
   return (
     <section className="space-y-4">
@@ -64,6 +67,7 @@ export function CalendarGrid({
                     activities={activities}
                     onAdd={onAdd}
                     onRemove={onRemove}
+                    onWorkoutClick={onWorkoutClick}
                   />
                 );
               })}

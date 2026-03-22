@@ -1,9 +1,10 @@
-import { convertToModelMessages, streamText, type UIMessage } from "ai";
+import { convertToModelMessages, stepCountIs, streamText, type UIMessage } from "ai";
 import { NextResponse } from "next/server";
 import { loadCoachUserContext } from "@/lib/ai/context";
 import { resolveModels } from "@/lib/ai/models";
 import { buildCoachSystemPrompt } from "@/lib/ai/prompt";
 import { generateSearchQueries, retrieveKnowledge } from "@/lib/ai/rag";
+import { createCoachTools } from "@/lib/ai/tools";
 import { extractMessageText, sanitizeModelOverrides } from "@/lib/ai/utils";
 import { createClient } from "@/lib/supabase/server";
 
@@ -105,10 +106,14 @@ export async function POST(request: Request) {
       });
     }
 
+    const tools = createCoachTools(user.id);
+
     const result = streamText({
       model: models.coaching,
       system: systemPrompt,
       messages: modelMessages,
+      tools,
+      stopWhen: stepCountIs(3),
     });
 
     if (LOG_AI_STEPS) {

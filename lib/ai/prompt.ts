@@ -71,7 +71,10 @@ export const buildCoachSystemPrompt = (params: {
   const ragContext = formatRagContext(params.ragChunks);
   const memoriesContext = formatMemories(params.userContext.memories);
 
-  const parts = [BASE_COACH_PROMPT, userContext];
+  const today = new Date().toISOString().slice(0, 10);
+  const dayName = new Date().toLocaleDateString("en-US", { weekday: "long" });
+
+  const parts = [BASE_COACH_PROMPT, `Today is ${dayName}, ${today}.`, userContext];
   if (memoriesContext) {
     parts.push(memoriesContext);
   }

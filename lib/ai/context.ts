@@ -24,7 +24,11 @@ type RecentActivity = {
   avg_power: number | null;
   normalized_power: number | null;
   avg_hr: number | null;
+  max_hr: number | null;
+  avg_cadence: number | null;
   distance: number | null;
+  elevation_gain: number | null;
+  calories: number | null;
 };
 
 type WellnessDay = {
@@ -33,6 +37,8 @@ type WellnessDay = {
   atl: number | null;
   tsb: number | null;
   ramp_rate: number | null;
+  resting_hr: number | null;
+  hrv: number | null;
 };
 
 export type CoachMemoryItem = {
@@ -200,7 +206,7 @@ export async function loadCoachUserContext(userId: string): Promise<CoachUserCon
       supabase
         .from("icu_activities")
         .select(
-          "activity_date, name, type, moving_time, icu_training_load, avg_power, normalized_power, avg_hr, distance"
+          "activity_date, name, type, moving_time, icu_training_load, avg_power, normalized_power, avg_hr, max_hr, avg_cadence, distance, elevation_gain, calories"
         )
         .eq("user_id", userId)
         .gte("activity_date", toDate(recentStart))
@@ -209,7 +215,7 @@ export async function loadCoachUserContext(userId: string): Promise<CoachUserCon
         .limit(14),
       supabase
         .from("wellness")
-        .select("date, ctl, atl, tsb, ramp_rate")
+        .select("date, ctl, atl, tsb, ramp_rate, resting_hr, hrv")
         .eq("user_id", userId)
         .gte("date", toDate(recentStart))
         .lte("date", toDate(today))
@@ -254,8 +260,12 @@ const formatRecentActivities = (activities: RecentActivity[]): string => {
     const power = a.avg_power != null ? `avg ${a.avg_power}W` : "";
     const np = a.normalized_power != null ? `NP ${a.normalized_power}W` : "";
     const hr = a.avg_hr != null ? `${a.avg_hr}bpm` : "";
+    const maxHr = a.max_hr != null ? `max ${a.max_hr}bpm` : "";
+    const cadence = a.avg_cadence != null ? `${a.avg_cadence}rpm` : "";
     const dist = a.distance != null ? `${(a.distance / 1000).toFixed(1)}km` : "";
-    const metrics = [duration, dist, load, power, np, hr].filter(Boolean).join(", ");
+    const elev = a.elevation_gain != null ? `${Math.round(a.elevation_gain)}m elev` : "";
+    const cal = a.calories != null ? `${a.calories}kcal` : "";
+    const metrics = [duration, dist, elev, load, power, np, hr, maxHr, cadence, cal].filter(Boolean).join(", ");
     return `- ${a.activity_date}: ${a.name ?? a.type ?? "Activity"} (${metrics})`;
   });
 
@@ -272,7 +282,9 @@ const formatWellnessTrend = (days: WellnessDay[]): string => {
     const atl = d.atl != null ? `ATL ${Math.round(d.atl)}` : "";
     const tsb = d.tsb != null ? `TSB ${Math.round(d.tsb)}` : "";
     const ramp = d.ramp_rate != null ? `ramp ${d.ramp_rate.toFixed(1)}` : "";
-    const parts = [ctl, atl, tsb, ramp].filter(Boolean).join(", ");
+    const restHr = d.resting_hr != null ? `RHR ${d.resting_hr}` : "";
+    const hrv = d.hrv != null ? `HRV ${d.hrv}` : "";
+    const parts = [ctl, atl, tsb, ramp, restHr, hrv].filter(Boolean).join(", ");
     return `- ${d.date}: ${parts}`;
   });
 

@@ -1,6 +1,7 @@
 import { CalendarAgendaDay } from "./calendar-agenda-day";
 import { CalendarAgendaWeekSummary } from "./calendar-agenda-week-summary";
 import type { ScheduledWorkout, CalendarActivity } from "./types";
+import type { Workout } from "@/lib/workouts/types";
 import type { CalendarWellness } from "@/app/calendar/actions";
 import { formatDateKey } from "./utils";
 
@@ -11,6 +12,7 @@ interface CalendarAgendaProps {
   wellnessByDate: Record<string, CalendarWellness>;
   onAdd: (dateKey: string) => void;
   onRemove: (scheduledWorkoutId: string) => void;
+  onWorkoutClick?: (workout: Workout) => void;
 }
 
 function formatWeekRangeLabel(week: Date[]) {
@@ -28,6 +30,7 @@ export function CalendarAgenda({
   wellnessByDate,
   onAdd,
   onRemove,
+  onWorkoutClick,
 }: CalendarAgendaProps) {
   return (
     <section className="space-y-4">
@@ -64,6 +67,7 @@ export function CalendarAgenda({
                     activities={activities}
                     onAdd={onAdd}
                     onRemove={onRemove}
+                    onWorkoutClick={onWorkoutClick}
                   />
                 );
               })}

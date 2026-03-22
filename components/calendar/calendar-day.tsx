@@ -2,6 +2,7 @@ import { Plus, X, CheckCircle } from "lucide-react";
 import { MiniIntensityChart } from "@/components/workouts/mini-intensity-chart";
 import { flattenBuilderItems } from "@/lib/workouts/utils";
 import type { ScheduledWorkout, CalendarActivity } from "./types";
+import type { Workout } from "@/lib/workouts/types";
 import {
   getCalendarDayLabelParts,
   formatDateKey,
@@ -15,9 +16,10 @@ interface CalendarDayProps {
   activities?: CalendarActivity[];
   onAdd: (dateKey: string) => void;
   onRemove: (scheduledWorkoutId: string) => void;
+  onWorkoutClick?: (workout: Workout) => void;
 }
 
-export function CalendarDay({ date, workouts, activities = [], onAdd, onRemove }: CalendarDayProps) {
+export function CalendarDay({ date, workouts, activities = [], onAdd, onRemove, onWorkoutClick }: CalendarDayProps) {
   const dateKey = formatDateKey(date);
   const { monthPrefix, dayOfMonth } = getCalendarDayLabelParts(date);
 
@@ -52,7 +54,8 @@ export function CalendarDay({ date, workouts, activities = [], onAdd, onRemove }
           return (
             <div
               key={item.id}
-              className="rounded-md bg-background px-1.5 py-1 text-xs flex items-start justify-between gap-1.5 shadow-sm"
+              className="rounded-md bg-background px-1.5 py-1 text-xs flex items-start justify-between gap-1.5 shadow-sm cursor-pointer hover:ring-1 hover:ring-primary/40 transition-shadow"
+              onClick={() => onWorkoutClick?.(item.workout)}
             >
               <div className="min-w-0">
                 <div className="truncate text-[11px] font-bold leading-tight">{item.workout.name}</div>
@@ -64,7 +67,7 @@ export function CalendarDay({ date, workouts, activities = [], onAdd, onRemove }
                 </div>
               </div>
               <button
-                onClick={() => onRemove(item.id)}
+                onClick={(e) => { e.stopPropagation(); onRemove(item.id); }}
                 className="p-1 rounded hover:bg-accent text-muted-foreground"
                 aria-label="Remove workout"
               >

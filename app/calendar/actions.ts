@@ -385,3 +385,11 @@ export async function getCalendarWellness(startDate: string, endDate: string) {
     };
   }
 }
+
+export async function getUserFtp(): Promise<number | null> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase.from("users").select("ftp").eq("id", user.id).maybeSingle();
+  return (data as { ftp: number | null } | null)?.ftp ?? null;
+}

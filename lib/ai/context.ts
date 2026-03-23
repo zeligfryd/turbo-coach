@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { daysUntilRace } from "@/lib/race/readiness";
+import type { PowerProfile } from "@/lib/power/types";
 
 type WorkoutItem = {
   id: string;
@@ -67,6 +68,7 @@ export type CoachUserContext = {
   wellnessTrend: WellnessDay[];
   memories: CoachMemoryItem[];
   upcomingRaces: UpcomingRace[];
+  powerProfile: PowerProfile | null;
 };
 
 const formatIntervalSummary = (intervals: unknown): string => {
@@ -175,6 +177,7 @@ export async function loadCoachUserContext(userId: string): Promise<CoachUserCon
     { data: wellnessData },
     { data: memoriesData },
     { data: racesData },
+    { data: powerCurveCache },
   ] = await Promise.all([
       supabase.from("users").select("ftp, weight").eq("id", userId).maybeSingle(),
       supabase
@@ -251,12 +254,20 @@ export async function loadCoachUserContext(userId: string): Promise<CoachUserCon
         .lte("race_date", toDate(raceLookahead))
         .order("race_date", { ascending: true })
         .limit(5),
+      supabase
+        .from("power_curve_cache")
+        .select("profile")
+        .eq("user_id", userId)
+        .maybeSingle(),
     ]);
 
   const memories = (memoriesData as CoachMemoryItem[] | null) ?? [];
   if (memories.length > 0) {
     console.log("[Memory] Loaded", memories.length, "memories for context");
   }
+
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const powerProfile = (powerCurveCache as any)?.profile as PowerProfile | null ?? null;
 
   const context: CoachUserContext = {
     ftp: profile?.ftp ?? null,
@@ -267,6 +278,7 @@ export async function loadCoachUserContext(userId: string): Promise<CoachUserCon
     wellnessTrend: (wellnessData as WellnessDay[] | null) ?? [],
     memories,
     upcomingRaces: (racesData as UpcomingRace[] | null) ?? [],
+    powerProfile,
   };
 
   contextCache.set(userId, { data: context, expiresAt: Date.now() + CONTEXT_TTL_MS });
@@ -333,6 +345,29 @@ const formatUpcomingRaces = (races: UpcomingRace[]): string => {
   return `Upcoming races:\n${lines.join("\n")}`;
 };
 
+const formatPowerProfile = (profile: PowerProfile | null): string => {
+  if (!profile) return "Power profile: not yet computed (needs more ride data).";
+
+  const scores = Object.entries(profile.scores)
+    .map(([k, v]) => `${k}: ${v}/6`)
+    .join(", ");
+
+  const peaks = Object.entries(profile.allTimePeaks)
+    .map(([k, v]) => {
+      const wkg = profile.peakWkg[k];
+      return `${k}: ${v}W${wkg != null ? ` (${wkg} W/kg)` : ""}`;
+    })
+    .join(", ");
+
+  return [
+    `Power profile type: ${profile.type}`,
+    `Scores (Coggan 1-6): ${scores}`,
+    `All-time peaks: ${peaks}`,
+    `Biggest weakness: ${profile.weakness}`,
+    `Profile description: ${profile.description}`,
+  ].join("\n");
+};
+
 export const formatCoachUserContext = (context: CoachUserContext): string => {
   const profileLines = [
     `FTP: ${context.ftp ?? "unknown"} watts`,
@@ -342,6 +377,7 @@ export const formatCoachUserContext = (context: CoachUserContext): string => {
   return [
     "User context:",
     profileLines.map((line) => `- ${line}`).join("\n"),
+    formatPowerProfile(context.powerProfile),
     formatScheduledWorkouts(context.recentScheduledWorkouts, "Recent"),
     formatScheduledWorkouts(context.upcomingScheduledWorkouts, "Upcoming"),
     formatRecentActivities(context.recentActivities),

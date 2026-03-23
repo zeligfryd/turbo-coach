@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { syncWellness } from "@/lib/intervals/wellness-sync";
 import { triggerPostRideAnalysis } from "@/lib/ai/post-ride";
+import { recomputePowerCurve } from "@/lib/power/aggregate";
 import type { IcuConnectionRow } from "@/lib/intervals/types";
 
 export async function POST() {
@@ -68,8 +69,9 @@ export async function POST() {
       );
     }
 
-    // Fire-and-forget post-ride analysis for newly synced activities
+    // Fire-and-forget post-ride analysis and power curve recomputation
     triggerPostRideAnalysis(supabase, user.id).catch(console.warn);
+    recomputePowerCurve(supabase, user.id).catch(console.warn);
 
     return NextResponse.json({
       success: true,

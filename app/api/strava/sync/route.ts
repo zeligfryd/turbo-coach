@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { syncStravaActivities } from "@/lib/strava/sync";
 import { triggerPostRideAnalysis } from "@/lib/ai/post-ride";
+import { recomputePowerCurve } from "@/lib/power/aggregate";
 import type { StravaConnectionRow } from "@/lib/strava/types";
 import type { SyncMode } from "@/lib/strava/sync";
 
@@ -66,8 +67,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Fire-and-forget post-ride analysis for newly synced activities
+    // Fire-and-forget post-ride analysis and power curve recomputation
     triggerPostRideAnalysis(supabase, user.id).catch(console.warn);
+    recomputePowerCurve(supabase, user.id).catch(console.warn);
 
     return NextResponse.json({
       success: true,

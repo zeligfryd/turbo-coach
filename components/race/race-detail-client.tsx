@@ -5,6 +5,7 @@ import { RaceHeader } from "./race-header";
 import { RaceReadiness } from "./race-readiness";
 import { PacingCalculator } from "./pacing-calculator";
 import { PeriodisationCta } from "./periodisation-cta";
+import { ProfileRaceNote } from "./profile-race-note";
 import { RaceCoachPanel } from "./race-coach-panel";
 import type { RaceEvent, GpxData, PacingPlan } from "@/lib/race/types";
 import { daysUntilRace } from "@/lib/race/readiness";
@@ -74,6 +75,8 @@ export function RaceDetailClient({ race: initialRace, userFtp, userWeight }: Rac
             onPacingGenerated={handlePacingGenerated}
             onDiscuss={() => openCoach(`Walk me through this pacing plan for ${race.name}`)}
           />
+
+          <ProfileRaceNote eventType={race.event_type} />
 
           <PeriodisationCta race={race} />
         </div>

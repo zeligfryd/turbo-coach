@@ -154,6 +154,28 @@ export function createIcuClient(apiKey: string, athleteId: string) {
     return [];
   }
 
+  /**
+   * Fetch the athlete-level aggregated power curves.
+   * @param curveSpecs Array of curve specs: "all" (all-time), "42d" (last 42 days), "1y", etc.
+   * @returns Map of curve spec → power curve points
+   */
+  async function fetchAthletePowerCurves(
+    curveSpecs: string[] = ["all"]
+  ): Promise<Map<string, IcuPowerCurvePoint[]>> {
+    const params = new URLSearchParams({
+      type: "Ride",
+      curves: curveSpecs.join(","),
+    });
+    const url = `${ICU_BASE_URL}/athlete/${athleteId}/power-curves.json?${params}`;
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`intervals.icu athlete power curves returned ${res.status}: ${body.slice(0, 200)}`);
+    }
+    const raw = await res.json();
+    return parseAthletePowerCurvesResponse(raw, curveSpecs);
+  }
+
   return {
     validateConnection,
     fetchActivities,
@@ -162,5 +184,105 @@ export function createIcuClient(apiKey: string, athleteId: string) {
     fetchActivityDetail,
     fetchStreams,
     fetchPowerCurve,
+    fetchAthletePowerCurves,
   };
+}
+
+/**
+ * Parse the athlete power curves response from intervals.icu.
+ * Handles multiple possible response formats.
+ */
+function parseAthletePowerCurvesResponse(
+  raw: unknown,
+  curveSpecs: string[]
+): Map<string, IcuPowerCurvePoint[]> {
+  const result = new Map<string, IcuPowerCurvePoint[]>();
+
+  if (!raw || typeof raw !== "object") return result;
+
+  const parseSingleCurve = (obj: unknown): IcuPowerCurvePoint[] => {
+    if (!obj || typeof obj !== "object") return [];
+    const rec = obj as Record<string, unknown>;
+
+    // Format: { secs: number[], values: number[] } (intervals.icu athlete power curves)
+    if (Array.isArray(rec.secs) && Array.isArray(rec.values)) {
+      const weight = typeof rec.weight === "number" && rec.weight > 0 ? rec.weight : null;
+      return (rec.secs as number[]).map((s: number, i: number) => {
+        const watts = (rec.values as number[])[i] ?? 0;
+        return {
+          secs: s,
+          watts,
+          watts_per_kg: weight ? Math.round((watts / weight) * 100) / 100 : null,
+        };
+      });
+    }
+
+    // Format: { secs: number[], watts: number[], watts_per_kg?: number[] }
+    if (Array.isArray(rec.secs) && Array.isArray(rec.watts)) {
+      return (rec.secs as number[]).map((s: number, i: number) => ({
+        secs: s,
+        watts: (rec.watts as number[])[i] ?? 0,
+        watts_per_kg: Array.isArray(rec.watts_per_kg) ? (rec.watts_per_kg as number[])[i] : null,
+      }));
+    }
+
+    // Format: array of { secs, value/watts }
+    if (Array.isArray(obj)) {
+      return (obj as Record<string, unknown>[]).map((p) => ({
+        secs: Number(p.secs ?? p.seconds ?? 0),
+        watts: Number(p.watts ?? p.value ?? 0),
+        watts_per_kg: p.watts_per_kg != null ? Number(p.watts_per_kg) : null,
+      }));
+    }
+
+    return [];
+  };
+
+  const rec = raw as Record<string, unknown>;
+
+  // Format A: response is a single curve (when only one spec requested)
+  if (Array.isArray(rec.secs) && (Array.isArray(rec.values) || Array.isArray(rec.watts))) {
+    result.set(curveSpecs[0] ?? "all", parseSingleCurve(raw));
+    return result;
+  }
+
+  // Format B: response has a "curves" array
+  if (Array.isArray(rec.curves)) {
+    const curves = rec.curves as unknown[];
+    for (let i = 0; i < curves.length; i++) {
+      const spec = curveSpecs[i] ?? `curve_${i}`;
+      result.set(spec, parseSingleCurve(curves[i]));
+    }
+    return result;
+  }
+
+  // Format C: response has a "list" array (intervals.icu DataCurveSetPowerCurve)
+  // Each item in list has { secs: number[], values: number[], weight?: number, ... }
+  if (Array.isArray(rec.list)) {
+    const list = rec.list as unknown[];
+    for (let i = 0; i < list.length; i++) {
+      const spec = curveSpecs[i] ?? `curve_${i}`;
+      result.set(spec, parseSingleCurve(list[i]));
+    }
+    return result;
+  }
+
+  // Format D: response is keyed by curve spec
+  for (const spec of curveSpecs) {
+    if (spec in rec) {
+      result.set(spec, parseSingleCurve(rec[spec]));
+    }
+  }
+
+  // Format E: if nothing matched, log the shape for debugging and try the whole thing
+  if (result.size === 0) {
+    const keys = Object.keys(rec).slice(0, 10);
+    console.log("[ICU] Unexpected power curves response shape. Keys:", keys);
+    const attempt = parseSingleCurve(raw);
+    if (attempt.length > 0) {
+      result.set(curveSpecs[0] ?? "all", attempt);
+    }
+  }
+
+  return result;
 }

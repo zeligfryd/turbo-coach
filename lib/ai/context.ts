@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { daysUntilRace } from "@/lib/race/readiness";
 
 type WorkoutItem = {
   id: string;
@@ -47,6 +48,16 @@ export type CoachMemoryItem = {
   content: string;
 };
 
+type UpcomingRace = {
+  id: string;
+  name: string;
+  race_date: string;
+  event_type: string;
+  distance_km: number | null;
+  elevation_m: number | null;
+  readiness_score: number | null;
+};
+
 export type CoachUserContext = {
   ftp: number | null;
   weight: number | null;
@@ -55,6 +66,7 @@ export type CoachUserContext = {
   recentActivities: RecentActivity[];
   wellnessTrend: WellnessDay[];
   memories: CoachMemoryItem[];
+  upcomingRaces: UpcomingRace[];
 };
 
 const formatIntervalSummary = (intervals: unknown): string => {
@@ -152,6 +164,9 @@ export async function loadCoachUserContext(userId: string): Promise<CoachUserCon
 
   const toDate = (value: Date) => value.toISOString().slice(0, 10);
 
+  const raceLookahead = new Date(today);
+  raceLookahead.setDate(today.getDate() + 180);
+
   const [
     { data: profile },
     { data: recentScheduledWorkouts },
@@ -159,6 +174,7 @@ export async function loadCoachUserContext(userId: string): Promise<CoachUserCon
     { data: recentActivitiesData },
     { data: wellnessData },
     { data: memoriesData },
+    { data: racesData },
   ] = await Promise.all([
       supabase.from("users").select("ftp, weight").eq("id", userId).maybeSingle(),
       supabase
@@ -227,6 +243,14 @@ export async function loadCoachUserContext(userId: string): Promise<CoachUserCon
         .eq("user_id", userId)
         .order("updated_at", { ascending: false })
         .limit(50),
+      supabase
+        .from("race_events")
+        .select("id, name, race_date, event_type, distance_km, elevation_m, readiness_score")
+        .eq("user_id", userId)
+        .gte("race_date", toDate(today))
+        .lte("race_date", toDate(raceLookahead))
+        .order("race_date", { ascending: true })
+        .limit(5),
     ]);
 
   const memories = (memoriesData as CoachMemoryItem[] | null) ?? [];
@@ -242,6 +266,7 @@ export async function loadCoachUserContext(userId: string): Promise<CoachUserCon
     recentActivities: (recentActivitiesData as RecentActivity[] | null) ?? [],
     wellnessTrend: (wellnessData as WellnessDay[] | null) ?? [],
     memories,
+    upcomingRaces: (racesData as UpcomingRace[] | null) ?? [],
   };
 
   contextCache.set(userId, { data: context, expiresAt: Date.now() + CONTEXT_TTL_MS });
@@ -291,6 +316,23 @@ const formatWellnessTrend = (days: WellnessDay[]): string => {
   return `Fitness/fatigue trend (last 14 days):\n${lines.join("\n")}`;
 };
 
+const formatUpcomingRaces = (races: UpcomingRace[]): string => {
+  if (races.length === 0) {
+    return "Upcoming races: none.";
+  }
+
+  const lines = races.map((r) => {
+    const days = daysUntilRace(r.race_date);
+    const dist = r.distance_km != null ? `${r.distance_km}km` : "";
+    const elev = r.elevation_m != null ? `${Math.round(r.elevation_m)}m elev` : "";
+    const score = r.readiness_score != null ? `readiness ${r.readiness_score}/100` : "";
+    const parts = [dist, elev, score].filter(Boolean).join(", ");
+    return `- ${r.race_date} (${days} days): ${r.name} (${r.event_type}${parts ? `, ${parts}` : ""})`;
+  });
+
+  return `Upcoming races:\n${lines.join("\n")}`;
+};
+
 export const formatCoachUserContext = (context: CoachUserContext): string => {
   const profileLines = [
     `FTP: ${context.ftp ?? "unknown"} watts`,
@@ -304,5 +346,6 @@ export const formatCoachUserContext = (context: CoachUserContext): string => {
     formatScheduledWorkouts(context.upcomingScheduledWorkouts, "Upcoming"),
     formatRecentActivities(context.recentActivities),
     formatWellnessTrend(context.wellnessTrend),
+    formatUpcomingRaces(context.upcomingRaces),
   ].join("\n\n");
 };

@@ -1,6 +1,6 @@
 import { CalendarAgendaDay } from "./calendar-agenda-day";
 import { CalendarAgendaWeekSummary } from "./calendar-agenda-week-summary";
-import type { ScheduledWorkout, CalendarActivity } from "./types";
+import type { ScheduledWorkout, CalendarActivity, CalendarRaceEvent } from "./types";
 import type { Workout } from "@/lib/workouts/types";
 import type { CalendarWellness } from "@/app/calendar/actions";
 import { formatDateKey } from "./utils";
@@ -10,10 +10,13 @@ interface CalendarAgendaProps {
   scheduledByDate: Record<string, ScheduledWorkout[]>;
   activitiesByDate: Record<string, CalendarActivity[]>;
   wellnessByDate: Record<string, CalendarWellness>;
+  racesByDate: Record<string, CalendarRaceEvent[]>;
   onAdd: (dateKey: string) => void;
   onRemove: (scheduledWorkoutId: string) => void;
   onWorkoutClick?: (workout: Workout) => void;
   onActivityClick?: (activityId: string) => void;
+  onRaceClick?: (raceId: string) => void;
+  onAddRace?: (dateKey: string) => void;
 }
 
 function formatWeekRangeLabel(week: Date[]) {
@@ -29,10 +32,13 @@ export function CalendarAgenda({
   scheduledByDate,
   activitiesByDate,
   wellnessByDate,
+  racesByDate,
   onAdd,
   onRemove,
   onWorkoutClick,
   onActivityClick,
+  onRaceClick,
+  onAddRace,
 }: CalendarAgendaProps) {
   return (
     <section className="space-y-4">
@@ -61,16 +67,20 @@ export function CalendarAgenda({
                 const key = formatDateKey(day);
                 const items = scheduledByDate[key] ?? [];
                 const activities = activitiesByDate[key] ?? [];
+                const races = racesByDate[key] ?? [];
                 return (
                   <CalendarAgendaDay
                     key={key}
                     date={day}
                     workouts={items}
                     activities={activities}
+                    races={races}
                     onAdd={onAdd}
                     onRemove={onRemove}
                     onWorkoutClick={onWorkoutClick}
                     onActivityClick={onActivityClick}
+                    onRaceClick={onRaceClick}
+                    onAddRace={onAddRace}
                   />
                 );
               })}

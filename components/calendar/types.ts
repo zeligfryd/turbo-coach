@@ -1,4 +1,5 @@
 import type { Workout } from "@/lib/workouts/types";
+import type { CalendarRaceEvent } from "@/lib/race/types";
 
 export type ScheduledWorkout = {
   id: string;
@@ -20,3 +21,5 @@ export type CalendarActivity = {
   elevation_gain: number | null;
   source: string;
 };
+
+export type { CalendarRaceEvent };

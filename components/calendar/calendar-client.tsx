@@ -18,11 +18,13 @@ import {
   startOfMonth,
   startOfWeekMonday,
 } from "./utils";
-import type { ScheduledWorkout, CalendarActivity } from "./types";
+import type { ScheduledWorkout, CalendarActivity, CalendarRaceEvent } from "./types";
 import type { Workout } from "@/lib/workouts/types";
 import { getScheduledWorkouts, getCalendarActivities, getCalendarWellness, getUserFtp, removeScheduledWorkout, scheduleWorkout } from "@/app/calendar/actions";
 import type { CalendarWellness } from "@/app/calendar/actions";
+import { getRaceEvents } from "@/app/race/actions";
 import { WorkoutDetailModal } from "@/components/workouts/workout-detail-modal";
+import { RaceEventFormModal } from "./race-event-form";
 
 function getMonthKey(date: Date) {
   const year = date.getFullYear();
@@ -52,12 +54,15 @@ export function CalendarClient() {
   const [scheduledByDate, setScheduledByDate] = useState<Record<string, ScheduledWorkout[]>>({});
   const [activitiesByDate, setActivitiesByDate] = useState<Record<string, CalendarActivity[]>>({});
   const [wellnessByDate, setWellnessByDate] = useState<Record<string, CalendarWellness>>({});
+  const [racesByDate, setRacesByDate] = useState<Record<string, CalendarRaceEvent[]>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
   const [userFtp, setUserFtp] = useState<number | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isRaceFormOpen, setIsRaceFormOpen] = useState(false);
+  const [raceFormDate, setRaceFormDate] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const pendingPrependAdjust = useRef<number | null>(null);
   const pendingScrollToDate = useRef<string | null>(null);
@@ -93,10 +98,11 @@ export function CalendarClient() {
 
   const fetchScheduled = useCallback(async () => {
     setIsLoading(true);
-    const [workoutsResult, activitiesResult, wellnessResult] = await Promise.all([
+    const [workoutsResult, activitiesResult, wellnessResult, racesResult] = await Promise.all([
       getScheduledWorkouts(range.startDate, range.endDate),
       getCalendarActivities(range.startDate, range.endDate),
       getCalendarWellness(range.startDate, range.endDate),
+      getRaceEvents(range.startDate, range.endDate),
     ]);
     if (workoutsResult.success) {
       const grouped: Record<string, ScheduledWorkout[]> = {};
@@ -122,6 +128,15 @@ export function CalendarClient() {
         byDate[item.date] = item;
       });
       setWellnessByDate(byDate);
+    }
+    if (racesResult.success) {
+      const grouped: Record<string, CalendarRaceEvent[]> = {};
+      racesResult.races.forEach((item: CalendarRaceEvent) => {
+        const key = item.race_date;
+        grouped[key] = grouped[key] || [];
+        grouped[key].push(item);
+      });
+      setRacesByDate(grouped);
     }
     setIsLoading(false);
   }, [range.startDate, range.endDate]);
@@ -320,6 +335,21 @@ export function CalendarClient() {
     router.push(`/activity/${activityId}`);
   };
 
+  const handleRaceClick = (raceId: string) => {
+    router.push(`/race/${raceId}`);
+  };
+
+  const handleAddRace = (dateKey: string) => {
+    setRaceFormDate(dateKey);
+    setIsRaceFormOpen(true);
+  };
+
+  const handleRaceCreated = () => {
+    setIsRaceFormOpen(false);
+    setRaceFormDate(null);
+    fetchScheduled();
+  };
+
   const handleSync = async () => {
     setIsSyncing(true);
     try {
@@ -381,10 +411,13 @@ export function CalendarClient() {
             scheduledByDate={scheduledByDate}
             activitiesByDate={activitiesByDate}
             wellnessByDate={wellnessByDate}
+            racesByDate={racesByDate}
             onAdd={handleAdd}
             onRemove={handleRemove}
             onWorkoutClick={setSelectedWorkout}
             onActivityClick={handleActivityClick}
+            onRaceClick={handleRaceClick}
+            onAddRace={handleAddRace}
           />
         </div>
         <div className="md:hidden">
@@ -393,10 +426,13 @@ export function CalendarClient() {
             scheduledByDate={scheduledByDate}
             activitiesByDate={activitiesByDate}
             wellnessByDate={wellnessByDate}
+            racesByDate={racesByDate}
             onAdd={handleAdd}
             onRemove={handleRemove}
             onWorkoutClick={setSelectedWorkout}
             onActivityClick={handleActivityClick}
+            onRaceClick={handleRaceClick}
+            onAddRace={handleAddRace}
           />
         </div>
       </div>
@@ -411,6 +447,13 @@ export function CalendarClient() {
         workout={selectedWorkout}
         onClose={() => setSelectedWorkout(null)}
         userFtp={userFtp}
+      />
+
+      <RaceEventFormModal
+        open={isRaceFormOpen}
+        defaultDate={raceFormDate}
+        onClose={() => { setIsRaceFormOpen(false); setRaceFormDate(null); }}
+        onCreated={handleRaceCreated}
       />
     </div>
   );

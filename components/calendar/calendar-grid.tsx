@@ -13,6 +13,7 @@ interface CalendarGridProps {
   onAdd: (dateKey: string) => void;
   onRemove: (scheduledWorkoutId: string) => void;
   onWorkoutClick?: (workout: Workout) => void;
+  onActivityClick?: (activityId: string) => void;
 }
 
 const weekDayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Week"];
@@ -25,6 +26,7 @@ export function CalendarGrid({
   onAdd,
   onRemove,
   onWorkoutClick,
+  onActivityClick,
 }: CalendarGridProps) {
   return (
     <section className="space-y-4">
@@ -68,6 +70,7 @@ export function CalendarGrid({
                     onAdd={onAdd}
                     onRemove={onRemove}
                     onWorkoutClick={onWorkoutClick}
+                    onActivityClick={onActivityClick}
                   />
                 );
               })}

@@ -13,6 +13,7 @@ interface CalendarAgendaProps {
   onAdd: (dateKey: string) => void;
   onRemove: (scheduledWorkoutId: string) => void;
   onWorkoutClick?: (workout: Workout) => void;
+  onActivityClick?: (activityId: string) => void;
 }
 
 function formatWeekRangeLabel(week: Date[]) {
@@ -31,6 +32,7 @@ export function CalendarAgenda({
   onAdd,
   onRemove,
   onWorkoutClick,
+  onActivityClick,
 }: CalendarAgendaProps) {
   return (
     <section className="space-y-4">
@@ -68,6 +70,7 @@ export function CalendarAgenda({
                     onAdd={onAdd}
                     onRemove={onRemove}
                     onWorkoutClick={onWorkoutClick}
+                    onActivityClick={onActivityClick}
                   />
                 );
               })}

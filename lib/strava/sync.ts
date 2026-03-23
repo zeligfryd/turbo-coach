@@ -1,13 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createStravaClient } from "./client";
 import { getValidStravaToken } from "./token";
+import { computeAllMetrics } from "@/lib/activity/compute-metrics";
 import type { StravaActivitySummary } from "./types";
 
-type SyncResult = {
+export type SyncResult = {
   success: boolean;
   activitiesSynced: number;
   error?: string;
 };
+
+export type SyncMode = "full" | "incremental";
 
 function mapStravaActivityToRow(userId: string, activity: StravaActivitySummary) {
   const startDate = activity.start_date_local;
@@ -43,22 +46,50 @@ function mapStravaActivityToRow(userId: string, activity: StravaActivitySummary)
   };
 }
 
+/**
+ * Sync Strava activities.
+ *
+ * - "full": fetches 2 years of history, upserts summaries (no streams).
+ * - "incremental": fetches activities since last sync, then fetches streams
+ *   for each new activity and computes accurate metrics (NP, avg power, TSS, etc.).
+ */
 export async function syncStravaActivities(
   supabase: SupabaseClient,
-  userId: string
+  userId: string,
+  mode: SyncMode = "full"
 ): Promise<SyncResult> {
   try {
     const { accessToken } = await getValidStravaToken(supabase, userId);
     const client = createStravaClient(accessToken);
 
-    // Always fetch full 2-year history — upsert handles dedup
-    const oldest = new Date();
-    oldest.setFullYear(oldest.getFullYear() - 2);
+    // Determine date range
+    let oldest: Date;
+    if (mode === "incremental") {
+      const { data: conn } = await supabase
+        .from("strava_connections")
+        .select("last_synced_at")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (conn?.last_synced_at) {
+        oldest = new Date(conn.last_synced_at);
+        // Go back 1 extra day to catch any edge cases
+        oldest.setDate(oldest.getDate() - 1);
+      } else {
+        // No previous sync — fall back to 2 years
+        oldest = new Date();
+        oldest.setFullYear(oldest.getFullYear() - 2);
+      }
+    } else {
+      oldest = new Date();
+      oldest.setFullYear(oldest.getFullYear() - 2);
+    }
     const newest = new Date();
 
     const activities = await client.fetchAllActivities(oldest, newest);
 
     if (activities.length > 0) {
+      // Upsert activity summaries
       const chunkSize = 500;
       for (let i = 0; i < activities.length; i += chunkSize) {
         const chunk = activities.slice(i, i + chunkSize);
@@ -72,6 +103,9 @@ export async function syncStravaActivities(
           throw new Error(`Upsert failed: ${error.message}`);
         }
       }
+
+      // Fetch streams and compute accurate metrics for all synced activities
+      await computeMetricsForActivities(supabase, userId, client, activities);
     }
 
     await supabase
@@ -98,5 +132,62 @@ export async function syncStravaActivities(
       .eq("user_id", userId);
 
     return { success: false, activitiesSynced: 0, error: message };
+  }
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+/**
+ * Fetch streams from Strava for each activity and compute accurate metrics.
+ * Updates the DB rows with computed values.
+ */
+async function computeMetricsForActivities(
+  supabase: SupabaseClient,
+  userId: string,
+  client: ReturnType<typeof createStravaClient>,
+  activities: StravaActivitySummary[]
+) {
+  // Get user FTP
+  const { data: profile } = await supabase
+    .from("users")
+    .select("ftp")
+    .eq("id", userId)
+    .maybeSingle();
+  const ftp = (profile?.ftp as number | null) ?? null;
+
+  // Process each activity — fetch streams and compute metrics
+  for (const activity of activities) {
+    try {
+      const streams = await client.fetchActivityStreams(activity.id);
+      const watts = streams?.watts;
+      if (!watts || watts.length === 0) continue;
+
+      const heartrate = streams?.heartrate ?? null;
+      const cadence = streams?.cadence ?? null;
+      const durationSeconds = activity.moving_time ?? watts.length;
+
+      const computed = computeAllMetrics(watts, heartrate, cadence, ftp, durationSeconds);
+
+      const updates: Record<string, unknown> = {
+        avg_power: computed.avgPower,
+        normalized_power: computed.normalizedPower,
+        max_power: computed.maxPower,
+        updated_at: new Date().toISOString(),
+      };
+      if (computed.tss != null) updates.icu_training_load = computed.tss;
+      if (computed.avgHr != null) updates.avg_hr = computed.avgHr;
+      if (computed.maxHr != null) updates.max_hr = computed.maxHr;
+      if (computed.avgCadence != null) updates.avg_cadence = computed.avgCadence;
+
+      await supabase
+        .from("icu_activities")
+        .update(updates)
+        .eq("user_id", userId)
+        .eq("external_id", String(activity.id))
+        .eq("source", "strava");
+    } catch (err) {
+      // Log but don't fail the whole sync for a single activity's streams
+      console.warn(`[Sync] Failed to compute metrics for activity ${activity.id}:`, err);
+    }
   }
 }

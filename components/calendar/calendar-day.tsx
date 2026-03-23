@@ -1,4 +1,5 @@
-import { Plus, X, CheckCircle } from "lucide-react";
+import { useState } from "react";
+import { Plus, X, CheckCircle, Trash2 } from "lucide-react";
 import { MiniIntensityChart } from "@/components/workouts/mini-intensity-chart";
 import { flattenBuilderItems } from "@/lib/workouts/utils";
 import type { ScheduledWorkout, CalendarActivity } from "./types";
@@ -17,11 +18,13 @@ interface CalendarDayProps {
   onAdd: (dateKey: string) => void;
   onRemove: (scheduledWorkoutId: string) => void;
   onWorkoutClick?: (workout: Workout) => void;
+  onActivityClick?: (activityId: string) => void;
 }
 
-export function CalendarDay({ date, workouts, activities = [], onAdd, onRemove, onWorkoutClick }: CalendarDayProps) {
+export function CalendarDay({ date, workouts, activities = [], onAdd, onRemove, onWorkoutClick, onActivityClick }: CalendarDayProps) {
   const dateKey = formatDateKey(date);
   const { monthPrefix, dayOfMonth } = getCalendarDayLabelParts(date);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   return (
     <div
@@ -66,13 +69,24 @@ export function CalendarDay({ date, workouts, activities = [], onAdd, onRemove, 
                   <MiniIntensityChart intervals={flattenBuilderItems(item.workout.intervals)} height={12} />
                 </div>
               </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); onRemove(item.id); }}
-                className="p-1 rounded hover:bg-accent text-muted-foreground"
-                aria-label="Remove workout"
-              >
-                <X className="h-3 w-3" />
-              </button>
+              {confirmingId === item.id ? (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setConfirmingId(null); onRemove(item.id); }}
+                  className="p-1 rounded bg-destructive/10 text-destructive hover:bg-destructive/20"
+                  aria-label="Confirm remove"
+                  onBlur={() => setConfirmingId(null)}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              ) : (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setConfirmingId(item.id); }}
+                  className="p-1 rounded hover:bg-accent text-muted-foreground"
+                  aria-label="Remove workout"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
             </div>
           );
         })}
@@ -90,7 +104,8 @@ export function CalendarDay({ date, workouts, activities = [], onAdd, onRemove, 
           return (
             <div
               key={activity.id}
-              className="rounded-md bg-green-500/10 border border-green-500/20 px-1.5 py-1 text-xs shadow-sm"
+              className="rounded-md bg-green-500/10 border border-green-500/20 px-1.5 py-1 text-xs shadow-sm cursor-pointer hover:ring-1 hover:ring-green-500/40 transition-shadow"
+              onClick={() => onActivityClick?.(activity.id)}
             >
               <div className="flex items-center gap-1 min-w-0">
                 <CheckCircle className="h-3 w-3 text-green-600 shrink-0" />

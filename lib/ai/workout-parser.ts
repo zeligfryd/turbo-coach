@@ -222,11 +222,23 @@ export async function extractWorkoutFromDescription(
   });
 
   const rawCandidate = parseJsonFromText(result.text);
+
+  if (rawCandidate === null) {
+    throw new Error(
+      "Could not extract a workout from the provided text. " +
+      "Make sure the description includes workout intervals with durations and intensities."
+    );
+  }
+
   const normalizedCandidate = normalizeExtractionCandidate(rawCandidate);
   const parsed = WorkoutExtractionSchema.safeParse(normalizedCandidate);
 
   if (!parsed.success) {
-    throw new Error("Failed to parse extracted workout JSON");
+    console.error("Workout extraction validation errors:", parsed.error.issues);
+    throw new Error(
+      "Failed to parse workout structure. The description may not contain enough detail " +
+      "to build a workout (needs intervals with durations and power targets)."
+    );
   }
 
   return parsed.data;

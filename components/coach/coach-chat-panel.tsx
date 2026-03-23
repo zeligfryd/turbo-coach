@@ -711,7 +711,13 @@ export function CoachChatPanel({
       (s): s is Extract<MessageSegment, { type: "workout" }> => s.type === "workout" && s.isClosed
     );
     const lastWorkout = workoutSegments[workoutSegments.length - 1];
-    if (!lastWorkout) return;
+    if (!lastWorkout) {
+      console.warn(
+        "Coach called scheduleDescribedWorkout but no <workout> tags found in response. " +
+        "The workout was not scheduled."
+      );
+      return;
+    }
 
     // Use a stable key for this workout segment
     const segmentKey = `${lastAssistantMsg.id}-auto-schedule`;
@@ -1012,6 +1018,7 @@ export function CoachChatPanel({
                                             ) : schedulingKey === segmentKey ? (
                                               <div className="inline-flex items-center gap-1.5">
                                                 <input
+                                                  id={`schedule-date-${segmentKey}`}
                                                   type="date"
                                                   className="h-8 rounded-md border border-input bg-background px-2 text-sm"
                                                   defaultValue={new Date().toISOString().slice(0, 10)}
@@ -1022,12 +1029,22 @@ export function CoachChatPanel({
                                                       scheduleWorkout(segmentKey, segment.content, e.currentTarget.value);
                                                     }
                                                   }}
-                                                  onChange={(e) => {
-                                                    if (e.target.value) {
-                                                      scheduleWorkout(segmentKey, segment.content, e.target.value);
+                                                />
+                                                <Button
+                                                  type="button"
+                                                  variant="default"
+                                                  size="sm"
+                                                  className="h-8"
+                                                  onClick={() => {
+                                                    const input = document.getElementById(`schedule-date-${segmentKey}`) as HTMLInputElement;
+                                                    if (input?.value) {
+                                                      scheduleWorkout(segmentKey, segment.content, input.value);
                                                     }
                                                   }}
-                                                />
+                                                >
+                                                  <Check className="h-3.5 w-3.5 mr-1" />
+                                                  Schedule
+                                                </Button>
                                                 <Button
                                                   type="button"
                                                   variant="ghost"

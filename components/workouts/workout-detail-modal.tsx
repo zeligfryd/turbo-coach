@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { Star, Copy, MoreVertical, Edit2, Trash2, Download, Bike } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -321,7 +322,9 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
           {workout.description && (
             <div>
               <h3 className="text-sm font-medium text-foreground mb-2">Description</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">{workout.description}</p>
+              <div className="prose prose-sm max-w-none dark:prose-invert text-muted-foreground">
+                <ReactMarkdown>{workout.description}</ReactMarkdown>
+              </div>
             </div>
           )}
 

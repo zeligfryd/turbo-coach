@@ -43,13 +43,17 @@ export function StravaConnection({ initialConnection }: StravaConnectionProps) {
     }
   };
 
-  const handleSync = async () => {
+  const handleSync = async (mode: "incremental" | "full" = "incremental") => {
     setIsSyncing(true);
     setError(null);
     setSuccess(null);
 
     try {
-      const res = await fetch("/api/strava/sync", { method: "POST" });
+      const res = await fetch("/api/strava/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode }),
+      });
       const data = await res.json();
 
       if (!res.ok) {
@@ -130,8 +134,11 @@ export function StravaConnection({ initialConnection }: StravaConnectionProps) {
           {success && <p className="text-sm text-green-600">{success}</p>}
 
           <div className="flex gap-3">
-            <Button onClick={handleSync} disabled={isSyncing || isLoading} className="flex-1">
-              {isSyncing ? "Syncing..." : "Sync Activities"}
+            <Button onClick={() => handleSync("incremental")} disabled={isSyncing || isLoading} className="flex-1">
+              {isSyncing ? "Syncing..." : "Sync Recent"}
+            </Button>
+            <Button variant="outline" onClick={() => handleSync("full")} disabled={isSyncing || isLoading}>
+              Full Sync
             </Button>
             <Button
               variant="outline"

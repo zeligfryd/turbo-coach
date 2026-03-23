@@ -1,4 +1,4 @@
-import type { IcuActivitySummary, IcuWellnessDay } from "./types";
+import type { IcuActivitySummary, IcuActivityDetail, IcuStreams, IcuPowerCurvePoint, IcuWellnessDay } from "./types";
 
 const ICU_BASE_URL = "https://intervals.icu/api/v1";
 
@@ -93,5 +93,74 @@ export function createIcuClient(apiKey: string, athleteId: string) {
     return (await res.json()) as IcuWellnessDay[];
   }
 
-  return { validateConnection, fetchActivities, fetchActivitiesInBatches, fetchWellness };
+  async function fetchActivityDetail(activityId: string): Promise<IcuActivityDetail> {
+    const url = `${ICU_BASE_URL}/activity/${activityId}?intervals=true`;
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`intervals.icu activity detail returned ${res.status}: ${body.slice(0, 200)}`);
+    }
+    return (await res.json()) as IcuActivityDetail;
+  }
+
+  async function fetchStreams(
+    activityId: string,
+    types: string[] = ["watts", "heartrate", "cadence", "altitude", "velocity_smooth", "w_bal"]
+  ): Promise<IcuStreams> {
+    const params = new URLSearchParams({ types: types.join(",") });
+    const url = `${ICU_BASE_URL}/activity/${activityId}/streams.json?${params}`;
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`intervals.icu streams returned ${res.status}: ${body.slice(0, 200)}`);
+    }
+    const raw = await res.json();
+    // ICU may return streams as { watts: { data: [...] } } or { watts: [...] }
+    // Normalize to plain arrays
+    const result: IcuStreams = {};
+    if (raw && typeof raw === "object") {
+      for (const [key, value] of Object.entries(raw)) {
+        if (Array.isArray(value)) {
+          result[key] = value;
+        } else if (value && typeof value === "object" && "data" in (value as Record<string, unknown>)) {
+          const arr = (value as Record<string, unknown>).data;
+          if (Array.isArray(arr)) result[key] = arr;
+        }
+      }
+    }
+    return result;
+  }
+
+  async function fetchPowerCurve(activityId: string): Promise<IcuPowerCurvePoint[]> {
+    const url = `${ICU_BASE_URL}/activity/${activityId}/power-curve.json`;
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`intervals.icu power curve returned ${res.status}: ${body.slice(0, 200)}`);
+    }
+    const raw = await res.json();
+    // ICU returns { secs: number[], watts: number[], watts_per_kg?: number[] }
+    if (raw && Array.isArray(raw.secs) && Array.isArray(raw.watts)) {
+      return (raw.secs as number[]).map((s: number, i: number) => ({
+        secs: s,
+        watts: (raw.watts as number[])[i],
+        watts_per_kg: raw.watts_per_kg ? (raw.watts_per_kg as number[])[i] : null,
+      }));
+    }
+    // Fallback: if it's already an array of points
+    if (Array.isArray(raw)) {
+      return raw as IcuPowerCurvePoint[];
+    }
+    return [];
+  }
+
+  return {
+    validateConnection,
+    fetchActivities,
+    fetchActivitiesInBatches,
+    fetchWellness,
+    fetchActivityDetail,
+    fetchStreams,
+    fetchPowerCurve,
+  };
 }

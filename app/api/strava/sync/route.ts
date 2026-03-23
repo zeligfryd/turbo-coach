@@ -3,8 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { syncStravaActivities } from "@/lib/strava/sync";
 import { triggerPostRideAnalysis } from "@/lib/ai/post-ride";
 import type { StravaConnectionRow } from "@/lib/strava/types";
+import type { SyncMode } from "@/lib/strava/sync";
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const supabase = await createClient();
     const {
@@ -38,6 +39,15 @@ export async function POST() {
       );
     }
 
+    // Parse mode from request body (default: "full" for backward compat)
+    let mode: SyncMode = "full";
+    try {
+      const body = await request.json();
+      if (body.mode === "incremental") mode = "incremental";
+    } catch {
+      // No body or invalid JSON — use default
+    }
+
     await supabase
       .from("strava_connections")
       .update({
@@ -47,7 +57,7 @@ export async function POST() {
       })
       .eq("user_id", user.id);
 
-    const result = await syncStravaActivities(supabase, user.id);
+    const result = await syncStravaActivities(supabase, user.id, mode);
 
     if (!result.success) {
       return NextResponse.json(

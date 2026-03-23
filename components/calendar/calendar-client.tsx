@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { RefreshCw } from "lucide-react";
 import { CalendarAgenda } from "./calendar-agenda";
 import { CalendarGrid } from "./calendar-grid";
 import { MonthPicker } from "./month-picker";
@@ -42,6 +44,7 @@ function buildMonthWindow(center: Date, pastCount: number, futureCount: number) 
 }
 
 export function CalendarClient() {
+  const router = useRouter();
   const today = startOfMonth(new Date());
   const [months, setMonths] = useState<Date[]>(() => buildMonthWindow(today, 6, 6));
   const [selectedMonthKey, setSelectedMonthKey] = useState(getMonthKey(today));
@@ -54,6 +57,7 @@ export function CalendarClient() {
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
   const [userFtp, setUserFtp] = useState<number | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const pendingPrependAdjust = useRef<number | null>(null);
   const pendingScrollToDate = useRef<string | null>(null);
@@ -312,6 +316,25 @@ export function CalendarClient() {
     setIsPickerOpen(true);
   };
 
+  const handleActivityClick = (activityId: string) => {
+    router.push(`/activity/${activityId}`);
+  };
+
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await fetch("/api/sync", { method: "POST" });
+      if (res.ok) {
+        // Refresh calendar data after sync
+        fetchScheduled();
+      }
+    } catch {
+      // Silently fail — sync errors are visible on the profile page
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleRemove = async (scheduledWorkoutId: string) => {
     await removeScheduledWorkout(scheduledWorkoutId);
     fetchScheduled();
@@ -335,7 +358,17 @@ export function CalendarClient() {
           <h1 className="text-2xl font-bold">Calendar</h1>
           <p className="text-sm text-muted-foreground">Plan your workouts by day and week.</p>
         </div>
-        <MonthPicker value={viewingMonthKey} options={monthOptions} onChange={handleMonthChange} />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSync}
+            disabled={isSyncing}
+            className="p-2 rounded-md hover:bg-accent text-muted-foreground disabled:opacity-50"
+            title="Sync recent activities"
+          >
+            <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
+          </button>
+          <MonthPicker value={viewingMonthKey} options={monthOptions} onChange={handleMonthChange} />
+        </div>
       </div>
 
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-auto pr-2" onScroll={handleScroll}>
@@ -351,6 +384,7 @@ export function CalendarClient() {
             onAdd={handleAdd}
             onRemove={handleRemove}
             onWorkoutClick={setSelectedWorkout}
+            onActivityClick={handleActivityClick}
           />
         </div>
         <div className="md:hidden">
@@ -362,6 +396,7 @@ export function CalendarClient() {
             onAdd={handleAdd}
             onRemove={handleRemove}
             onWorkoutClick={setSelectedWorkout}
+            onActivityClick={handleActivityClick}
           />
         </div>
       </div>

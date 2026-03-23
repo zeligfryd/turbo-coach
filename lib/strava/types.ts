@@ -40,3 +40,40 @@ export type StravaActivitySummary = {
   kilojoules?: number;
   suffer_score?: number;
 };
+
+/** Detailed activity from Strava's GET /activities/{id} endpoint. */
+export type StravaActivityDetail = StravaActivitySummary & {
+  description?: string | null;
+  average_speed?: number;
+  max_speed?: number;
+  device_watts?: boolean;
+  has_heartrate?: boolean;
+  laps?: StravaLap[];
+};
+
+/** A lap within a Strava activity. */
+export type StravaLap = {
+  id: number;
+  name: string;
+  elapsed_time: number;
+  moving_time: number;
+  distance: number;
+  average_watts?: number;
+  average_heartrate?: number;
+  max_heartrate?: number;
+  average_cadence?: number;
+  lap_index: number;
+  total_elevation_gain?: number;
+};
+
+/** Stream data from Strava's GET /activities/{id}/streams endpoint. */
+export type StravaStreams = {
+  time?: number[];
+  watts?: number[];
+  heartrate?: number[];
+  cadence?: number[];
+  altitude?: number[];
+  velocity_smooth?: number[];
+  distance?: number[];
+  grade_smooth?: number[];
+};

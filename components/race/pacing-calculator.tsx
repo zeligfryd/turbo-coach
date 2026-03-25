@@ -5,7 +5,8 @@ import dynamic from "next/dynamic";
 import { Upload, Loader2, MessageCircle, Zap, Clock, TrendingUp, HelpCircle, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { RaceEvent, GpxData, PacingPlan, AmbitionLevel } from "@/lib/race/types";
-import { AMBITION_LEVELS, AMBITION_LABELS, AMBITION_SCALING } from "@/lib/race/types";
+import { AMBITION_LEVELS, AMBITION_LABELS } from "@/lib/race/types";
+import { scalePlan } from "@/lib/pacing/scale";
 
 const ElevationProfileChart = dynamic(
   () => import("./elevation-profile-chart").then((mod) => ({ default: mod.ElevationProfileChart })),
@@ -25,21 +26,6 @@ function formatTime(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = Math.round(minutes % 60);
   return h > 0 ? `${h}h ${m}min` : `${m}min`;
-}
-
-function scalePlan(plan: PacingPlan, ambition: AmbitionLevel): PacingPlan {
-  const { power, time } = AMBITION_SCALING[ambition];
-  return {
-    overallTargetNpW: Math.round(plan.overallTargetNpW * power),
-    estimatedFinishTimeMin: Math.round(plan.estimatedFinishTimeMin * time),
-    strategy: plan.strategy,
-    segments: plan.segments.map((seg) => ({
-      ...seg,
-      targetPowerW: Math.round(seg.targetPowerW * power),
-      targetPowerPercent: Math.round(seg.targetPowerPercent * power),
-      estimatedTimeMin: Math.round(seg.estimatedTimeMin * time),
-    })),
-  };
 }
 
 const AMBITION_WARNINGS: Partial<Record<AmbitionLevel, string>> = {

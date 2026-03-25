@@ -17,7 +17,7 @@ export default async function PerformancePage() {
     .maybeSingle();
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 sm:px-6 space-y-8">
+    <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold">Performance</h1>
         <p className="text-sm text-muted-foreground mt-1">

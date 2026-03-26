@@ -73,7 +73,7 @@ export async function syncActivities(
         const rows = chunk.map((a) => mapActivityToRow(userId, a));
 
         const { error } = await supabase
-          .from("icu_activities")
+          .from("activities")
           .upsert(rows, { onConflict: "user_id,external_id,source" });
 
         if (error) {

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { syncStravaActivities } from "@/lib/strava/sync";
 import { triggerPostRideAnalysis } from "@/lib/ai/post-ride";
 import { recomputePowerCurve } from "@/lib/power/aggregate";
+import { recomputeFitness } from "@/lib/fitness/compute";
 import type { StravaConnectionRow } from "@/lib/strava/types";
 import type { SyncMode } from "@/lib/strava/sync";
 
@@ -67,9 +68,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // Fire-and-forget post-ride analysis and power curve recomputation
+    // Fire-and-forget post-ride analysis, power curve, and fitness recomputation
     triggerPostRideAnalysis(supabase, user.id).catch(console.warn);
     recomputePowerCurve(supabase, user.id).catch(console.warn);
+    recomputeFitness(supabase, user.id).catch(console.warn);
 
     return NextResponse.json({
       success: true,

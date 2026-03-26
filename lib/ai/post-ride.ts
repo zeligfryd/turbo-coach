@@ -28,7 +28,7 @@ export async function triggerPostRideAnalysis(
   const cutoff = twoDaysAgo.toISOString().slice(0, 10);
 
   const { data: activities } = await supabase
-    .from("icu_activities")
+    .from("activities")
     .select(
       "id, activity_date, name, type, moving_time, icu_training_load, " +
       "avg_power, normalized_power, max_power, avg_hr, max_hr, avg_cadence, " +

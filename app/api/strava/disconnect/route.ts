@@ -15,7 +15,7 @@ export async function POST() {
 
     // Delete Strava-sourced activities
     await supabase
-      .from("icu_activities")
+      .from("activities")
       .delete()
       .eq("user_id", user.id)
       .eq("source", "strava");

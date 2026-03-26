@@ -312,7 +312,7 @@ export async function getCalendarActivities(startDate: string, endDate: string) 
 
     const [{ data, error }, { data: profile }] = await Promise.all([
       supabase
-        .from("icu_activities")
+        .from("activities")
         .select(
           "id, activity_date, name, type, moving_time, icu_training_load, avg_power, normalized_power, avg_hr, distance, elevation_gain, source"
         )

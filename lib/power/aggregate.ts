@@ -123,7 +123,7 @@ async function enrichWithDates(
   try {
     // Fetch activities with power data, ordered by date
     const { data: activities } = await supabase
-      .from("icu_activities")
+      .from("activities")
       .select("activity_date, max_power, normalized_power")
       .eq("user_id", userId)
       .not("avg_power", "is", null)

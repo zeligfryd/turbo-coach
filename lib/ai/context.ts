@@ -223,7 +223,7 @@ export async function loadCoachUserContext(userId: string): Promise<CoachUserCon
         .order("scheduled_date", { ascending: true })
         .limit(10),
       supabase
-        .from("icu_activities")
+        .from("activities")
         .select(
           "activity_date, name, type, moving_time, icu_training_load, avg_power, normalized_power, avg_hr, max_hr, avg_cadence, distance, elevation_gain, calories"
         )

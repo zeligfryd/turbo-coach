@@ -79,7 +79,7 @@ export async function GET(request: Request) {
 
     // Count activities with power data
     const { count } = await supabase
-      .from("icu_activities")
+      .from("activities")
       .select("id", { count: "exact", head: true })
       .eq("user_id", user.id)
       .not("avg_power", "is", null)

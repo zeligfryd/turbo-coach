@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { syncStravaActivities } from "@/lib/strava/sync";
 import { syncWellness } from "@/lib/intervals/wellness-sync";
 import { triggerPostRideAnalysis } from "@/lib/ai/post-ride";
+import { recomputeFitness } from "@/lib/fitness/compute";
 import type { StravaConnectionRow } from "@/lib/strava/types";
 import type { IcuConnectionRow } from "@/lib/intervals/types";
 
@@ -94,8 +95,9 @@ export async function POST() {
 
     await Promise.all(tasks);
 
-    // Fire-and-forget post-ride analysis
+    // Fire-and-forget post-ride analysis and fitness recomputation
     triggerPostRideAnalysis(supabase, user.id).catch(console.warn);
+    recomputeFitness(supabase, user.id).catch(console.warn);
 
     return NextResponse.json({
       success: results.errors.length === 0,

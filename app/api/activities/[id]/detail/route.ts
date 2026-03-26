@@ -24,7 +24,7 @@ export async function GET(
 
     // Look up the activity
     const { data: activity, error: actError } = await supabase
-      .from("icu_activities")
+      .from("activities")
       .select("external_id, source, user_id, activity_date, moving_time, distance, icu_ftp, avg_power, normalized_power, avg_hr, max_hr, avg_cadence, calories, icu_training_load, elevation_gain, max_power, name, type, start_date_local, icu_atl, icu_ctl")
       .eq("id", id)
       .eq("user_id", user.id)
@@ -206,7 +206,7 @@ async function handleStravaActivity(
 
     // Fire-and-forget — don't block the response
     supabase
-      .from("icu_activities")
+      .from("activities")
       .update(updates)
       .eq("id", activityDbId)
       .eq("user_id", userId)

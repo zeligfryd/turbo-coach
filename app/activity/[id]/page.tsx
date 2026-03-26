@@ -19,7 +19,7 @@ export default async function ActivityPage({ params }: PageProps) {
 
   // Fetch basic activity info for the header (fast, from DB)
   const { data: activityRaw } = await supabase
-    .from("icu_activities")
+    .from("activities")
     .select(
       "id, external_id, source, name, type, activity_date, start_date_local, " +
       "moving_time, distance, elevation_gain, avg_power, normalized_power, max_power, " +

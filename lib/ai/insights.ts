@@ -25,7 +25,7 @@ export async function generateWeeklySummary(userId: string): Promise<string | nu
   ] = await Promise.all([
     supabase.from("users").select("ftp, weight").eq("id", userId).maybeSingle(),
     supabase
-      .from("icu_activities")
+      .from("activities")
       .select("activity_date, name, type, moving_time, icu_training_load, avg_power, normalized_power, avg_hr, distance, elevation_gain")
       .eq("user_id", userId)
       .gte("activity_date", toDate(weekAgo))

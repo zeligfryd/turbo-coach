@@ -96,7 +96,7 @@ export async function syncStravaActivities(
         const rows = chunk.map((a) => mapStravaActivityToRow(userId, a));
 
         const { error } = await supabase
-          .from("icu_activities")
+          .from("activities")
           .upsert(rows, { onConflict: "user_id,external_id,source" });
 
         if (error) {
@@ -180,7 +180,7 @@ async function computeMetricsForActivities(
       if (computed.avgCadence != null) updates.avg_cadence = computed.avgCadence;
 
       await supabase
-        .from("icu_activities")
+        .from("activities")
         .update(updates)
         .eq("user_id", userId)
         .eq("external_id", String(activity.id))

@@ -38,7 +38,7 @@ export function createCoachTools(userId: string) {
         const supabase = await createClient();
 
         let query = supabase
-          .from("icu_activities")
+          .from("activities")
           .select(
             "activity_date, name, type, moving_time, icu_training_load, " +
             "avg_power, normalized_power, max_power, avg_hr, max_hr, avg_cadence, " +
@@ -142,7 +142,7 @@ export function createCoachTools(userId: string) {
         const supabase = await createClient();
 
         const { data, error } = await supabase
-          .from("icu_activities")
+          .from("activities")
           .select("icu_training_load, moving_time, distance, elevation_gain, avg_power, normalized_power, calories")
           .eq("user_id", userId)
           .gte("activity_date", startDate)
@@ -285,7 +285,7 @@ export function createCoachTools(userId: string) {
             .gte("scheduled_date", startDate)
             .lte("scheduled_date", endDate),
           supabase
-            .from("icu_activities")
+            .from("activities")
             .select("activity_date")
             .eq("user_id", userId)
             .gte("activity_date", startDate)
@@ -335,7 +335,7 @@ export function createCoachTools(userId: string) {
         const loadPeriod = async (start: string, end: string) => {
           const [{ data: acts }, { data: wellStart }, { data: wellEnd }] = await Promise.all([
             supabase
-              .from("icu_activities")
+              .from("activities")
               .select("icu_training_load, moving_time, distance, elevation_gain, avg_power")
               .eq("user_id", userId)
               .gte("activity_date", start)
@@ -414,7 +414,7 @@ export function createCoachTools(userId: string) {
         const supabase = await createClient();
 
         const { data, error } = await supabase
-          .from("icu_activities")
+          .from("activities")
           .select("activity_date, name, type, max_power, avg_power, normalized_power, moving_time, icu_ftp")
           .eq("user_id", userId)
           .gte("activity_date", startDate)
@@ -484,7 +484,7 @@ export function createCoachTools(userId: string) {
 
         if (activityId) {
           const { data } = await supabase
-            .from("icu_activities")
+            .from("activities")
             .select("external_id, source, name, activity_date, icu_ftp, moving_time, distance, avg_power, normalized_power, avg_hr, max_hr, avg_cadence, calories, elevation_gain, max_power, icu_training_load")
             .eq("id", activityId)
             .eq("user_id", userId)
@@ -494,7 +494,7 @@ export function createCoachTools(userId: string) {
           }
         } else if (date) {
           let query = supabase
-            .from("icu_activities")
+            .from("activities")
             .select("external_id, source, name, activity_date, icu_ftp, moving_time, distance, avg_power, normalized_power, avg_hr, max_hr, avg_cadence, calories, elevation_gain, max_power, icu_training_load")
             .eq("user_id", userId)
             .eq("activity_date", date)

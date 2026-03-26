@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     const [{ data: profile }, { data: recentActivities }, { data: powerCurveCache }] = await Promise.all([
       supabase.from("users").select("ftp, weight").eq("id", user.id).maybeSingle(),
       supabase
-        .from("icu_activities")
+        .from("activities")
         .select("avg_power, normalized_power, moving_time, distance, elevation_gain")
         .eq("user_id", user.id)
         .order("activity_date", { ascending: false })

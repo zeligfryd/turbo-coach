@@ -18,6 +18,7 @@ import { ConversationSidebar } from "@/components/coach/conversation-sidebar";
 import {
   deleteConversation,
   getConversations,
+  markConversationRead,
   type ConversationListItem,
 } from "@/app/coach/actions";
 import { writeActiveConversationId, clearActiveConversationId } from "@/lib/coach/persistence";
@@ -27,6 +28,7 @@ export default function CoachPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [streamingWarningOpen, setStreamingWarningOpen] = useState(false);
+  const [firstUnreadIndex, setFirstUnreadIndex] = useState<number | null>(null);
   const pendingActionRef = useRef<(() => void) | null>(null);
 
   const onConversationCreated = useCallback(
@@ -87,6 +89,21 @@ export default function CoachPage() {
   const handleSelect = (id: string) => {
     if (id === activeId) return;
     guardStreaming(() => {
+      // Compute first unread index from the conversation's unread_count
+      const conv = conversations.find((c) => c.id === id);
+      if (conv && conv.unread_count > 0) {
+        // We'll get the actual message count when the conversation loads;
+        // store the unread_count so the chat panel can compute the scroll target
+        setFirstUnreadIndex(conv.unread_count);
+        // Mark as read in DB and clear local unread badge
+        markConversationRead(id).catch(console.warn);
+        setConversations((prev) =>
+          prev.map((c) => (c.id === id ? { ...c, unread_count: 0 } : c))
+        );
+      } else {
+        setFirstUnreadIndex(null);
+      }
+
       setActiveId(id);
       writeActiveConversationId(id);
       chat.loadConversation(id);
@@ -96,6 +113,7 @@ export default function CoachPage() {
   const handleNew = () => {
     guardStreaming(() => {
       setActiveId(null);
+      setFirstUnreadIndex(null);
       clearActiveConversationId();
       chat.startNewConversation();
     });
@@ -107,6 +125,7 @@ export default function CoachPage() {
     setConversations((prev) => prev.filter((c) => c.id !== id));
     if (activeId === id) {
       setActiveId(null);
+      setFirstUnreadIndex(null);
       clearActiveConversationId();
       chat.startNewConversation();
     }
@@ -152,7 +171,10 @@ export default function CoachPage() {
       )}
 
       <div className="flex-1 min-w-0">
-        <CoachChatPanel controller={chat} />
+        <CoachChatPanel
+          controller={chat}
+          unreadFromCount={firstUnreadIndex}
+        />
       </div>
 
       <AlertDialog open={streamingWarningOpen} onOpenChange={cancelLeave}>

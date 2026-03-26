@@ -1,5 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generatePostRideAnalysis } from "@/lib/ai/insights";
+import {
+  getOrCreateInsightsConversation,
+  appendInsightMessage,
+} from "@/lib/coach/insights-conversation";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -71,15 +75,19 @@ export async function triggerPostRideAnalysis(
   try {
     const analysis = await generatePostRideAnalysis(userId, activity);
     if (analysis) {
+      const convId = await getOrCreateInsightsConversation(supabase, userId);
+      await appendInsightMessage(supabase, convId, userId, analysis, "post_ride_analysis", {
+        activity_id: activity.id,
+        activity_name: activity.name ?? activity.type ?? "Ride",
+        activity_date: activity.activity_date,
+      });
+      // Insert a minimal record for deduplication (so the same activity isn't analyzed twice)
       await supabase.from("coach_insights").insert({
         user_id: userId,
         type: "post_ride_analysis",
-        content: analysis,
-        metadata: {
-          activity_id: activity.id,
-          activity_name: activity.name ?? activity.type ?? "Ride",
-          activity_date: activity.activity_date,
-        },
+        content: "",
+        metadata: { activity_id: activity.id },
+        read: true,
       });
       console.log("[PostRide] Generated analysis for activity", activity.id);
     }

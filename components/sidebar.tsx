@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { Menu, Home, Bike, User, Calendar, Activity, Bot, BarChart3, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getCoachUnreadCount } from "@/app/coach/actions";
 
 const STORAGE_KEY = "turbo-coach-sidebar-collapsed";
 
@@ -12,6 +13,7 @@ export function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(true); // Start collapsed to avoid flicker
   const [isMobileOpen, setIsMobileOpen] = useState(false); // Mobile drawer state
   const [isLoaded, setIsLoaded] = useState(false);
+  const [coachUnread, setCoachUnread] = useState(0);
   const pathname = usePathname();
 
   // Load collapsed state from localStorage on mount (desktop only)
@@ -30,6 +32,11 @@ export function Sidebar() {
     setIsMobileOpen(false);
   }, [pathname]);
 
+  // Fetch coach unread count on mount and route changes
+  useEffect(() => {
+    getCoachUnreadCount().then(setCoachUnread).catch(() => setCoachUnread(0));
+  }, [pathname]);
+
   // Save collapsed state to localStorage (desktop only)
   const toggleCollapsed = () => {
     // On mobile, toggle the drawer
@@ -44,14 +51,14 @@ export function Sidebar() {
   };
 
   const navItems = [
-    { href: "/dashboard", label: "Home", icon: Home },
-    { href: "/ride", label: "Ride", icon: Activity },
-    { href: "/calendar", label: "Calendar", icon: Calendar },
-    { href: "/fitness", label: "Fitness", icon: TrendingUp },
-    { href: "/performance", label: "Performance", icon: BarChart3 },
-    { href: "/coach", label: "Coach", icon: Bot },
-    { href: "/profile", label: "Profile", icon: User },
-    { href: "/workouts", label: "Workouts", icon: Bike },
+    { href: "/dashboard", label: "Home", icon: Home, badge: 0 },
+    { href: "/ride", label: "Ride", icon: Activity, badge: 0 },
+    { href: "/calendar", label: "Calendar", icon: Calendar, badge: 0 },
+    { href: "/fitness", label: "Fitness", icon: TrendingUp, badge: 0 },
+    { href: "/performance", label: "Performance", icon: BarChart3, badge: 0 },
+    { href: "/coach", label: "Coach", icon: Bot, badge: coachUnread },
+    { href: "/profile", label: "Profile", icon: User, badge: 0 },
+    { href: "/workouts", label: "Workouts", icon: Bike, badge: 0 },
   ];
 
   return (
@@ -131,7 +138,7 @@ export function Sidebar() {
                   <Link
                     href={item.href}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors",
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors relative",
                       "hover:bg-accent hover:text-accent-foreground",
                       isActive && "bg-accent text-accent-foreground font-medium",
                       "md:justify-start",
@@ -139,13 +146,30 @@ export function Sidebar() {
                     )}
                     title={isCollapsed ? item.label : undefined}
                   >
-                    <Icon className="h-5 w-5 flex-shrink-0" />
+                    <span className="relative flex-shrink-0">
+                      <Icon className="h-5 w-5" />
+                      {item.badge > 0 && isCollapsed && (
+                        <span className="absolute -top-1.5 -right-1.5 inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold leading-none">
+                          {item.badge > 99 ? "99+" : item.badge}
+                        </span>
+                      )}
+                    </span>
                     <span className="md:hidden transition-opacity duration-200">
                       {item.label}
                     </span>
                     {!isCollapsed && (
-                      <span className="hidden md:inline transition-opacity duration-200">
+                      <span className="hidden md:inline transition-opacity duration-200 flex-1">
                         {item.label}
+                      </span>
+                    )}
+                    {item.badge > 0 && !isCollapsed && (
+                      <span className="hidden md:inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold leading-none">
+                        {item.badge > 99 ? "99+" : item.badge}
+                      </span>
+                    )}
+                    {item.badge > 0 && (
+                      <span className="md:hidden inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-semibold leading-none ml-auto">
+                        {item.badge > 99 ? "99+" : item.badge}
                       </span>
                     )}
                   </Link>

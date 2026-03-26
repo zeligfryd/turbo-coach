@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { generateWeeklySummary } from "@/lib/ai/insights";
+import {
+  getOrCreateInsightsConversation,
+  appendInsightMessage,
+} from "@/lib/coach/insights-conversation";
 
 /**
  * POST /api/coach/weekly-summary
@@ -34,11 +38,9 @@ export async function POST(request: Request) {
         try {
           const summary = await generateWeeklySummary(user.id);
           if (summary) {
-            await supabase.from("coach_insights").insert({
-              user_id: user.id,
-              type: "weekly_summary",
-              content: summary,
-              metadata: { generated_at: new Date().toISOString() },
+            const convId = await getOrCreateInsightsConversation(supabase, user.id);
+            await appendInsightMessage(supabase, convId, user.id, summary, "weekly_summary", {
+              generated_at: new Date().toISOString(),
             });
             generated++;
           }
@@ -63,11 +65,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "No activities this week, skipping summary." });
     }
 
-    await supabase.from("coach_insights").insert({
-      user_id: user.id,
-      type: "weekly_summary",
-      content: summary,
-      metadata: { generated_at: new Date().toISOString(), manual: true },
+    const convId = await getOrCreateInsightsConversation(supabase, user.id);
+    await appendInsightMessage(supabase, convId, user.id, summary, "weekly_summary", {
+      generated_at: new Date().toISOString(),
+      manual: true,
     });
 
     return NextResponse.json({ success: true, summary });

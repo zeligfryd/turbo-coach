@@ -8,6 +8,8 @@ export type ConversationListItem = {
   id: string;
   title: string;
   updated_at: string;
+  is_system: boolean;
+  unread_count: number;
 };
 
 export type Conversation = {
@@ -45,7 +47,7 @@ export async function getConversations(): Promise<{
 
     const { data, error } = await supabase
       .from("coach_conversations")
-      .select("id, title, updated_at")
+      .select("id, title, updated_at, is_system, unread_count")
       .eq("user_id", user.id)
       .order("updated_at", { ascending: false })
       .limit(50);
@@ -193,6 +195,18 @@ export async function deleteConversation(
       return { success: false, error: "Not authenticated" };
     }
 
+    // Prevent deletion of system conversations
+    const { data: conv } = await supabase
+      .from("coach_conversations")
+      .select("is_system")
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (conv?.is_system) {
+      return { success: false, error: "Cannot delete the Training Insights conversation" };
+    }
+
     const { error } = await supabase
       .from("coach_conversations")
       .delete()
@@ -209,6 +223,62 @@ export async function deleteConversation(
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
     };
+  }
+}
+
+export async function markConversationRead(
+  id: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return { success: false, error: "Not authenticated" };
+    }
+
+    const { error } = await supabase
+      .from("coach_conversations")
+      .update({ unread_count: 0 })
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+export async function getCoachUnreadCount(): Promise<number> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) return 0;
+
+    const { data } = await supabase
+      .from("coach_conversations")
+      .select("unread_count")
+      .eq("user_id", user.id)
+      .eq("is_system", true)
+      .maybeSingle();
+
+    return (data as { unread_count: number } | null)?.unread_count ?? 0;
+  } catch {
+    return 0;
   }
 }
 

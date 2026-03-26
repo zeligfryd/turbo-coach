@@ -7,7 +7,7 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
-import { CalendarPlus, Check, Cog, Database, Lightbulb, Loader2, Send, X } from "lucide-react";
+import { CalendarPlus, Check, Cog, Database, Loader2, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -33,11 +33,8 @@ import {
   createAndScheduleCoachWorkout,
   createConversation,
   getConversation,
-  getUnreadInsights,
-  markInsightRead,
   saveConversationMessages,
   triggerMemoryExtraction,
-  type CoachInsight,
 } from "@/app/coach/actions";
 import { extractMessageText } from "@/lib/ai/utils";
 import type { RuntimeModelOverrides } from "@/lib/ai/models";
@@ -265,7 +262,6 @@ export const useCoachChatController = (options?: ControllerOptions) => {
   const [isLoadingConversation, setIsLoadingConversation] = useState(false);
   const [loadConversationError, setLoadConversationError] = useState<string | null>(null);
   const [didMigrateLegacy, setDidMigrateLegacy] = useState(false);
-  const [insights, setInsights] = useState<CoachInsight[]>([]);
   const [devOverrides, setDevOverrides] = useState<DevModelOverrides>(DEFAULT_OVERRIDES);
   const [devRagSettings, setDevRagSettings] = useState<DevRagSettings>(DEFAULT_RAG_SETTINGS);
   const prevStatusRef = useRef<string>("");
@@ -300,18 +296,6 @@ export const useCoachChatController = (options?: ControllerOptions) => {
     () => status === "submitted" || status === "streaming",
     [status]
   );
-
-  // Load unread insights on mount
-  useEffect(() => {
-    getUnreadInsights().then((result) => {
-      if (result.success) setInsights(result.insights);
-    });
-  }, []);
-
-  const dismissInsight = useCallback((id: string) => {
-    setInsights((prev) => prev.filter((i) => i.id !== id));
-    markInsightRead(id).catch(console.warn);
-  }, []);
 
   // Dev settings hydration
   useEffect(() => {
@@ -535,8 +519,6 @@ export const useCoachChatController = (options?: ControllerOptions) => {
     sendSuggestion,
     startNewConversation,
     loadConversation,
-    insights,
-    dismissInsight,
   };
 };
 
@@ -548,12 +530,15 @@ export function CoachChatPanel({
   showSettingsTrigger = true,
   settingsOpen: controlledSettingsOpen,
   onSettingsOpenChange,
+  unreadFromCount,
 }: {
   controller: CoachChatController;
   className?: string;
   showSettingsTrigger?: boolean;
   settingsOpen?: boolean;
   onSettingsOpenChange?: (open: boolean) => void;
+  /** Number of unread messages from the end of the conversation. Used to auto-scroll to the first unread. */
+  unreadFromCount?: number | null;
 }) {
   const router = useRouter();
   const scrollEndRef = useRef<HTMLDivElement>(null);
@@ -586,13 +571,39 @@ export function CoachChatPanel({
     }
   }, [controller.messages, controller.status]);
 
-  // Always scroll to bottom when loading a different conversation
+  // Track the unread count for this load so we scroll once
+  const pendingUnreadRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (unreadFromCount && unreadFromCount > 0) {
+      pendingUnreadRef.current = unreadFromCount;
+    }
+  }, [unreadFromCount]);
+
+  // When conversation finishes loading, scroll to first unread (or bottom)
   useEffect(() => {
     if (!controller.isLoadingConversation) {
-      userScrolledUpRef.current = false;
-      scrollEndRef.current?.scrollIntoView({ behavior: "instant" });
+      const unread = pendingUnreadRef.current;
+      pendingUnreadRef.current = null;
+
+      if (unread && unread > 0 && controller.messages.length > 0) {
+        const targetIndex = controller.messages.length - unread;
+        // Delay slightly to ensure DOM has rendered
+        requestAnimationFrame(() => {
+          const el = document.querySelector(`[data-message-index="${targetIndex}"]`);
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "start" });
+            userScrolledUpRef.current = true;
+            return;
+          }
+          // Fallback: scroll to bottom
+          scrollEndRef.current?.scrollIntoView({ behavior: "instant" });
+        });
+      } else {
+        userScrolledUpRef.current = false;
+        scrollEndRef.current?.scrollIntoView({ behavior: "instant" });
+      }
     }
-  }, [controller.isLoadingConversation]);
+  }, [controller.isLoadingConversation, controller.messages.length]);
   const settingsOpen = controlledSettingsOpen ?? internalSettingsOpen;
   const setSettingsOpen = onSettingsOpenChange ?? setInternalSettingsOpen;
 
@@ -836,41 +847,6 @@ export function CoachChatPanel({
           </>
         )}
 
-        {controller.insights.length > 0 && (
-          <div className="max-w-4xl mx-auto space-y-2 mb-4">
-            {controller.insights.map((insight) => (
-              <div
-                key={insight.id}
-                className={cn(
-                  "relative rounded-lg border p-3 text-sm",
-                  insight.type === "weekly_summary"
-                    ? "bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800"
-                    : "bg-amber-50 border-amber-200 dark:bg-amber-950 dark:border-amber-800"
-                )}
-              >
-                <button
-                  type="button"
-                  className="absolute top-2 right-2 text-muted-foreground hover:text-foreground"
-                  onClick={() => controller.dismissInsight(insight.id)}
-                  aria-label="Dismiss"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-                <div className="flex items-start gap-2 pr-6">
-                  <Lightbulb className="h-4 w-4 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="font-medium text-xs mb-1">
-                      {insight.type === "weekly_summary" ? "Weekly Summary" : "Ride Analysis"}
-                      {insight.metadata?.activity_name ? ` — ${insight.metadata.activity_name}` : ""}
-                    </p>
-                    <p className="whitespace-pre-wrap">{insight.content}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
         {controller.isLoadingConversation && (
           <div className="max-w-4xl mx-auto mt-8 flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -911,12 +887,12 @@ export function CoachChatPanel({
 
         {!controller.isLoadingConversation && controller.messages.length > 0 && (
           <div className="max-w-4xl mx-auto space-y-4 pb-8">
-            {controller.messages.map((message) => {
+            {controller.messages.map((message, messageIndex) => {
               const text = getMessageText(message);
               const isUser = message.role === "user";
 
               return (
-                <div key={message.id} className={cn("flex", isUser ? "justify-end" : "justify-start")}>
+                <div key={message.id} data-message-index={messageIndex} className={cn("flex", isUser ? "justify-end" : "justify-start")}>
                   <div
                     className={cn(
                       "max-w-[85%] rounded-xl px-4 py-3 text-sm shadow-sm",

@@ -12,6 +12,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   calculateTotalDuration,
   calculateAverageIntensity,
   formatDuration,
@@ -39,6 +49,7 @@ export function WorkoutCard({ workout, onClick, isCustom, userFtp }: WorkoutCard
   const [isFavorite, setIsFavorite] = useState(workout.is_favorite || false);
   const [isToggling, setIsToggling] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Flatten BuilderItems to intervals
   const intervals = flattenBuilderItems(workout.intervals);
@@ -102,24 +113,25 @@ export function WorkoutCard({ workout, onClick, isCustom, userFtp }: WorkoutCard
     router.push(`/workouts/builder?mode=edit&id=${workout.id}`);
   };
 
-  const handleDelete = async (e: React.MouseEvent) => {
+  const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm(`Are you sure you want to delete "${workout.name}"?`)) {
-      return;
-    }
+    setShowDeleteConfirm(true);
+  };
 
+  const confirmDelete = async () => {
     setIsDeleting(true);
+    setShowDeleteConfirm(false);
     const result = await deleteWorkout(workout.id);
 
     if (result.success) {
       router.refresh();
     } else {
-      alert(`Failed to delete workout: ${result.error}`);
       setIsDeleting(false);
     }
   };
 
   return (
+    <>
     <Card
       onClick={onClick}
       className="text-left p-4 cursor-pointer hover:shadow-md transition-all group border-0"
@@ -203,5 +215,23 @@ export function WorkoutCard({ workout, onClick, isCustom, userFtp }: WorkoutCard
         )}
       </div>
     </Card>
+
+    <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete workout</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to delete &ldquo;{workout.name}&rdquo;? This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction variant="destructive" onClick={confirmDelete}>
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

@@ -5,6 +5,16 @@ import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Star, Copy, MoreVertical, Edit2, Trash2, Download, Bike } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -58,6 +68,7 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
   const [isFavorite, setIsFavorite] = useState(workout?.is_favorite || false);
   const [isToggling, setIsToggling] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   if (!workout) return null;
 
@@ -135,24 +146,25 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
     onClose();
   };
 
-  const handleDelete = async () => {
-    if (!confirm(`Are you sure you want to delete "${workout.name}"?`)) {
-      return;
-    }
+  const handleDelete = () => {
+    setShowDeleteConfirm(true);
+  };
 
+  const confirmDelete = async () => {
     setIsDeleting(true);
+    setShowDeleteConfirm(false);
     const result = await deleteWorkout(workout.id);
 
     if (result.success) {
       onClose();
       router.refresh();
     } else {
-      alert(`Failed to delete workout: ${result.error}`);
       setIsDeleting(false);
     }
   };
 
   return (
+    <>
     <Dialog open={!!workout} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
         <DialogHeader className="p-4 sm:p-6 border-b border-border">
@@ -384,5 +396,23 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
         </div>
       </DialogContent>
     </Dialog>
+
+    <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete workout</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to delete &ldquo;{workout.name}&rdquo;? This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction variant="destructive" onClick={confirmDelete}>
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

@@ -230,8 +230,7 @@ export async function loadCoachUserContext(userId: string): Promise<CoachUserCon
         .eq("user_id", userId)
         .gte("activity_date", toDate(recentStart))
         .lte("activity_date", toDate(today))
-        .order("activity_date", { ascending: false })
-        .limit(14),
+        .order("activity_date", { ascending: false }),
       supabase
         .from("wellness")
         .select("date, ctl, atl, tsb, ramp_rate, resting_hr, hrv")

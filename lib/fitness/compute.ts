@@ -38,7 +38,7 @@ export async function recomputeFitness(
     // Fetch activities — only after the ICU range if ICU data exists
     let query = supabase
       .from("activities")
-      .select("activity_date, icu_training_load, source")
+      .select("activity_date, icu_training_load")
       .eq("user_id", userId)
       .not("icu_training_load", "is", null)
       .gt("icu_training_load", 0)
@@ -62,23 +62,11 @@ export async function recomputeFitness(
       return { success: true, daysComputed: 0 };
     }
 
-    // Build daily loads, deduplicating across sources (prefer ICU over Strava per day)
-    const loadByDateSource = new Map<string, { icu: number; strava: number }>();
-    for (const a of (activities ?? []) as { activity_date: string; icu_training_load: number; source: string }[]) {
-      const date = a.activity_date;
-      const load = Number(a.icu_training_load) || 0;
-      const entry = loadByDateSource.get(date) ?? { icu: 0, strava: 0 };
-      if (a.source === "intervals.icu") {
-        entry.icu += load;
-      } else {
-        entry.strava += load;
-      }
-      loadByDateSource.set(date, entry);
-    }
-
+    // Sum training load per day
     const dailyMap = new Map<string, number>();
-    for (const [date, { icu, strava }] of loadByDateSource) {
-      dailyMap.set(date, icu > 0 ? icu : strava);
+    for (const a of (activities ?? []) as { activity_date: string; icu_training_load: number }[]) {
+      const load = Number(a.icu_training_load) || 0;
+      dailyMap.set(a.activity_date, (dailyMap.get(a.activity_date) ?? 0) + load);
     }
 
     // Ensure the curve extends to today

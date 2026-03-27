@@ -22,11 +22,11 @@ const DEFAULT_CONFIG: ModelsConfig = {
   },
   coaching: {
     provider: "openai",
-    model: "gpt-4o-mini",
+    model: "gpt-5.4-mini",
   },
   workoutExtraction: {
     provider: "openai",
-    model: "gpt-4o-mini",
+    model: "gpt-40-mini",
   },
   memoryExtraction: {
     provider: "openai",

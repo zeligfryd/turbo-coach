@@ -44,8 +44,16 @@ export async function appendInsightMessage(
   insightType: "weekly_summary" | "post_ride_analysis",
   metadata?: Record<string, unknown>
 ): Promise<void> {
-  const label =
-    insightType === "weekly_summary" ? "Weekly Summary" : "Ride Analysis";
+  let label: string;
+  if (insightType === "weekly_summary" && metadata?.week_start && metadata?.week_end) {
+    label = `Weekly Summary (${metadata.week_start} – ${metadata.week_end})`;
+  } else if (insightType === "weekly_summary") {
+    label = "Weekly Summary";
+  } else {
+    const activityName = metadata?.activity_name ?? "Ride";
+    const activityDate = metadata?.activity_date ?? "";
+    label = `Ride Analysis: ${activityName}${activityDate ? ` (${activityDate})` : ""}`;
+  }
 
   const message = {
     id: crypto.randomUUID(),

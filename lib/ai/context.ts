@@ -131,7 +131,7 @@ const formatScheduledWorkouts = (
   const lines = workouts.map((entry) => {
     const workout = normalizeWorkout(entry.workout);
     if (!workout) {
-      return `- ${entry.scheduled_date}: Missing workout details`;
+      return `- ${entry.scheduled_date} (${dayName(entry.scheduled_date)}): Missing workout details`;
     }
 
     const duration = workout.duration_seconds ? `${Math.round(workout.duration_seconds / 60)}m` : "n/a";
@@ -141,7 +141,7 @@ const formatScheduledWorkouts = (
         : "n/a";
     const intervalSummary = formatIntervalSummary(workout.intervals);
 
-    return `- ${entry.scheduled_date}: ${workout.name} (${workout.category}, ${duration}, avg ${intensity}) | ${intervalSummary}`;
+    return `- ${entry.scheduled_date} (${dayName(entry.scheduled_date)}): ${workout.name} (${workout.category}, ${duration}, avg ${intensity}) | ${intervalSummary}`;
   });
 
   return `${label} scheduled workouts:\n${lines.join("\n")}`;
@@ -284,6 +284,9 @@ export async function loadCoachUserContext(userId: string): Promise<CoachUserCon
   return context;
 }
 
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+const dayName = (dateStr: string) => DAY_NAMES[new Date(dateStr + "T00:00:00Z").getUTCDay()];
+
 const formatRecentActivities = (activities: RecentActivity[]): string => {
   if (activities.length === 0) {
     return "Recent actual activities: none synced.";
@@ -302,7 +305,7 @@ const formatRecentActivities = (activities: RecentActivity[]): string => {
     const elev = a.elevation_gain != null ? `${Math.round(a.elevation_gain)}m elev` : "";
     const cal = a.calories != null ? `${a.calories}kcal` : "";
     const metrics = [duration, dist, elev, load, power, np, hr, maxHr, cadence, cal].filter(Boolean).join(", ");
-    return `- ${a.activity_date}: ${a.name ?? a.type ?? "Activity"} (${metrics})`;
+    return `- ${a.activity_date} (${dayName(a.activity_date)}): ${a.name ?? a.type ?? "Activity"} (${metrics})`;
   });
 
   return `Recent actual activities:\n${lines.join("\n")}`;
@@ -321,7 +324,7 @@ const formatWellnessTrend = (days: WellnessDay[]): string => {
     const restHr = d.resting_hr != null ? `RHR ${d.resting_hr}` : "";
     const hrv = d.hrv != null ? `HRV ${d.hrv}` : "";
     const parts = [ctl, atl, tsb, ramp, restHr, hrv].filter(Boolean).join(", ");
-    return `- ${d.date}: ${parts}`;
+    return `- ${d.date} (${dayName(d.date)}): ${parts}`;
   });
 
   return `Fitness/fatigue trend (last 14 days):\n${lines.join("\n")}`;

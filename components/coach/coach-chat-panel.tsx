@@ -67,7 +67,7 @@ const DEFAULT_OVERRIDES: DevModelOverrides = {
   },
   coaching: {
     provider: "openai",
-    model: "gpt-4o-mini",
+    model: "gpt-5.4-mini",
   },
   workoutExtraction: {
     provider: "openai",

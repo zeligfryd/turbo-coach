@@ -47,13 +47,16 @@ export function assertPowerConsistency(plan: PacingPlan, ftp: number, toleranceW
 
 /**
  * Flat segments should have power within the duration bucket range.
- * Duration buckets: <1h 95-105%, 1-2h 90-95%, 2-3h 85-90%, 3-4h 80-86%, 4h+ 75-82%
+ * Duration buckets: <30min 105-115%, 30min-1h 95-105%, 1-2h 90-95%,
+ *                  2-3h 85-90%, 3-4h 80-86%, 4h+ 75-82%
  */
 export function assertFlatTargetInRange(plan: PacingPlan, ftp: number) {
   const finishMin = plan.estimatedFinishTimeMin;
   let lower: number, upper: number;
 
-  if (finishMin < 60) {
+  if (finishMin < 30) {
+    lower = 105; upper = 115;
+  } else if (finishMin < 60) {
     lower = 95; upper = 105;
   } else if (finishMin < 120) {
     lower = 90; upper = 95;

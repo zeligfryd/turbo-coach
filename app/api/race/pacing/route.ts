@@ -48,7 +48,7 @@ export async function POST(request: Request) {
         .select("avg_power, normalized_power, moving_time, distance, elevation_gain")
         .eq("user_id", user.id)
         .order("activity_date", { ascending: false })
-        .limit(10),
+        .limit(5),
       supabase
         .from("power_curve_cache")
         .select("profile")
@@ -96,12 +96,39 @@ export async function POST(request: Request) {
       gpxData,
     });
 
-    const result = await generateText({
-      model: models.coaching,
-      prompt,
-    });
+    // Attempt LLM call with one retry on parse failure
+    let plan;
+    let lastError: Error | null = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const result = await generateText({ model: models.coaching, prompt });
+        plan = parsePacingResponse(result.text);
+        lastError = null;
+        break;
+      } catch (e) {
+        lastError = e instanceof Error ? e : new Error("LLM error");
+      }
+    }
+    if (!plan) throw lastError ?? new Error("Failed to generate pacing plan");
 
-    const plan = parsePacingResponse(result.text);
+    // Sanity-check overall NP against duration-based ceiling
+    const durationH = plan.estimatedFinishTimeMin / 60;
+    let maxNpPct: number;
+    if (durationH < 0.5)       maxNpPct = 115;
+    else if (durationH < 1)    maxNpPct = 105;
+    else if (durationH < 2)    maxNpPct = 95;
+    else if (durationH < 3)    maxNpPct = 90;
+    else if (durationH < 4)    maxNpPct = 86;
+    else                       maxNpPct = 82;
+    const maxNpW = Math.round(ftp * maxNpPct / 100);
+    if (plan.overallTargetNpW > maxNpW * 1.15) {
+      // 15% tolerance for rounding and short bursts; reject clearly dangerous plans
+      throw new Error(
+        `Generated plan NP (${plan.overallTargetNpW}W) exceeds physiological ceiling ` +
+        `(${maxNpW}W = ${maxNpPct}% FTP) for ${Math.round(durationH * 60)}min event. ` +
+        `Please try regenerating.`
+      );
+    }
 
     // Cache pacing plan on race event
     await supabase

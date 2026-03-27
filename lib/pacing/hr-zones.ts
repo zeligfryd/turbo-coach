@@ -27,7 +27,9 @@ const ZONE_THRESHOLDS: { zone: number; name: string; minPct: number; maxPct: num
   { zone: 5, name: "VO2max+", minPct: 1.0, maxPct: 1.15 },
 ];
 
-const LTHR_FROM_MAX_HR_FACTOR = 0.93;
+// Coggan's recommended estimate is ~84-90% of max HR; 0.87 is the midpoint.
+// Using 0.93 overestimates LTHR, pushing all HR zones too high.
+const LTHR_FROM_MAX_HR_FACTOR = 0.87;
 
 /**
  * Resolve LTHR from explicit value or estimate from max HR.

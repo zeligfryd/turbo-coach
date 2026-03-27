@@ -193,17 +193,24 @@ export function buildPacingPrompt(params: PacingPromptParams): string {
   const totalElev = gpxData.totalElevationM ?? 0;
   const weightAdvisory = buildWeightAdvisory(weight, totalElev);
 
+  const isLongEvent = (eventType: string) =>
+    eventType === "gran_fondo" || eventType === "gravel";
+
   return [
     "You are an expert cycling coach creating a race pacing plan.",
     "Return ONLY valid JSON matching this exact structure (no markdown, no explanation):",
     "",
     `{"overallTargetNpW": number, "estimatedFinishTimeMin": number, "strategy": "string (2-3 sentences)", "segments": [{"label": "string", "startKm": number, "endKm": number, "targetPowerW": number, "targetPowerPercent": number, "estimatedTimeMin": number, "advice": "string (1-2 sentences, include watts AND W/kg for climb segments)"${hrZones ? ', "targetHrZone": "string (e.g. Z2, Z3-Z4)", "targetHrBpm": "string (e.g. 145-160)"' : ""}}]}`,
     "",
+    "Example output (40km flat TT, FTP 280W, 75kg, ~56min):",
+    '{"overallTargetNpW": 266, "estimatedFinishTimeMin": 56, "strategy": "Even-paced 40km TT targeting 95% FTP. Start slightly below target for the first 5 minutes while HR stabilises, then hold 95-97% throughout and build to 100% in the final 5km.", "segments": [{"label": "Opening 5km", "startKm": 0, "endKm": 5, "targetPowerW": 252, "targetPowerPercent": 90, "estimatedTimeMin": 7, "advice": "Controlled start — resist the adrenaline and let HR build gradually before settling into race pace."}, {"label": "Main effort", "startKm": 5, "endKm": 35, "targetPowerW": 271, "targetPowerPercent": 97, "estimatedTimeMin": 42, "advice": "Hold steady, aero position. VI target <1.05 — any surging costs more than it saves."}, {"label": "Final push", "startKm": 35, "endKm": 40, "targetPowerW": 280, "targetPowerPercent": 100, "estimatedTimeMin": 7, "advice": "Build to 100% FTP if HR and legs feel good. Empty the tank here."}]}',
+    "",
     "Athlete profile:",
     `- FTP: ${ftp}W${!manualFtp ? " (estimated)" : ""}`,
     `- Weight: ${weight ?? "unknown"} kg`,
     `- FTP W/kg: ${wkg ?? "unknown"}`,
     `- Recent rides: ${recentContext || "no data"}`,
+    "  (If recent ride power values are shown as '?', base all targets on stated FTP alone and note in the strategy that recent form data is unavailable.)",
     ...profileContext,
     "",
     `Race: ${raceName} (${eventType})`,
@@ -223,12 +230,17 @@ export function buildPacingPrompt(params: PacingPromptParams): string {
     '  Show both in advice text: e.g. "323W (3.75 W/kg)".',
     "- Math check: all watts = round(FTP × percentage), all W/kg = watts / weightKg. These must be consistent.",
     "",
+    "FORM CHECK — do this before setting any targets:",
+    "- Inspect the recent rides. If recent NP values (excluding rides shown as '?') average more than 20% below stated FTP across non-recovery rides, treat working FTP as 80-90% of stated FTP for all target calculations.",
+    `- In that case, note in the strategy field: "Recent training load suggests you may not currently be at your stated FTP — targets have been calibrated to recent form. Consider an FTP retest before race day."`,
+    "",
     "STEP 1 — ESTIMATE FINISH TIME FIRST:",
     "- Estimate finish time FIRST using the GPX data and athlete W/kg before setting any power targets. All targets flow from this estimate.",
     "- Heuristic: flat speed from athlete W/kg (roughly 35-45 km/h for 3.5-5 W/kg), add ~1 min per km per 100m elevation gain for climbing, descents at 50-60 km/h with minimal pedalling.",
     "",
     "STEP 2 — FLAT POWER CEILING (determined by estimated duration):",
-    "- Under 1h: 95-105% FTP",
+    "- Under 30min (prologue / short TT): 105-115% FTP",
+    "- 30min-1h: 95-105% FTP",
     "- 1-2h: 90-95% FTP",
     "- 2-3h: 85-90% FTP",
     "- 3-4h: 80-86% FTP",
@@ -238,11 +250,22 @@ export function buildPacingPrompt(params: PacingPromptParams): string {
     "- TT (solo effort): ride as close to the flat ceiling as possible, as steadily as possible. Minimise surges. Target VI < 1.05.",
     "- Road race / crit: higher variability is unavoidable. NP target matches the duration ceiling but average power will be lower due to surges and recoveries.",
     "- Gran fondo: like a road race but self-governed — advise riding to power targets, not to feel or to competitors.",
+    "- Gravel race: conservative, like a gran fondo but reduce all targets a further 5-8% for rolling resistance and terrain variation. Ride to power, not to competitors — drafting is minimal and the terrain will punish over-pacing.",
     "",
     "CLIMB TARGETS (base ranges by climb duration):",
     "- Short climbs (<5 min): 110-120% FTP, W' expenditure acceptable",
     "- Medium climbs (5-20 min): 100-108% FTP, settle in quickly, no blowups",
     "- Long climbs (20 min+): 95-103% FTP — treat like a TT within the race",
+    ...(isLongEvent(eventType)
+      ? [
+          `- ${eventType === "gravel" ? "Gravel / " : ""}Gran fondo event (likely 3h+): reduce ALL climb ceilings by 10-12%. Long climbs: 86-93% FTP. Medium climbs: 89-96% FTP. Cumulative fatigue across the day makes early aggression on climbs catastrophically expensive.`,
+        ]
+      : []),
+    ...(eventType === "time_trial"
+      ? [
+          "- Multi-hour TT: long climb ceiling must not exceed flat power ceiling + 5%. Treat every climb as a TT segment, not an opportunity to push.",
+        ]
+      : []),
     "",
     ...(powerProfile ? buildProfileModifiers(powerProfile) : []),
     ...(hrZones
@@ -258,7 +281,8 @@ export function buildPacingPrompt(params: PacingPromptParams): string {
           "- targetHrZone: use \"Z2\", \"Z3\", \"Z3-Z4\", etc.",
           "- targetHrBpm: the bpm range from the HR zone table above (e.g. \"145-160\").",
           "- For segments spanning multiple intensities (e.g. rolling), use a range like \"Z2-Z3\".",
-          "- HR targets serve as a guardrail — if HR drifts above target zone, the athlete is overcooking it.",
+          "- HR targets are hard ceilings — if HR drifts above the target zone, the athlete should reduce power.",
+          "- CARDIAC DRIFT: In events over 90 minutes, HR naturally rises 5-10 bpm at constant power. For segments in the FINAL THIRD of a race estimated longer than 90 minutes, either (a) relax the HR ceiling by one zone, OR (b) note in the segment advice that a 3-5% power reduction may be needed to keep HR in range as fatigue accumulates.",
           `${hrZones.estimated ? "- NOTE: LTHR is estimated from max HR, so HR targets are approximate. Mention this in the strategy." : ""}`,
           "",
         ]
@@ -267,7 +291,21 @@ export function buildPacingPrompt(params: PacingPromptParams): string {
     "- Descents: recovery windows — advise soft pedalling, eat and drink here",
     "- First 10 minutes: start 5-10% below flat target to allow warm-up and positioning, then settle into race pace",
     "- Final km: budget a push at 105-120% FTP if W' allows, only if estimated finish time suggests meaningful sprint capacity remains",
+    ...(gpxData.totalDistanceKm > 0 && eventType !== "time_trial"
+      ? [
+          `- ${
+            gpxData.segments.reduce((acc, s) => acc + s.distanceKm, 0) > 80 ||
+            isLongEvent(eventType)
+              ? "NUTRITION (mandatory for this event length): include at least one explicit fuelling note in the strategy or segment advice — descents and flat sections are prime eating/drinking windows. Events >2h require 60-90g carbs/hour to avoid bonking."
+              : "Fuelling: if the event is likely longer than 2 hours based on your finish time estimate, mention nutrition timing in the strategy."
+          }`,
+        ]
+      : []),
     "- Do NOT be excessively conservative — give athletes numbers they can actually race on. This is a race, not a training ride.",
     "- Advice should reference specific route geography from the GPX segments and be tactically useful, not generic",
+    "",
+    "FINAL CHECK before outputting JSON:",
+    "- Verify that overallTargetNpW falls within the STEP 2 flat power ceiling for the estimated finish time. If it exceeds it, reduce the highest outlier segment targets.",
+    "- Verify that no single segment's targetPowerPercent exceeds the physiological maximum for its estimatedTimeMin: >60min → max 95%, 20-60min → max 105%, 5-20min → max 115%.",
   ].join("\n");
 }

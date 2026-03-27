@@ -52,7 +52,7 @@ export function PacingCalculator({
 
   const gpxData = race.gpx_data;
   const basePlan = race.pacing_plan;
-  const pacingPlan = basePlan ? scalePlan(basePlan, ambition) : null;
+  const pacingPlan = basePlan ? scalePlan(basePlan, ambition, userFtp ?? undefined) : null;
 
   const handleGpxUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

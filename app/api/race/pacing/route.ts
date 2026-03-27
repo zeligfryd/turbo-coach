@@ -6,6 +6,7 @@ import type { GpxData } from "@/lib/race/types";
 import type { PowerProfile } from "@/lib/power/types";
 import { resolveFtp, buildPacingPrompt } from "@/lib/pacing/prompt";
 import { parsePacingResponse } from "@/lib/pacing/parse";
+import { buildHrZones } from "@/lib/pacing/hr-zones";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
 
     // Fetch athlete profile, recent performance, and power profile
     const [{ data: profile }, { data: recentActivities }, { data: powerCurveCache }] = await Promise.all([
-      supabase.from("users").select("ftp, weight").eq("id", user.id).maybeSingle(),
+      supabase.from("users").select("ftp, weight, max_hr, lthr").eq("id", user.id).maybeSingle(),
       supabase
         .from("activities")
         .select("avg_power, normalized_power, moving_time, distance, elevation_gain")
@@ -56,7 +57,10 @@ export async function POST(request: Request) {
     ]);
 
     const weight = profile?.weight ?? null;
+    const maxHr = profile?.max_hr ?? null;
+    const lthr = profile?.lthr ?? null;
     const powerProfile = (powerCurveCache as any)?.profile as PowerProfile | null ?? null;
+    const hrZones = buildHrZones(maxHr, lthr);
 
     const manualFtp = profile?.ftp ?? null;
     const estimatedFtp = powerProfile?.estimatedFtp ?? null;
@@ -86,6 +90,7 @@ export async function POST(request: Request) {
       wkg,
       recentContext,
       powerProfile,
+      hrZones,
       raceName: race.name,
       eventType: race.event_type,
       gpxData,

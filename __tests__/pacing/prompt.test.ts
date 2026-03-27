@@ -24,6 +24,7 @@ function makeParams(overrides: Partial<PacingPromptParams> = {}): PacingPromptPa
     wkg: 3.73,
     recentContext: "NP 250W, Avg 230W, 90min",
     powerProfile: null,
+    hrZones: null,
     raceName: "Test Race",
     eventType: "road_race",
     gpxData: FLAT_TT,

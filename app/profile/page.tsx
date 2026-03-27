@@ -18,7 +18,7 @@ export default async function ProfilePage() {
 
   const [{ data: profile }, { data: stravaConnection }, { data: icuConnection }] =
     await Promise.all([
-      supabase.from("users").select("ftp, weight, weekly_summary_enabled, auto_analysis_enabled").eq("id", data.user.id).single(),
+      supabase.from("users").select("ftp, weight, max_hr, lthr, weekly_summary_enabled, auto_analysis_enabled").eq("id", data.user.id).single(),
       supabase.from("strava_connections").select("*").eq("user_id", data.user.id).maybeSingle(),
       supabase.from("icu_connections").select("*").eq("user_id", data.user.id).maybeSingle(),
     ]);
@@ -33,6 +33,8 @@ export default async function ProfilePage() {
       <ProfileForm
         initialFtp={profile?.ftp ?? null}
         initialWeight={profile?.weight ?? null}
+        initialMaxHr={(profile as Record<string, unknown> | null)?.max_hr as number | null ?? null}
+        initialLthr={(profile as Record<string, unknown> | null)?.lthr as number | null ?? null}
         userId={data.user.id}
       />
       <CoachSettingsForm initialSettings={coachSettings} />

@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import dynamic from "next/dynamic";
-import { Upload, Loader2, MessageCircle, Zap, Clock, TrendingUp, HelpCircle, AlertTriangle } from "lucide-react";
+import { Upload, Loader2, MessageCircle, Zap, Clock, TrendingUp, HelpCircle, AlertTriangle, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { RaceEvent, GpxData, PacingPlan, AmbitionLevel } from "@/lib/race/types";
 import { AMBITION_LEVELS, AMBITION_LABELS } from "@/lib/race/types";
@@ -290,7 +290,15 @@ export function PacingCalculator({
                     <div key={i} className="rounded-lg bg-muted/30 px-3 py-2">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">{seg.label}</span>
-                        <span className="text-sm font-bold text-primary">{seg.targetPowerW}W ({seg.targetPowerPercent}%)</span>
+                        <div className="flex items-center gap-2">
+                          {seg.targetHrZone && (
+                            <span className="inline-flex items-center gap-1 text-xs font-medium text-rose-500">
+                              <Heart className="h-3 w-3" />
+                              {seg.targetHrZone}{seg.targetHrBpm ? ` (${seg.targetHrBpm})` : ""}
+                            </span>
+                          )}
+                          <span className="text-sm font-bold text-primary">{seg.targetPowerW}W ({seg.targetPowerPercent}%)</span>
+                        </div>
                       </div>
                       <div className="text-xs text-muted-foreground mt-0.5">
                         Est. {formatTime(seg.estimatedTimeMin)} · km {seg.startKm}–{seg.endKm}

@@ -1,5 +1,6 @@
 import type { GpxData, GpxSegment } from "@/lib/race/types";
 import type { PowerProfile } from "@/lib/power/types";
+import { type HrZoneModel, formatHrZonesForPrompt } from "@/lib/pacing/hr-zones";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -59,6 +60,7 @@ export interface PacingPromptParams {
   wkg: number | null;
   recentContext: string;
   powerProfile: PowerProfile | null;
+  hrZones: HrZoneModel | null;
   raceName: string;
   eventType: string;
   gpxData: GpxData;
@@ -180,6 +182,7 @@ export function buildPacingPrompt(params: PacingPromptParams): string {
     wkg,
     recentContext,
     powerProfile,
+    hrZones,
     raceName,
     eventType,
     gpxData,
@@ -194,7 +197,7 @@ export function buildPacingPrompt(params: PacingPromptParams): string {
     "You are an expert cycling coach creating a race pacing plan.",
     "Return ONLY valid JSON matching this exact structure (no markdown, no explanation):",
     "",
-    '{"overallTargetNpW": number, "estimatedFinishTimeMin": number, "strategy": "string (2-3 sentences)", "segments": [{"label": "string", "startKm": number, "endKm": number, "targetPowerW": number, "targetPowerPercent": number, "estimatedTimeMin": number, "advice": "string (1-2 sentences, include watts AND W/kg for climb segments)"}]}',
+    `{"overallTargetNpW": number, "estimatedFinishTimeMin": number, "strategy": "string (2-3 sentences)", "segments": [{"label": "string", "startKm": number, "endKm": number, "targetPowerW": number, "targetPowerPercent": number, "estimatedTimeMin": number, "advice": "string (1-2 sentences, include watts AND W/kg for climb segments)"${hrZones ? ', "targetHrZone": "string (e.g. Z2, Z3-Z4)", "targetHrBpm": "string (e.g. 145-160)"' : ""}}]}`,
     "",
     "Athlete profile:",
     `- FTP: ${ftp}W${!manualFtp ? " (estimated)" : ""}`,
@@ -210,6 +213,7 @@ export function buildPacingPrompt(params: PacingPromptParams): string {
     "Route segments:",
     segmentDescriptions,
     ...weightAdvisory,
+    ...(hrZones ? ["", formatHrZonesForPrompt(hrZones)] : []),
     "",
     "=== PACING TARGET GENERATION RULES ===",
     "",
@@ -241,6 +245,24 @@ export function buildPacingPrompt(params: PacingPromptParams): string {
     "- Long climbs (20 min+): 95-103% FTP — treat like a TT within the race",
     "",
     ...(powerProfile ? buildProfileModifiers(powerProfile) : []),
+    ...(hrZones
+      ? [
+          "HR ZONE TARGETS:",
+          "- Each segment MUST include targetHrZone and targetHrBpm fields.",
+          "- Map power targets to corresponding HR zones:",
+          "  - Recovery / descent → Z1",
+          "  - Endurance / easy flat → Z2",
+          "  - Tempo / moderate flat → Z3",
+          "  - Threshold / sustained climb → Z4",
+          "  - VO2max / short hard effort → Z5",
+          "- targetHrZone: use \"Z2\", \"Z3\", \"Z3-Z4\", etc.",
+          "- targetHrBpm: the bpm range from the HR zone table above (e.g. \"145-160\").",
+          "- For segments spanning multiple intensities (e.g. rolling), use a range like \"Z2-Z3\".",
+          "- HR targets serve as a guardrail — if HR drifts above target zone, the athlete is overcooking it.",
+          `${hrZones.estimated ? "- NOTE: LTHR is estimated from max HR, so HR targets are approximate. Mention this in the strategy." : ""}`,
+          "",
+        ]
+      : []),
     "OTHER:",
     "- Descents: recovery windows — advise soft pedalling, eat and drink here",
     "- First 10 minutes: start 5-10% below flat target to allow warm-up and positioning, then settle into race pace",

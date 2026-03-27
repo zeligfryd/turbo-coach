@@ -11,12 +11,16 @@ import { cn } from "@/lib/utils";
 interface ProfileFormProps extends React.ComponentPropsWithoutRef<"div"> {
   initialFtp: number | null;
   initialWeight: number | null;
+  initialMaxHr: number | null;
+  initialLthr: number | null;
   userId: string;
 }
 
-export function ProfileForm({ className, initialFtp, initialWeight, userId, ...props }: ProfileFormProps) {
+export function ProfileForm({ className, initialFtp, initialWeight, initialMaxHr, initialLthr, userId, ...props }: ProfileFormProps) {
   const [ftp, setFtp] = useState<string>(initialFtp?.toString() ?? "");
   const [weight, setWeight] = useState<string>(initialWeight?.toString() ?? "");
+  const [maxHr, setMaxHr] = useState<string>(initialMaxHr?.toString() ?? "");
+  const [lthr, setLthr] = useState<string>(initialLthr?.toString() ?? "");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -31,6 +35,8 @@ export function ProfileForm({ className, initialFtp, initialWeight, userId, ...p
     try {
       const ftpValue = ftp ? parseInt(ftp, 10) : null;
       const weightValue = weight ? parseFloat(weight) : null;
+      const maxHrValue = maxHr ? parseInt(maxHr, 10) : null;
+      const lthrValue = lthr ? parseInt(lthr, 10) : null;
 
       const { error } = await supabase
         .from("users")
@@ -38,6 +44,8 @@ export function ProfileForm({ className, initialFtp, initialWeight, userId, ...p
           id: userId,
           ftp: ftpValue,
           weight: weightValue,
+          max_hr: maxHrValue,
+          lthr: lthrValue,
           updated_at: new Date().toISOString(),
         });
 
@@ -89,6 +97,36 @@ export function ProfileForm({ className, initialFtp, initialWeight, userId, ...p
                   <span className="text-sm text-muted-foreground whitespace-nowrap">kg</span>
                 </div>
                 <p className="text-xs text-muted-foreground">Your current body weight.</p>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="maxHr">Max Heart Rate</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="maxHr"
+                    type="number"
+                    placeholder="e.g., 190"
+                    value={maxHr}
+                    onChange={(e) => setMaxHr(e.target.value)}
+                  />
+                  <span className="text-sm text-muted-foreground whitespace-nowrap">bpm</span>
+                </div>
+                <p className="text-xs text-muted-foreground">Your maximum heart rate. Used for HR zone pacing targets.</p>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="lthr">Lactate Threshold Heart Rate (optional)</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="lthr"
+                    type="number"
+                    placeholder="e.g., 172"
+                    value={lthr}
+                    onChange={(e) => setLthr(e.target.value)}
+                  />
+                  <span className="text-sm text-muted-foreground whitespace-nowrap">bpm</span>
+                </div>
+                <p className="text-xs text-muted-foreground">If you know your LTHR, enter it here for more accurate HR zones. Otherwise it will be estimated from your max HR.</p>
               </div>
 
               {error && <p className="text-sm text-red-500">{error}</p>}

@@ -28,6 +28,8 @@ export function parsePacingResponse(text: string): PacingPlan {
       targetPowerPercent: Math.round(Number(seg.targetPowerPercent ?? 0)),
       estimatedTimeMin: Math.round(Number(seg.estimatedTimeMin ?? 0)),
       advice: String(seg.advice ?? ""),
+      targetHrZone: typeof seg.targetHrZone === "string" ? seg.targetHrZone : null,
+      targetHrBpm: typeof seg.targetHrBpm === "string" ? seg.targetHrBpm : null,
     }),
   );
 

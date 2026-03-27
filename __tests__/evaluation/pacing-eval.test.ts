@@ -70,6 +70,7 @@ function makeParams(
     wkg: 3.73,
     recentContext: "NP 250W, Avg 230W, 90min; NP 260W, Avg 240W, 120min",
     powerProfile: null,
+    hrZones: null,
     raceName: "Eval Race",
     eventType: "road_race",
     gpxData: course,

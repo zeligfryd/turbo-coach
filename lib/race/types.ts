@@ -56,6 +56,8 @@ export type PacingSegment = {
   targetPowerPercent: number; // % FTP
   estimatedTimeMin: number;
   advice: string;
+  targetHrZone: string | null;  // e.g. "Z2", "Z3-Z4"
+  targetHrBpm: string | null;   // e.g. "145-160"
 };
 
 export type PacingPlan = {

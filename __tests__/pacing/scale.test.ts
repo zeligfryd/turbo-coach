@@ -16,6 +16,8 @@ const BASE_PLAN: PacingPlan = {
       targetPowerPercent: 85,
       estimatedTimeMin: 35,
       advice: "Settle into tempo.",
+      targetHrZone: "Z2-Z3",
+      targetHrBpm: "145-160",
     },
     {
       label: "Climb 1",
@@ -25,6 +27,8 @@ const BASE_PLAN: PacingPlan = {
       targetPowerPercent: 100,
       estimatedTimeMin: 45,
       advice: "Hold steady at 3.5 W/kg.",
+      targetHrZone: "Z4",
+      targetHrBpm: "165-178",
     },
   ],
 };

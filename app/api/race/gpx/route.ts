@@ -19,6 +19,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
 
+    const MAX_GPX_SIZE = 5 * 1024 * 1024; // 5 MB
+    if (file.size > MAX_GPX_SIZE) {
+      return NextResponse.json({ error: "GPX file exceeds 5 MB limit" }, { status: 413 });
+    }
+
     if (!raceId) {
       return NextResponse.json({ error: "Missing raceId" }, { status: 400 });
     }

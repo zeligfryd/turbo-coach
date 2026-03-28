@@ -25,8 +25,8 @@ export async function POST() {
 
     // Fetch both connections in parallel
     const [{ data: stravaConn }, { data: icuConn }] = await Promise.all([
-      supabase.from("strava_connections").select("*").eq("user_id", user.id).maybeSingle(),
-      supabase.from("icu_connections").select("*").eq("user_id", user.id).maybeSingle(),
+      supabase.from("strava_connections").select("sync_status").eq("user_id", user.id).maybeSingle(),
+      supabase.from("icu_connections").select("sync_status, api_key, athlete_id").eq("user_id", user.id).maybeSingle(),
     ]);
 
     const results: { strava?: { activitiesSynced: number }; icu?: { daysSynced: number }; errors: string[] } = {
@@ -41,11 +41,6 @@ export async function POST() {
       if (conn.sync_status !== "syncing") {
         tasks.push(
           (async () => {
-            await supabase
-              .from("strava_connections")
-              .update({ sync_status: "syncing", sync_error: null, updated_at: new Date().toISOString() })
-              .eq("user_id", user.id);
-
             const result = await syncStravaActivities(supabase, user.id, "incremental");
             if (result.success) {
               results.strava = { activitiesSynced: result.activitiesSynced };

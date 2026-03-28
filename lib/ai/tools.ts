@@ -7,7 +7,7 @@ import { getValidStravaToken } from "@/lib/strava/token";
 import { computeAllMetrics } from "@/lib/activity/compute-metrics";
 import type { IcuActivityDetail, IcuInterval, IcuPowerCurvePoint } from "@/lib/intervals/types";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 /**
  * Creates the set of tools available to the AI coach.
@@ -724,7 +724,7 @@ export function createCoachTools(userId: string) {
 // ── Strava activity handler for coach tool ──────────────────
 
 async function handleStravaActivityForCoach(
-  supabase: any,
+  supabase: SupabaseServerClient,
   userId: string,
   activity: Record<string, unknown>
 ) {
@@ -848,7 +848,7 @@ async function handleStravaActivityForCoach(
 // ── ICU activity handler for coach tool ─────────────────────
 
 async function handleIcuActivityForCoach(
-  supabase: any,
+  supabase: SupabaseServerClient,
   userId: string,
   activity: Record<string, unknown>
 ) {

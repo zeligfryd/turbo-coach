@@ -7,9 +7,10 @@ import { generateSearchQueries, retrieveKnowledge } from "@/lib/ai/rag";
 import { createCoachTools } from "@/lib/ai/tools";
 import { extractMessageText, sanitizeModelOverrides } from "@/lib/ai/utils";
 import { createClient } from "@/lib/supabase/server";
+import { checkRateLimit } from "@/lib/api/rate-limit";
 
-/** Set to false to disable temporary AI step logging (inputs/outputs, excluding long system prompt). */
-const LOG_AI_STEPS = true;
+/** Enabled in development only — logs AI step inputs/outputs to the server console. */
+const LOG_AI_STEPS = process.env.NODE_ENV !== "production";
 
 
 const parseBooleanEnv = (value: string | undefined, fallback: boolean) => {
@@ -52,6 +53,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
+    const rateLimitResponse = await checkRateLimit(supabase, user.id, {
+      key: "coach",
+      windowSeconds: 60,
+      maxRequests: 20,
+    });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const requestBody = (await request.json()) as {
       messages?: UIMessage[];
       modelOverrides?: unknown;
@@ -69,7 +77,7 @@ export async function POST(request: Request) {
     const isRagEnabled = ragEnabledOverride ?? ragEnabledByEnv;
     const { models } = resolveModels(modelOverrides);
 
-    const lastUserMessage = [...messages].reverse().find((message) => message.role === "user");
+    const lastUserMessage = messages.findLast((message) => message.role === "user");
     const userMessageText = lastUserMessage ? extractMessageText(lastUserMessage) : "";
 
     const userContext = await loadCoachUserContext(user.id);

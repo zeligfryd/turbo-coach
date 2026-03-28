@@ -20,7 +20,7 @@ export async function POST() {
 
     const { data: connection, error: connError } = await supabase
       .from("icu_connections")
-      .select("*")
+      .select("sync_status, api_key, athlete_id")
       .eq("user_id", user.id)
       .single();
 

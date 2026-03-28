@@ -147,15 +147,7 @@ const formatScheduledWorkouts = (
   return `${label} scheduled workouts:\n${lines.join("\n")}`;
 };
 
-const contextCache = new Map<string, { data: CoachUserContext; expiresAt: number }>();
-const CONTEXT_TTL_MS = 60_000;
-
 export async function loadCoachUserContext(userId: string): Promise<CoachUserContext> {
-  const cached = contextCache.get(userId);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.data;
-  }
-
   const supabase = await createClient();
 
   const today = new Date();
@@ -280,7 +272,6 @@ export async function loadCoachUserContext(userId: string): Promise<CoachUserCon
     powerProfile,
   };
 
-  contextCache.set(userId, { data: context, expiresAt: Date.now() + CONTEXT_TTL_MS });
   return context;
 }
 

@@ -6,6 +6,32 @@ import { createIcuClient } from "@/lib/intervals/client";
 import { computeAllMetrics } from "@/lib/activity/compute-metrics";
 import type { IcuStreams, IcuInterval, IcuPowerCurvePoint, IcuActivityDetail, ActivityDetailResponse } from "@/lib/intervals/types";
 
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+
+type ActivityRow = {
+  external_id: string;
+  source: string | null;
+  user_id: string;
+  activity_date: string | null;
+  moving_time: number | null;
+  distance: number | null;
+  icu_ftp: number | null;
+  avg_power: number | null;
+  normalized_power: number | null;
+  avg_hr: number | null;
+  max_hr: number | null;
+  avg_cadence: number | null;
+  calories: number | null;
+  icu_training_load: number | null;
+  elevation_gain: number | null;
+  max_power: number | null;
+  name: string | null;
+  type: string | null;
+  start_date_local: string | null;
+  icu_atl: number | null;
+  icu_ctl: number | null;
+};
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -35,11 +61,11 @@ export async function GET(
     }
 
     if (activity.source === "strava") {
-      return handleStravaActivity(supabase, user.id, id, activity);
+      return handleStravaActivity(supabase, user.id, id, activity as ActivityRow);
     }
 
     // ICU-sourced activity — use ICU API directly
-    return handleIcuActivity(supabase, user.id, activity);
+    return handleIcuActivity(supabase, user.id, activity as ActivityRow);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error";
     console.error("[ActivityDetail] Error:", message);
@@ -47,13 +73,11 @@ export async function GET(
   }
 }
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 async function handleStravaActivity(
-  supabase: any,
+  supabase: SupabaseServerClient,
   userId: string,
   activityDbId: string,
-  activity: Record<string, any>
+  activity: ActivityRow
 ) {
   // Get a valid Strava token
   const { accessToken } = await getValidStravaToken(supabase, userId);
@@ -100,7 +124,7 @@ async function handleStravaActivity(
     type: activity.type ?? stravaDetail?.type ?? "Ride",
     name: activity.name ?? stravaDetail?.name ?? "Activity",
     description: stravaDetail?.description ?? null,
-    start_date_local: activity.start_date_local,
+    start_date_local: activity.start_date_local ?? "",
     distance: activity.distance ?? stravaDetail?.distance ?? null,
     moving_time: activity.moving_time ?? stravaDetail?.moving_time ?? null,
     elapsed_time: stravaDetail?.elapsed_time ?? activity.moving_time ?? null,
@@ -224,9 +248,9 @@ async function handleStravaActivity(
 }
 
 async function handleIcuActivity(
-  supabase: any,
+  supabase: SupabaseServerClient,
   userId: string,
-  activity: Record<string, any>
+  activity: ActivityRow
 ) {
   const { data: connection } = await supabase
     .from("icu_connections")

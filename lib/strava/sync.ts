@@ -59,6 +59,11 @@ export async function syncStravaActivities(
   mode: SyncMode = "full"
 ): Promise<SyncResult> {
   try {
+    await supabase
+      .from("strava_connections")
+      .update({ sync_status: "syncing", sync_error: null, updated_at: new Date().toISOString() })
+      .eq("user_id", userId);
+
     const { accessToken } = await getValidStravaToken(supabase, userId);
     const client = createStravaClient(accessToken);
 

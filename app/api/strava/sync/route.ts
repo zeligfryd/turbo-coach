@@ -21,7 +21,7 @@ export async function POST(request: Request) {
 
     const { data: connection, error: connError } = await supabase
       .from("strava_connections")
-      .select("*")
+      .select("sync_status")
       .eq("user_id", user.id)
       .single();
 
@@ -49,15 +49,6 @@ export async function POST(request: Request) {
     } catch {
       // No body or invalid JSON — use default
     }
-
-    await supabase
-      .from("strava_connections")
-      .update({
-        sync_status: "syncing",
-        sync_error: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", user.id);
 
     const result = await syncStravaActivities(supabase, user.id, mode);
 

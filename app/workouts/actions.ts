@@ -212,7 +212,7 @@ export async function toggleWorkoutFavorite(workoutId: string) {
     // Check if favorite already exists
     const { data: existingFavorite, error: checkError } = await supabase
       .from("user_favorite_workouts")
-      .select("*")
+      .select("id")
       .eq("user_id", user.id)
       .eq("workout_id", workoutId)
       .maybeSingle();

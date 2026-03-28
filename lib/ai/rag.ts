@@ -5,8 +5,8 @@ import { resolveModels, type RuntimeModelOverrides } from "@/lib/ai/models";
 import type { CoachKnowledgeChunk } from "@/lib/ai/prompt";
 import { createClient } from "@/lib/supabase/server";
 
-/** Set to false to disable temporary AI step logging (inputs/outputs, excluding long system prompt). */
-const LOG_AI_STEPS = true;
+/** Enabled in development only — logs AI step inputs/outputs to the server console. */
+const LOG_AI_STEPS = process.env.NODE_ENV !== "production";
 
 const QuerySchema = z.object({
   queries: z.array(z.string().min(4)).min(1).max(3),

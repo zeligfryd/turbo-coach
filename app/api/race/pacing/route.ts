@@ -7,6 +7,7 @@ import type { PowerProfile } from "@/lib/power/types";
 import { resolveFtp, buildPacingPrompt } from "@/lib/pacing/prompt";
 import { parsePacingResponse } from "@/lib/pacing/parse";
 import { buildHrZones } from "@/lib/pacing/hr-zones";
+import { checkRateLimit } from "@/lib/api/rate-limit";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -18,6 +19,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
+    const rateLimitResponse = await checkRateLimit(supabase, user.id, {
+      key: "pacing",
+      windowSeconds: 60,
+      maxRequests: 5,
+    });
+    if (rateLimitResponse) return rateLimitResponse;
+
     const { raceId } = (await request.json()) as { raceId: string };
     if (!raceId) {
       return NextResponse.json({ error: "Missing raceId" }, { status: 400 });
@@ -26,7 +34,7 @@ export async function POST(request: Request) {
     // Fetch race event with GPX data
     const { data: race } = await supabase
       .from("race_events")
-      .select("*")
+      .select("name, event_type, gpx_data")
       .eq("id", raceId)
       .eq("user_id", user.id)
       .maybeSingle();

@@ -47,32 +47,28 @@ const SUGGESTIONS = [
 
 const IS_DEV = process.env.NODE_ENV === "development";
 
-type OverrideStep = "queryGeneration" | "embedding" | "coaching" | "workoutExtraction";
-type Provider = "openai" | "ollama";
+type Provider = "openai" | "anthropic" | "ollama";
 type DevRagSettings = {
   useDefault: boolean;
   enabled: boolean;
 };
 
-type DevModelOverrides = RuntimeModelOverrides;
+type DevCoachingModel = {
+  provider: Provider;
+  model: string;
+};
 
-const DEFAULT_OVERRIDES: DevModelOverrides = {
-  queryGeneration: {
-    provider: "ollama",
-    model: "qwen2.5:14b-instruct",
-  },
-  embedding: {
-    provider: "openai",
-    model: "text-embedding-3-small",
-  },
-  coaching: {
-    provider: "openai",
-    model: "gpt-5.4-mini",
-  },
-  workoutExtraction: {
-    provider: "openai",
-    model: "gpt-4o-mini",
-  },
+const PROVIDER_MODELS: Record<Provider, string[]> = {
+  anthropic: ["claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-opus-4-6"],
+  openai: ["gpt-4o", "gpt-4o-mini", "gpt-5.4-mini"],
+  ollama: ["qwen2.5:14b-instruct", "llama3.1:8b"],
+};
+
+const CUSTOM_MODEL_VALUE = "__custom__";
+
+const DEFAULT_COACHING_MODEL: DevCoachingModel = {
+  provider: "anthropic",
+  model: "claude-sonnet-4-6",
 };
 
 const DEFAULT_RAG_SETTINGS: DevRagSettings = {
@@ -80,45 +76,21 @@ const DEFAULT_RAG_SETTINGS: DevRagSettings = {
   enabled: true,
 };
 
-const sanitizeStep = (step: unknown): { provider: Provider; model: string } | null => {
-  if (!step || typeof step !== "object") {
-    return null;
-  }
+const VALID_PROVIDERS = new Set<Provider>(["openai", "anthropic", "ollama"]);
 
-  const raw = step as { provider?: unknown; model?: unknown };
-  if ((raw.provider !== "openai" && raw.provider !== "ollama") || typeof raw.model !== "string") {
-    return null;
+const sanitizeCoachingModel = (value: unknown): DevCoachingModel => {
+  if (!value || typeof value !== "object") return DEFAULT_COACHING_MODEL;
+  const raw = value as { provider?: unknown; model?: unknown };
+  if (!VALID_PROVIDERS.has(raw.provider as Provider) || typeof raw.model !== "string" || !raw.model.trim()) {
+    return DEFAULT_COACHING_MODEL;
   }
-
-  const model = raw.model.trim();
-  if (!model) {
-    return null;
-  }
-
-  return {
-    provider: raw.provider,
-    model,
-  };
+  return { provider: raw.provider as Provider, model: raw.model.trim() };
 };
 
-const sanitizeOverrides = (value: unknown): DevModelOverrides => {
-  if (!value || typeof value !== "object") {
-    return DEFAULT_OVERRIDES;
-  }
-
-  const raw = value as Record<string, unknown>;
-  const queryGeneration = sanitizeStep(raw.queryGeneration) ?? DEFAULT_OVERRIDES.queryGeneration!;
-  const embedding = sanitizeStep(raw.embedding) ?? DEFAULT_OVERRIDES.embedding!;
-  const coaching = sanitizeStep(raw.coaching) ?? DEFAULT_OVERRIDES.coaching!;
-  const workoutExtraction = sanitizeStep(raw.workoutExtraction) ?? DEFAULT_OVERRIDES.workoutExtraction!;
-
-  return {
-    queryGeneration,
-    embedding,
-    coaching,
-    workoutExtraction,
-  };
-};
+/** Build the full overrides object from just the coaching model setting. */
+const buildOverrides = (coaching: DevCoachingModel): RuntimeModelOverrides => ({
+  coaching: { provider: coaching.provider, model: coaching.model },
+});
 
 const getMessageText = (message: UIMessage) => extractMessageText(message);
 
@@ -299,8 +271,9 @@ export const useCoachChatController = (options?: ControllerOptions) => {
   const [isLoadingConversation, setIsLoadingConversation] = useState(false);
   const [loadConversationError, setLoadConversationError] = useState<string | null>(null);
   const [didMigrateLegacy, setDidMigrateLegacy] = useState(false);
-  const [devOverrides, setDevOverrides] = useState<DevModelOverrides>(DEFAULT_OVERRIDES);
+  const [devCoachingModel, setDevCoachingModel] = useState<DevCoachingModel>(DEFAULT_COACHING_MODEL);
   const [devRagSettings, setDevRagSettings] = useState<DevRagSettings>(DEFAULT_RAG_SETTINGS);
+  const devOverrides = useMemo(() => buildOverrides(devCoachingModel), [devCoachingModel]);
   const prevStatusRef = useRef<string>("");
   const savingRef = useRef(false);
   // Stable ref for callbacks to avoid effect re-runs when parent re-renders
@@ -328,7 +301,7 @@ export const useCoachChatController = (options?: ControllerOptions) => {
         },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [devOverrides, devRagSettings, raceContext]
+    [devCoachingModel, devRagSettings, raceContext]
   );
 
   const { messages, sendMessage, stop, status, error, setMessages } = useChat({
@@ -345,8 +318,8 @@ export const useCoachChatController = (options?: ControllerOptions) => {
     if (!IS_DEV) {
       return;
     }
-    const saved = readStorage<DevModelOverrides>(COACH_STORAGE_KEYS.devModelOverrides, DEFAULT_OVERRIDES);
-    setDevOverrides(sanitizeOverrides(saved));
+    const saved = readStorage<unknown>(COACH_STORAGE_KEYS.devModelOverrides, null);
+    setDevCoachingModel(sanitizeCoachingModel(saved));
     const savedRagSetting = readStorage<unknown>(COACH_STORAGE_KEYS.devRagMode, DEFAULT_RAG_SETTINGS);
     if (typeof savedRagSetting === "string") {
       if (savedRagSetting === "inherit") {
@@ -374,8 +347,8 @@ export const useCoachChatController = (options?: ControllerOptions) => {
     if (!IS_DEV) {
       return;
     }
-    writeStorage(COACH_STORAGE_KEYS.devModelOverrides, devOverrides);
-  }, [devOverrides]);
+    writeStorage(COACH_STORAGE_KEYS.devModelOverrides, devCoachingModel);
+  }, [devCoachingModel]);
 
   useEffect(() => {
     if (!IS_DEV) {
@@ -481,24 +454,12 @@ export const useCoachChatController = (options?: ControllerOptions) => {
     doSave();
   }, [status, messages, conversationId]);
 
-  const updateProvider = (step: OverrideStep, provider: Provider) => {
-    setDevOverrides((prev) => ({
-      ...prev,
-      [step]: {
-        provider,
-        model: prev[step]?.model ?? "",
-      },
-    }));
+  const setCoachingProvider = (provider: Provider) => {
+    setDevCoachingModel({ provider, model: PROVIDER_MODELS[provider][0] ?? "" });
   };
 
-  const updateModel = (step: OverrideStep, model: string) => {
-    setDevOverrides((prev) => ({
-      ...prev,
-      [step]: {
-        provider: prev[step]?.provider ?? "openai",
-        model,
-      },
-    }));
+  const setCoachingModel = (model: string) => {
+    setDevCoachingModel((prev) => ({ ...prev, model }));
   };
 
   const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -555,10 +516,11 @@ export const useCoachChatController = (options?: ControllerOptions) => {
     conversationId,
     raceContext,
     devOverrides,
+    devCoachingModel,
     devRagSettings,
     setDevRagSettings,
-    updateProvider,
-    updateModel,
+    setCoachingProvider,
+    setCoachingModel,
     onSubmit,
     sendSuggestion,
     startNewConversation,
@@ -879,78 +841,99 @@ export function CoachChatPanel({
                 </Button>
               </div>
             ) : null}
-            <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-              <DialogContent className="max-w-3xl z-[90]">
+            <Dialog open={settingsOpen} onOpenChange={setSettingsOpen} modal={false}>
+              <DialogContent className="max-w-sm z-[90]" onPointerDownOutside={(e) => e.preventDefault()}>
                 <DialogHeader>
                   <DialogTitle>Developer coach settings</DialogTitle>
                   <DialogDescription>
-                    Override model providers/models and toggle RAG behavior for local testing.
+                    Override model and RAG behavior for local testing.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label className="text-xs">RAG mode</Label>
-                    <div className="rounded-md border p-3">
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            id="rag-enabled"
-                            checked={controller.devRagSettings.enabled}
-                            disabled={controller.devRagSettings.useDefault}
-                            onCheckedChange={(checked) =>
-                              controller.setDevRagSettings((prev) => ({
-                                ...prev,
-                                enabled: checked,
-                              }))
-                            }
-                          />
-                          <Label htmlFor="rag-enabled" className="text-sm font-normal">
-                            RAG
-                          </Label>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            id="rag-default"
-                            checked={controller.devRagSettings.useDefault}
-                            onCheckedChange={(checked) =>
-                              controller.setDevRagSettings((prev) => ({
-                                useDefault: checked === true,
-                                enabled: checked === true ? DEFAULT_RAG_SETTINGS.enabled : prev.enabled,
-                              }))
-                            }
-                          />
-                          <Label htmlFor="rag-default" className="text-sm font-normal cursor-pointer">
-                            default
-                          </Label>
-                        </div>
+                    <Label className="text-xs">RAG</Label>
+                    <div className="flex items-center gap-4">
+                      <Switch
+                        id="rag-enabled"
+                        checked={controller.devRagSettings.enabled}
+                        disabled={controller.devRagSettings.useDefault}
+                        onCheckedChange={(checked) =>
+                          controller.setDevRagSettings((prev) => ({
+                            ...prev,
+                            enabled: checked,
+                          }))
+                        }
+                      />
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="rag-default"
+                          checked={controller.devRagSettings.useDefault}
+                          onCheckedChange={(checked) =>
+                            controller.setDevRagSettings((prev) => ({
+                              useDefault: checked === true,
+                              enabled: checked === true ? DEFAULT_RAG_SETTINGS.enabled : prev.enabled,
+                            }))
+                          }
+                        />
+                        <Label htmlFor="rag-default" className="text-sm font-normal cursor-pointer">
+                          default
+                        </Label>
                       </div>
                     </div>
                   </div>
-                  <div className="grid gap-4 md:grid-cols-4">
-                    {(["queryGeneration", "embedding", "coaching", "workoutExtraction"] as const).map((step) => (
-                      <div key={step} className="space-y-2">
-                        <Label className="text-xs capitalize">{step}</Label>
+                  {(() => {
+                    const { provider, model } = controller.devCoachingModel;
+                    const knownModels = PROVIDER_MODELS[provider] ?? [];
+                    const isCustom = !knownModels.includes(model);
+
+                    return (
+                      <div className="space-y-2">
+                        <Label className="text-xs">Coaching model</Label>
                         <Select
-                          value={controller.devOverrides[step]?.provider ?? "openai"}
-                          onValueChange={(value) => controller.updateProvider(step, value as Provider)}
+                          value={provider}
+                          onValueChange={(value) => controller.setCoachingProvider(value as Provider)}
                         >
                           <SelectTrigger className="h-8">
-                            <SelectValue placeholder="Provider" />
+                            <SelectValue />
                           </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="openai">openai</SelectItem>
-                            <SelectItem value="ollama">ollama</SelectItem>
+                          <SelectContent className="z-[100]">
+                            <SelectItem value="anthropic">Anthropic</SelectItem>
+                            <SelectItem value="openai">OpenAI</SelectItem>
+                            <SelectItem value="ollama">Ollama</SelectItem>
                           </SelectContent>
                         </Select>
-                        <Input
-                          value={controller.devOverrides[step]?.model ?? ""}
-                          onChange={(event) => controller.updateModel(step, event.target.value)}
-                          placeholder="Model name"
-                          className="h-8"
-                        />
+                        <Select
+                          value={isCustom ? CUSTOM_MODEL_VALUE : model}
+                          onValueChange={(value) => {
+                            if (value === CUSTOM_MODEL_VALUE) {
+                              controller.setCoachingModel("");
+                            } else {
+                              controller.setCoachingModel(value);
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="h-8">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="z-[100]">
+                            {knownModels.map((m) => (
+                              <SelectItem key={m} value={m}>{m}</SelectItem>
+                            ))}
+                            <SelectItem value={CUSTOM_MODEL_VALUE}>Custom...</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {isCustom && (
+                          <Input
+                            value={model}
+                            onChange={(e) => controller.setCoachingModel(e.target.value)}
+                            placeholder="Model name"
+                            className="h-8"
+                            autoFocus
+                          />
+                        )}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })()}
                 </div>
               </DialogContent>
             </Dialog>

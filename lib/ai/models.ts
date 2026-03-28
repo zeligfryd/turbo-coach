@@ -1,6 +1,7 @@
 import { createOpenAI } from "@ai-sdk/openai";
+import { createAnthropic } from "@ai-sdk/anthropic";
 
-export type ModelProvider = "openai" | "ollama";
+export type ModelProvider = "openai" | "anthropic" | "ollama";
 export type ModelStep = "queryGeneration" | "embedding" | "coaching" | "workoutExtraction" | "memoryExtraction";
 
 export type StepConfig = {
@@ -17,25 +18,30 @@ const DEFAULT_CONFIG: ModelsConfig = {
     model: "qwen2.5:14b-instruct",
   },
   embedding: {
+    // Anthropic has no embeddings API — this must stay on OpenAI
     provider: "openai",
     model: "text-embedding-3-small",
   },
   coaching: {
-    provider: "openai",
-    model: "gpt-5.4-mini",
+    provider: "anthropic",
+    model: "claude-sonnet-4-6",
   },
   workoutExtraction: {
-    provider: "openai",
-    model: "gpt-40-mini",
+    provider: "anthropic",
+    model: "claude-haiku-4-5-20251001",
   },
   memoryExtraction: {
-    provider: "openai",
-    model: "gpt-4o-mini",
+    provider: "anthropic",
+    model: "claude-haiku-4-5-20251001",
   },
 };
 
 const openai = createOpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+});
+
+const anthropic = createAnthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
 const ollama = createOpenAI({
@@ -67,9 +73,11 @@ const resolveStepConfig = (
 };
 
 const getLanguageModel = (config: StepConfig) => {
+  if (config.provider === "anthropic") return anthropic(config.model);
   // Ollama's OpenAI-compatible API works reliably with chat/completions semantics.
   // Using chat() here avoids Responses API metadata validation mismatches.
-  return config.provider === "ollama" ? ollama.chat(config.model) : openai(config.model);
+  if (config.provider === "ollama") return ollama.chat(config.model);
+  return openai(config.model);
 };
 
 const getEmbeddingModel = (config: StepConfig) => {

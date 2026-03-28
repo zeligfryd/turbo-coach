@@ -544,6 +544,7 @@ export function CoachChatPanel({
   const scrollEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
+  const isProgrammaticScrollRef = useRef(false);
   const [internalSettingsOpen, setInternalSettingsOpen] = useState(false);
   const [loadingByWorkoutKey, setLoadingByWorkoutKey] = useState<Record<string, "builder" | "schedule" | false>>({});
   const [errorByWorkoutKey, setErrorByWorkoutKey] = useState<Record<string, string>>({});
@@ -552,23 +553,42 @@ export function CoachChatPanel({
   type ExtractedWorkout = { name: string; category: string; description: string | null; tags: string[]; intervals: unknown[] };
   const extractionCacheRef = useRef<Record<string, ExtractedWorkout>>({});
 
-  // Track whether user has scrolled away from the bottom
+  // Track whether user has intentionally scrolled away from the bottom.
+  // Ignores scroll events caused by our own programmatic scrolling.
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
     const handleScroll = () => {
+      if (isProgrammaticScrollRef.current) return;
       const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-      userScrolledUpRef.current = distanceFromBottom > 80;
+      if (distanceFromBottom > 80) {
+        userScrolledUpRef.current = true;
+      }
     };
     container.addEventListener("scroll", handleScroll, { passive: true });
     return () => container.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Auto-scroll only when user is near the bottom (or on conversation switch)
+  // Re-engage auto-scroll when a new assistant response starts streaming.
+  const prevStatusRef = useRef(controller.status);
   useEffect(() => {
-    if (!userScrolledUpRef.current) {
-      scrollEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = controller.status;
+    if (prev !== "streaming" && controller.status === "streaming") {
+      userScrolledUpRef.current = false;
     }
+  }, [controller.status]);
+
+  // Auto-scroll to bottom during streaming, unless the user has scrolled up.
+  useEffect(() => {
+    if (userScrolledUpRef.current) return;
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    // Use instant scroll (not smooth) so the animation doesn't fight with user input
+    // and doesn't fire intermediate scroll events that would interfere with the flag.
+    isProgrammaticScrollRef.current = true;
+    container.scrollTop = container.scrollHeight;
+    requestAnimationFrame(() => { isProgrammaticScrollRef.current = false; });
   }, [controller.messages, controller.status]);
 
   // Track the unread count for this load so we scroll once

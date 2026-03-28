@@ -168,13 +168,32 @@ export async function generatePostRideAnalysis(
 ): Promise<string | null> {
   const supabase = await createClient();
 
-  const [{ data: profile }, { data: memories }] = await Promise.all([
+  const today = new Date();
+  const toDate = (d: Date) => d.toISOString().slice(0, 10);
+  const nextWeekEnd = new Date(today);
+  nextWeekEnd.setDate(today.getDate() + 7);
+
+  const [{ data: profile }, { data: memories }, { data: upcomingWorkouts }, { data: upcomingRaces }] = await Promise.all([
     supabase.from("users").select("ftp, weight").eq("id", userId).maybeSingle(),
     supabase
       .from("coach_memories")
       .select("category, content")
       .eq("user_id", userId)
       .limit(20),
+    supabase
+      .from("scheduled_workouts")
+      .select("scheduled_date, workout:workouts (name, category, avg_intensity_percent)")
+      .eq("user_id", userId)
+      .gt("scheduled_date", toDate(today))
+      .lte("scheduled_date", toDate(nextWeekEnd))
+      .order("scheduled_date", { ascending: true }),
+    supabase
+      .from("race_events")
+      .select("name, race_date, event_type, distance_km")
+      .eq("user_id", userId)
+      .gte("race_date", toDate(today))
+      .order("race_date", { ascending: true })
+      .limit(3),
   ]);
 
   const ftp = profile?.ftp ?? null;
@@ -183,6 +202,18 @@ export async function generatePostRideAnalysis(
     : null;
 
   const memoryLines = ((memories as any[]) ?? []).map((m: any) => `- (${m.category}) ${m.content}`).join("\n");
+
+  const upcomingWorkoutLines = ((upcomingWorkouts as any[]) ?? []).map((sw: any) => {
+    const w = Array.isArray(sw.workout) ? sw.workout[0] : sw.workout;
+    if (!w) return `- ${sw.scheduled_date}: (no details)`;
+    const int = typeof w.avg_intensity_percent === "number" ? ` @ avg ${w.avg_intensity_percent}%` : "";
+    return `- ${sw.scheduled_date}: ${w.name} (${w.category}${int})`;
+  }).join("\n");
+
+  const upcomingRaceLines = ((upcomingRaces as any[]) ?? []).map((r: any) => {
+    const dist = r.distance_km != null ? ` ${r.distance_km}km` : "";
+    return `- ${r.race_date}: ${r.name} (${r.event_type}${dist})`;
+  }).join("\n");
 
   const prompt = `You are Turbo Coach, an AI cycling coach. Provide a brief post-ride analysis for this activity.
 
@@ -198,13 +229,14 @@ Activity: ${activity.name ?? activity.type ?? "Ride"}
 - TSS: ${activity.icu_training_load ? Math.round(Number(activity.icu_training_load)) : "?"}
 - Avg HR: ${activity.avg_hr ?? "?"}bpm | Max HR: ${activity.max_hr ?? "?"}bpm
 - Cadence: ${activity.avg_cadence ?? "?"}rpm
-
-${memoryLines ? `Known athlete context:\n${memoryLines}` : ""}
+${upcomingWorkoutLines ? `\nUpcoming scheduled workouts (next 7 days — live from calendar):\n${upcomingWorkoutLines}` : "\nNo workouts scheduled in the next 7 days."}
+${upcomingRaceLines ? `\nUpcoming races:\n${upcomingRaceLines}` : ""}
+${memoryLines ? `\nKnown athlete context:\n${memoryLines}` : ""}
 
 Write 2-3 sentences analysing this ride:
 - Was the intensity appropriate? What training zone was this predominantly in?
 - Any notable observations (high IF, cardiac drift, good power numbers, etc.)
-- Brief actionable takeaway
+- Brief actionable takeaway considering what's coming up in the calendar
 
 Be specific with numbers. Coach-like tone. No markdown headers.`;
 

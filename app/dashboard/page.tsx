@@ -5,7 +5,7 @@ export default function DashboardPage() {
         Welcome to Turbo Coach
       </h1>
       <p className="text-muted-foreground text-center max-w-xl">
-        Your cycling training companion. Navigate to Workouts to browse the workout library.
+        Your cycling training companion.
       </p>
     </div>
   );

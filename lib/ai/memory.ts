@@ -44,7 +44,7 @@ const buildExtractionPrompt = (
   return `You are a memory extraction system for an AI cycling coach. Analyze the following conversation exchange and extract any persistent, cycling-relevant facts about the athlete.
 
 Categories:
-- goals: Racing targets, FTP goals, event dates, weight goals
+- goals: Racing targets, FTP goals, weight goals, long-term athletic ambitions
 - preferences: Training time preferences, indoor/outdoor preference, music, communication style
 - limitations: Injuries, time constraints, equipment limitations, health conditions
 - training_patterns: Observed patterns like "tends to skip recovery days", "responds well to sweet spot"
@@ -57,6 +57,7 @@ Rules:
 - If a new fact updates/contradicts an existing memory, set "replaces" to the existing memory's ID
 - Keep content concise (one sentence)
 - Do not extract ephemeral details (today's weather, current mood)
+- NEVER save scheduled workouts, planned sessions, or specific race dates — the athlete's calendar is always loaded live and is the authoritative source; memories about it become stale the moment the calendar changes
 ${existingSection}
 Latest exchange:
 User: ${lastUserMessage}

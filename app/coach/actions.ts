@@ -102,7 +102,7 @@ export async function getConversation(
 }
 
 export async function createConversation(
-  title?: string
+  title?: string,
 ): Promise<{ success: boolean; error?: string; id: string | null }> {
   try {
     const supabase = await createClient();
@@ -590,6 +590,7 @@ export async function createAndScheduleCoachWorkout(
         user_id: user.id,
         is_preset: false,
         is_public: false,
+        is_library: false,
       })
       .select("id")
       .single();

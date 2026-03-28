@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { CoachChatPanel, useCoachChatController } from "@/components/coach/coach-chat-panel";
+import { useCoachRaceContext } from "@/components/coach/coach-race-context";
 import {
   readCoachDialogState,
   writeCoachDialogState,
@@ -33,6 +34,13 @@ export function FloatingCoach() {
   const [hasHydrated, setHasHydrated] = useState(false);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
 
+  const { raceContext, setRaceContext, registerOpenCoach } = useCoachRaceContext();
+
+  // Register open function so race page CTAs can open the coach
+  useEffect(() => {
+    registerOpenCoach(() => setIsOpen(true));
+  }, [registerOpenCoach]);
+
   // Read active conversation ID from localStorage on mount
   useEffect(() => {
     setActiveConvId(readActiveConversationId());
@@ -46,6 +54,7 @@ export function FloatingCoach() {
   const chat = useCoachChatController({
     conversationId: activeConvId,
     onConversationCreated,
+    raceContext: raceContext ?? undefined,
   });
 
   useEffect(() => {
@@ -79,6 +88,7 @@ export function FloatingCoach() {
     setActiveConvId(null);
     clearActiveConversationId();
     setNewChatConfirmOpen(false);
+    setRaceContext(null);
   };
 
   return (

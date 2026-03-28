@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { RaceHeader } from "./race-header";
 import { RaceReadiness } from "./race-readiness";
 import { PacingCalculator } from "./pacing-calculator";
 import { PeriodisationCta } from "./periodisation-cta";
 import { ProfileRaceNote } from "./profile-race-note";
-import { RaceCoachPanel } from "./race-coach-panel";
+import { useCoachRaceContext } from "@/components/coach/coach-race-context";
 import type { RaceEvent, GpxData, PacingPlan } from "@/lib/race/types";
 import { daysUntilRace } from "@/lib/race/readiness";
 
@@ -18,15 +18,29 @@ interface RaceDetailClientProps {
 
 export function RaceDetailClient({ race: initialRace, userFtp, userWeight }: RaceDetailClientProps) {
   const [race, setRace] = useState(initialRace);
-  const [coachOpen, setCoachOpen] = useState(false);
-  const [coachSeed, setCoachSeed] = useState<string | null>(null);
+  const { setRaceContext, openCoach } = useCoachRaceContext();
 
   const days = daysUntilRace(race.race_date);
 
-  const openCoach = (seed?: string) => {
-    if (seed) setCoachSeed(seed);
-    setCoachOpen(true);
-  };
+  // Sync race context into the coach whenever race state changes.
+  // Cleared on unmount — the coach uses getRaceEvents to re-fetch if needed
+  // when continuing the conversation from outside the race page.
+  useEffect(() => {
+    setRaceContext({
+      id: race.id,
+      name: race.name,
+      race_date: race.race_date,
+      event_type: race.event_type,
+      distance_km: race.distance_km ?? null,
+      elevation_m: race.elevation_m ?? null,
+      readiness_score: race.readiness_score ?? null,
+      route_segments: race.gpx_data?.segments ?? null,
+      pacing_plan: race.pacing_plan ?? null,
+    });
+
+    return () => setRaceContext(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [race]);
 
   const handleGpxProcessed = (gpxData: GpxData, distanceKm: number, elevationM: number) => {
     setRace((prev) => ({
@@ -50,47 +64,32 @@ export function RaceDetailClient({ race: initialRace, userFtp, userWeight }: Rac
   };
 
   return (
-    <div className="flex h-full min-h-0">
-      {/* Main content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-4 py-6 sm:px-6 space-y-8">
-          <RaceHeader
-            race={race}
-            daysToRace={days}
-            onAskCoach={() => openCoach(`Tell me about my preparation for ${race.name}`)}
-          />
-
-          <RaceReadiness
-            race={race}
-            daysToRace={days}
-            onScoreClick={() => openCoach(`Tell me more about my readiness for ${race.name}`)}
-            onReadinessUpdated={handleReadinessUpdated}
-          />
-
-          <PacingCalculator
-            race={race}
-            userFtp={userFtp}
-            userWeight={userWeight}
-            onGpxProcessed={handleGpxProcessed}
-            onPacingGenerated={handlePacingGenerated}
-            onDiscuss={() => openCoach(`Walk me through this pacing plan for ${race.name}`)}
-          />
-
-          <ProfileRaceNote eventType={race.event_type} />
-
-          <PeriodisationCta race={race} />
-        </div>
-      </div>
-
-      {/* In-page coach chat */}
-      <RaceCoachPanel
-        open={coachOpen}
-        onOpenChange={setCoachOpen}
+    <div className="max-w-4xl mx-auto space-y-8">
+      <RaceHeader
         race={race}
         daysToRace={days}
-        seedMessage={coachSeed}
-        onSeedConsumed={() => setCoachSeed(null)}
+        onAskCoach={openCoach}
       />
+
+      <RaceReadiness
+        race={race}
+        daysToRace={days}
+        onScoreClick={openCoach}
+        onReadinessUpdated={handleReadinessUpdated}
+      />
+
+      <PacingCalculator
+        race={race}
+        userFtp={userFtp}
+        userWeight={userWeight}
+        onGpxProcessed={handleGpxProcessed}
+        onPacingGenerated={handlePacingGenerated}
+        onDiscuss={openCoach}
+      />
+
+      <ProfileRaceNote eventType={race.event_type} />
+
+      <PeriodisationCta race={race} />
     </div>
   );
 }

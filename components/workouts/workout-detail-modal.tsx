@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { Star, Copy, MoreVertical, Edit2, Trash2, Download, Bike } from "lucide-react";
+import { Star, Copy, MoreVertical, Edit2, Trash2, Download, Bike, BookmarkCheck, Bookmark } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -42,7 +42,7 @@ import {
   formatWork,
   DEFAULT_FTP_WATTS,
 } from "@/lib/workouts/utils";
-import { toggleWorkoutFavorite, deleteWorkout } from "@/app/workouts/actions";
+import { toggleWorkoutFavorite, deleteWorkout, saveWorkoutToLibrary } from "@/app/workouts/actions";
 import { downloadWorkout } from "@/lib/workouts/export";
 
 const IntensityBarChart = dynamic(
@@ -69,6 +69,7 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
   const [isToggling, setIsToggling] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isInLibrary, setIsInLibrary] = useState(workout?.is_library !== false);
 
   if (!workout) return null;
 
@@ -141,6 +142,15 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
     onClose();
   };
 
+  const handleSaveToLibrary = async () => {
+    if (isInLibrary) return;
+    setIsInLibrary(true);
+    const result = await saveWorkoutToLibrary(workout.id);
+    if (!result.success) {
+      setIsInLibrary(false);
+    }
+  };
+
   const handleRide = () => {
     router.push(`/ride?workoutId=${encodeURIComponent(workout.id)}`);
     onClose();
@@ -188,6 +198,22 @@ export function WorkoutDetailModal({ workout, onClose, userFtp }: WorkoutDetailM
                 <Bike className="w-4 h-4" />
                 Ride
               </Button>
+              {isCustom && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleSaveToLibrary}
+                  disabled={isInLibrary}
+                  className="flex-shrink-0"
+                  title={isInLibrary ? "Saved to library" : "Save to library"}
+                >
+                  {isInLibrary ? (
+                    <BookmarkCheck className="w-5 h-5 text-primary" />
+                  ) : (
+                    <Bookmark className="w-5 h-5 text-muted-foreground" />
+                  )}
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"

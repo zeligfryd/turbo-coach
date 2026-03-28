@@ -176,12 +176,13 @@ export async function getCustomWorkouts() {
       return { success: false, error: "Not authenticated", workouts: [] };
     }
 
-    // Fetch user's custom workouts
+    // Fetch user's custom workouts that are in the library
     const { data: workouts, error: fetchError } = await supabase
       .from("workouts")
       .select("*")
       .eq("user_id", user.id)
       .eq("is_preset", false)
+      .eq("is_library", true)
       .order("created_at", { ascending: false });
 
     if (fetchError) {
@@ -252,9 +253,42 @@ export async function toggleWorkoutFavorite(workoutId: string) {
 
     return { success: true, isFavorite: !existingFavorite };
   } catch (error) {
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : "Unknown error" 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error"
+    };
+  }
+}
+
+export async function saveWorkoutToLibrary(
+  workoutId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createClient();
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return { success: false, error: "Not authenticated" };
+    }
+
+    const { error } = await supabase
+      .from("workouts")
+      .update({ is_library: true })
+      .eq("id", workoutId)
+      .eq("user_id", user.id)
+      .eq("is_preset", false);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath("/workouts");
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
     };
   }
 }

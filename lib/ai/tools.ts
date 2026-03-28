@@ -528,7 +528,8 @@ export function createCoachTools(userId: string) {
       description:
         "Schedule an existing workout from the athlete's library onto a specific date on their calendar. " +
         "Use when the coach recommends a specific workout and the athlete agrees, or when the athlete asks to schedule something. " +
-        "You need the workout ID (from the library) and a date.",
+        "You need the workout ID (from the library) and a date. " +
+        "To schedule multiple workouts at once (e.g. a training week), use batchScheduleWorkouts instead.",
       inputSchema: z.object({
         workoutId: z.string().describe("UUID of the workout to schedule"),
         date: z.string().describe("Date to schedule in YYYY-MM-DD format"),
@@ -566,14 +567,82 @@ export function createCoachTools(userId: string) {
       },
     }),
 
+    batchScheduleWorkouts: tool({
+      description:
+        "Schedule multiple existing library workouts onto multiple dates in a single call. " +
+        "Use this instead of calling scheduleWorkout repeatedly when scheduling several days at once " +
+        "(e.g. a training week, a taper block, or any multi-day plan). " +
+        "All workouts are scheduled in parallel. Each entry needs a workout ID from the library and a date. " +
+        "If a workout for a given day does not exist in the library, omit that day — handle it separately " +
+        "with a <workout> block and scheduleDescribedWorkout.",
+      inputSchema: z.object({
+        workouts: z.array(
+          z.object({
+            workoutId: z.string().describe("UUID of the workout from the library"),
+            date: z.string().describe("Date to schedule in YYYY-MM-DD format"),
+          })
+        ).min(1).max(14).describe("List of workout+date pairs to schedule"),
+      }),
+      execute: async ({ workouts }) => {
+        const supabase = await createClient();
+
+        // Verify all workout IDs are accessible
+        const ids = [...new Set(workouts.map((w) => w.workoutId))];
+        const { data: foundWorkouts, error: lookupError } = await supabase
+          .from("workouts")
+          .select("id, name, category")
+          .or(`user_id.eq.${userId},is_preset.eq.true`)
+          .in("id", ids);
+
+        if (lookupError) return { error: lookupError.message };
+
+        const workoutMap = new Map(
+          ((foundWorkouts ?? []) as any[]).map((w: any) => [w.id, w])
+        );
+
+        const rows: { user_id: string; workout_id: string; scheduled_date: string }[] = [];
+        const skipped: string[] = [];
+
+        for (const { workoutId, date } of workouts) {
+          if (workoutMap.has(workoutId)) {
+            rows.push({ user_id: userId, workout_id: workoutId, scheduled_date: date });
+          } else {
+            skipped.push(`${date} (workout ${workoutId} not found)`);
+          }
+        }
+
+        if (rows.length === 0) {
+          return { error: "None of the specified workouts were found in the library." };
+        }
+
+        const { error: insertError } = await supabase
+          .from("scheduled_workouts")
+          .insert(rows);
+
+        if (insertError) return { error: insertError.message };
+
+        const scheduled = rows.map((r) => ({
+          date: r.scheduled_date,
+          workout_name: (workoutMap.get(r.workout_id) as any)?.name,
+          workout_category: (workoutMap.get(r.workout_id) as any)?.category,
+        }));
+
+        return {
+          success: true,
+          scheduled_count: rows.length,
+          scheduled,
+          ...(skipped.length > 0 ? { skipped } : {}),
+        };
+      },
+    }),
+
     // Schedule the workout described in <workout> tags in the current response.
     // This is a deferred action — the client handles actual creation after the response completes.
     scheduleDescribedWorkout: tool({
       description:
         "Schedule a NEW workout you described in <workout> tags onto the athlete's calendar. " +
         "CRITICAL: You MUST write the full workout in <workout>...</workout> tags BEFORE calling this tool in the same response. " +
-        "If you found a matching workout via searchWorkoutLibrary, use scheduleWorkout instead — do NOT use this tool. " +
-        "Only use this tool when creating a brand new workout that doesn't exist in the library.",
+        "Use this tool whenever you are creating a new workout — it will NOT be added to the athlete's library.",
       inputSchema: z.object({
         date: z.string().describe("Date to schedule in YYYY-MM-DD format"),
       }),
@@ -663,11 +732,100 @@ export function createCoachTools(userId: string) {
       },
     }),
 
+    getRaceEvents: tool({
+      description:
+        "Fetch the athlete's upcoming (or recent past) race events. " +
+        "Use this when the athlete asks about a specific race, their pacing plan, route profile, or readiness score " +
+        "and no race context is available in the system prompt (e.g. they are continuing a conversation started on the race page). " +
+        "Returns full race details including pacing plan and route segments if available.",
+      inputSchema: z.object({
+        name: z
+          .string()
+          .optional()
+          .describe("Partial race name to filter by (case-insensitive). Leave empty to list all upcoming races."),
+        include_past: z
+          .boolean()
+          .optional()
+          .describe("Set true to include past races. Default: only upcoming races."),
+      }),
+      execute: async ({ name, include_past }) => {
+        const supabase = await createClient();
+        const today = new Date().toISOString().slice(0, 10);
+
+        let q = supabase
+          .from("race_events")
+          .select("id, name, race_date, event_type, distance_km, elevation_m, readiness_score, readiness_interpretation, pacing_plan, gpx_data")
+          .eq("user_id", userId)
+          .order("race_date", { ascending: true })
+          .limit(10);
+
+        if (!include_past) {
+          q = q.gte("race_date", today);
+        }
+        if (name) {
+          q = q.ilike("name", `%${name}%`);
+        }
+
+        const { data, error } = await q;
+        if (error) return { error: error.message };
+        if (!data || data.length === 0) {
+          return { message: "No race events found.", races: [] as unknown[] };
+        }
+
+        const races = (data as any[]).map((r: Record<string, unknown>) => {
+          const plan = r.pacing_plan as Record<string, unknown> | null;
+          const gpx = r.gpx_data as Record<string, unknown> | null;
+
+          return {
+            id: r.id,
+            name: r.name,
+            race_date: r.race_date,
+            event_type: r.event_type,
+            distance_km: r.distance_km,
+            elevation_m: r.elevation_m,
+            readiness_score: r.readiness_score ?? null,
+            readiness_interpretation: r.readiness_interpretation ?? null,
+            pacing_plan: plan
+              ? {
+                  overall_target_np_w: plan.overallTargetNpW,
+                  estimated_finish_min: plan.estimatedFinishTimeMin,
+                  strategy: plan.strategy,
+                  segments: Array.isArray(plan.segments)
+                    ? (plan.segments as Record<string, unknown>[]).map((s) => ({
+                        label: s.label,
+                        km: `${s.startKm}–${s.endKm}`,
+                        target_power_w: s.targetPowerW,
+                        target_power_pct: s.targetPowerPercent,
+                        estimated_time_min: s.estimatedTimeMin,
+                        hr_zone: s.targetHrZone ?? null,
+                        hr_bpm: s.targetHrBpm ?? null,
+                        advice: s.advice,
+                      }))
+                    : [],
+                }
+              : null,
+            route_segments: gpx && Array.isArray(gpx.segments)
+              ? (gpx.segments as Record<string, unknown>[]).map((s) => ({
+                  label: s.label,
+                  km: `${s.startKm}–${s.endKm}`,
+                  distance_km: s.distanceKm,
+                  elevation_gain_m: s.elevationGainM,
+                  avg_gradient_pct: s.avgGradientPercent,
+                  type: s.type,
+                }))
+              : null,
+          };
+        });
+
+        return { count: races.length, races };
+      },
+    }),
+
     searchWorkoutLibrary: tool({
       description:
-        "Search the athlete's workout library (presets + custom workouts). " +
-        "ALWAYS use this before creating a new workout from scratch — check if a similar workout already exists. " +
-        "If a good match is found, use scheduleWorkout to schedule it directly instead of creating a duplicate.",
+        "Search the athlete's workout library (presets + custom workouts saved to the library). " +
+        "Use this when the athlete explicitly mentions a specific workout by name, or asks to schedule a workout from their library. " +
+        "Do NOT call this before every new workout you create — just use scheduleDescribedWorkout directly.",
       inputSchema: z.object({
         query: z
           .string()
@@ -681,10 +839,11 @@ export function createCoachTools(userId: string) {
       execute: async ({ query, category }) => {
         const supabase = await createClient();
 
+        // Returns presets (is_preset=true) and user's library workouts (is_library=true)
         let q = supabase
           .from("workouts")
           .select("id, name, category, description, duration_seconds, avg_intensity_percent, tags, is_preset")
-          .or(`user_id.eq.${userId},is_preset.eq.true`)
+          .or(`is_preset.eq.true,and(user_id.eq.${userId},is_library.eq.true)`)
           .order("name", { ascending: true })
           .limit(20);
 

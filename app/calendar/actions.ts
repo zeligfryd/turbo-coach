@@ -234,6 +234,7 @@ export async function getWorkoutLibrary() {
       )
       .eq("user_id", user.id)
       .eq("is_preset", false)
+      .eq("is_library", true)
       .order("created_at", { ascending: false });
 
     if (customError) {

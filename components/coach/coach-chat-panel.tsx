@@ -217,6 +217,7 @@ const TOOL_LABELS: Record<string, string> = {
   comparePeriods: "Comparing periods",
   getPeakPowers: "Analysing peak powers",
   scheduleWorkout: "Scheduling workout",
+  batchScheduleWorkouts: "Scheduling workouts",
   scheduleDescribedWorkout: "Scheduling workout",
 };
 
@@ -248,10 +249,46 @@ const extractToolParts = (message: UIMessage): ToolPartInfo[] => {
   return results;
 };
 
+type RaceContextData = {
+  id: string;
+  name: string;
+  race_date: string;
+  event_type: string;
+  distance_km: number | null;
+  elevation_m: number | null;
+  readiness_score?: number | null;
+  route_segments?: {
+    label: string;
+    startKm: number;
+    endKm: number;
+    distanceKm: number;
+    elevationGainM: number;
+    avgGradientPercent: number;
+    type: "climb" | "descent" | "flat";
+  }[] | null;
+  pacing_plan?: {
+    overallTargetNpW: number;
+    estimatedFinishTimeMin: number;
+    strategy: string;
+    segments: {
+      label: string;
+      startKm: number;
+      endKm: number;
+      targetPowerW: number;
+      targetPowerPercent: number;
+      estimatedTimeMin: number;
+      advice: string;
+      targetHrZone: string | null;
+      targetHrBpm: string | null;
+    }[];
+  } | null;
+};
+
 type ControllerOptions = {
   conversationId?: string | null;
   onConversationCreated?: (id: string) => void;
   onConversationUpdated?: () => void;
+  raceContext?: RaceContextData;
 };
 
 export const useCoachChatController = (options?: ControllerOptions) => {
@@ -270,22 +307,28 @@ export const useCoachChatController = (options?: ControllerOptions) => {
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
+  const raceContext = options?.raceContext ?? null;
+
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: "/api/coach",
-        body: IS_DEV
-          ? {
-              modelOverrides: devOverrides,
-              ...(devRagSettings.useDefault
-                ? {}
-                : {
-                    ragEnabled: devRagSettings.enabled,
-                  }),
-            }
-          : undefined,
+        body: {
+          ...(IS_DEV
+            ? {
+                modelOverrides: devOverrides,
+                ...(devRagSettings.useDefault
+                  ? {}
+                  : {
+                      ragEnabled: devRagSettings.enabled,
+                    }),
+              }
+            : {}),
+          ...(raceContext ? { raceContext } : {}),
+        },
       }),
-    [devOverrides, devRagSettings]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [devOverrides, devRagSettings, raceContext]
   );
 
   const { messages, sendMessage, stop, status, error, setMessages } = useChat({
@@ -510,6 +553,7 @@ export const useCoachChatController = (options?: ControllerOptions) => {
     isLoadingConversation,
     loadConversationError,
     conversationId,
+    raceContext,
     devOverrides,
     devRagSettings,
     setDevRagSettings,
@@ -709,7 +753,7 @@ export function CoachChatPanel({
     }
   };
 
-  // Auto-schedule: after the stream completes, check for pending scheduleDescribedWorkout tool calls
+  // Auto-schedule: after the stream completes, process all pending scheduleDescribedWorkout tool calls
   const prevStreamStatusRef = useRef(controller.status);
   const autoSchedulingRef = useRef(false);
   useEffect(() => {
@@ -723,46 +767,92 @@ export function CoachChatPanel({
     const lastAssistantMsg = [...controller.messages].reverse().find((m) => m.role === "assistant");
     if (!lastAssistantMsg) return;
 
-    // Check for a pending scheduleDescribedWorkout tool result
+    // Collect ALL pending scheduleDescribedWorkout tool results (in order)
     const toolParts = extractToolParts(lastAssistantMsg);
-    const pendingSchedule = toolParts.find(
+    const pendingSchedules = toolParts.filter(
       (tp) =>
         tp.toolName === "scheduleDescribedWorkout" &&
         tp.state === "output-available" &&
         (tp.output as Record<string, unknown>)?.pending === true
     );
-    if (!pendingSchedule) return;
+    if (pendingSchedules.length === 0) return;
 
-    const scheduledDate = (pendingSchedule.output as Record<string, unknown>).date as string;
-    if (!scheduledDate) return;
-
-    // Extract the <workout> content from the same message
+    // Extract all closed <workout> blocks from the message, preserving their
+    // original segment index so the key matches the render's segmentKey format.
     const messageText = getMessageText(lastAssistantMsg);
-    const workoutSegments = parseMessageSegments(messageText).filter(
-      (s): s is Extract<MessageSegment, { type: "workout" }> => s.type === "workout" && s.isClosed
-    );
-    const lastWorkout = workoutSegments[workoutSegments.length - 1];
-    if (!lastWorkout) {
+    const allSegments = parseMessageSegments(messageText);
+    const workoutSegments = allSegments
+      .map((s, i) => ({ ...s, segmentIndex: i }))
+      .filter(
+        (s): s is Extract<MessageSegment, { type: "workout" }> & { segmentIndex: number } =>
+          s.type === "workout" && s.isClosed
+      );
+
+    if (workoutSegments.length === 0) {
       console.warn(
         "Coach called scheduleDescribedWorkout but no <workout> tags found in response. " +
-        "The workout was not scheduled."
+        "No workouts were scheduled."
       );
       return;
     }
 
-    // Use a stable key for this workout segment
-    const segmentKey = `${lastAssistantMsg.id}-auto-schedule`;
+    // Pair each tool call with its corresponding <workout> block by position.
+    // Use the segment's original index so the key matches the render's segmentKey
+    // (${message.id}-${segmentIndex}) — required for scheduledKeys/errorByWorkoutKey to surface in UI.
+    // If there are more tool calls than workout blocks, the last block is reused as a fallback.
+    const pairs = pendingSchedules.map((tp, i) => {
+      const ws = workoutSegments[Math.min(i, workoutSegments.length - 1)];
+      return {
+        date: (tp.output as Record<string, unknown>).date as string,
+        workout: ws,
+        key: `${lastAssistantMsg.id}-${ws.segmentIndex}`,
+      };
+    }).filter((p) => !!p.date);
 
     autoSchedulingRef.current = true;
+    console.log(`[AutoSchedule] Starting: ${pairs.length} workout(s) to schedule`, pairs.map(p => ({ date: p.date, key: p.key })));
     (async () => {
       try {
-        const data = await extractWorkout(segmentKey, lastWorkout.content);
-        const result = await createAndScheduleCoachWorkout(data, scheduledDate);
-        if (result.success) {
-          setScheduledKeys((prev) => ({ ...prev, [segmentKey]: scheduledDate }));
+        // Run sequentially to avoid concurrent LLM extraction failures.
+        for (const { date, workout, key } of pairs) {
+          let data;
+          try {
+            data = await extractWorkout(key, workout.content);
+          } catch (firstErr) {
+            // LLM extraction is non-deterministic — retry once before giving up.
+            console.warn(`Auto-schedule: extraction failed for ${date}, retrying…`, firstErr);
+            // Clear the failed entry from cache so the retry makes a fresh request.
+            extractionCacheRef.current[key] = undefined as unknown as ExtractedWorkout;
+            try {
+              data = await extractWorkout(key, workout.content);
+            } catch (retryErr) {
+              console.warn(`Auto-schedule: retry also failed for ${date}:`, retryErr);
+              setErrorByWorkoutKey((prev) => ({
+                ...prev,
+                [key]: "Couldn't extract workout structure. Use the Schedule button to try again.",
+              }));
+              continue;
+            }
+          }
+          try {
+            const result = await createAndScheduleCoachWorkout(data, date);
+            if (result.success) {
+              setScheduledKeys((prev) => ({ ...prev, [key]: date }));
+            } else {
+              console.warn(`Auto-schedule server error for ${date}:`, result.error);
+              setErrorByWorkoutKey((prev) => ({
+                ...prev,
+                [key]: result.error ?? "Failed to schedule. You can try manually.",
+              }));
+            }
+          } catch (err) {
+            console.warn(`Auto-schedule: scheduling failed for ${date}:`, err);
+            setErrorByWorkoutKey((prev) => ({
+              ...prev,
+              [key]: "Failed to schedule. Use the Schedule button to try again.",
+            }));
+          }
         }
-      } catch (err) {
-        console.warn("Auto-schedule failed:", err);
       } finally {
         autoSchedulingRef.current = false;
       }
@@ -886,22 +976,25 @@ export function CoachChatPanel({
           <div className="max-w-3xl mx-auto mt-8">
             <h1 className="text-2xl font-semibold tracking-tight">Coach</h1>
             <p className="text-muted-foreground mt-2">
-              Ask training questions and get advice grounded in your profile, schedule, and
-              knowledge base.
+              {controller.raceContext
+                ? `Ask me anything about ${controller.raceContext.name}.`
+                : "Ask training questions and get advice grounded in your profile, schedule, and knowledge base."}
             </p>
-            <div className="mt-6 flex flex-wrap gap-2">
-              {SUGGESTIONS.map((suggestion) => (
-                <Button
-                  key={suggestion}
-                  type="button"
-                  variant="outline"
-                  className="h-auto py-2 px-3 text-left whitespace-normal"
-                  onClick={() => controller.sendSuggestion(suggestion)}
-                >
-                  {suggestion}
-                </Button>
-              ))}
-            </div>
+            {!controller.raceContext && (
+              <div className="mt-6 flex flex-wrap gap-2">
+                {SUGGESTIONS.map((suggestion) => (
+                  <Button
+                    key={suggestion}
+                    type="button"
+                    variant="outline"
+                    className="h-auto py-2 px-3 text-left whitespace-normal"
+                    onClick={() => controller.sendSuggestion(suggestion)}
+                  >
+                    {suggestion}
+                  </Button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

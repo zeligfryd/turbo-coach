@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { signOAuthState } from "@/lib/strava/oauth-state";
+import { resolveStravaCredentials } from "@/lib/strava/credentials";
 
 export async function GET() {
   try {
@@ -14,14 +15,19 @@ export async function GET() {
       return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const clientId = process.env.STRAVA_CLIENT_ID;
     const redirectUri = process.env.NEXT_PUBLIC_STRAVA_REDIRECT_URI;
 
-    if (!clientId || !redirectUri) {
-      return NextResponse.json(
-        { error: "Strava is not configured" },
-        { status: 500 }
-      );
+    if (!redirectUri) {
+      return NextResponse.json({ error: "Strava redirect URI is not configured" }, { status: 500 });
+    }
+
+    let clientId: string;
+    try {
+      const credentials = await resolveStravaCredentials(supabase, user.id);
+      clientId = credentials.clientId;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Strava is not configured";
+      return NextResponse.json({ error: message }, { status: 500 });
     }
 
     const state = signOAuthState(user.id);

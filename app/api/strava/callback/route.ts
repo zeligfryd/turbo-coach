@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { verifyOAuthState } from "@/lib/strava/oauth-state";
+import { resolveStravaCredentials } from "@/lib/strava/credentials";
 import type { StravaTokenResponse } from "@/lib/strava/types";
 
 export async function GET(request: Request) {
@@ -25,13 +26,25 @@ export async function GET(request: Request) {
   }
 
   try {
+    const supabase = await createClient();
+
+    let clientId: string;
+    let clientSecret: string;
+    try {
+      const credentials = await resolveStravaCredentials(supabase, userId);
+      clientId = credentials.clientId;
+      clientSecret = credentials.clientSecret;
+    } catch {
+      return NextResponse.redirect(new URL("/profile?strava=error", request.url));
+    }
+
     // Exchange code for tokens
     const tokenRes = await fetch("https://www.strava.com/oauth/token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        client_id: process.env.STRAVA_CLIENT_ID,
-        client_secret: process.env.STRAVA_CLIENT_SECRET,
+        client_id: clientId,
+        client_secret: clientSecret,
         code,
         grant_type: "authorization_code",
       }),
@@ -46,7 +59,6 @@ export async function GET(request: Request) {
     const tokenData = (await tokenRes.json()) as StravaTokenResponse;
 
     // Store connection using the server supabase client
-    const supabase = await createClient();
     const { error } = await supabase.from("strava_connections").upsert(
       {
         user_id: userId,

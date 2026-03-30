@@ -1,15 +1,24 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { StravaConnectionRow, StravaTokenResponse } from "./types";
+import { isUserCredentialsMode, resolveStravaCredentials, type StravaCredentials } from "./credentials";
 
 export async function refreshStravaToken(
-  refreshToken: string
+  refreshToken: string,
+  credentials?: StravaCredentials
 ): Promise<StravaTokenResponse> {
+  const clientId = credentials?.clientId ?? process.env.STRAVA_CLIENT_ID;
+  const clientSecret = credentials?.clientSecret ?? process.env.STRAVA_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error("Strava credentials not configured");
+  }
+
   const res = await fetch("https://www.strava.com/oauth/token", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      client_id: process.env.STRAVA_CLIENT_ID,
-      client_secret: process.env.STRAVA_CLIENT_SECRET,
+      client_id: clientId,
+      client_secret: clientSecret,
       refresh_token: refreshToken,
       grant_type: "refresh_token",
     }),
@@ -44,8 +53,12 @@ export async function getValidStravaToken(
     return { accessToken: connection.access_token, connection };
   }
 
-  // Token expired — refresh
-  const refreshed = await refreshStravaToken(connection.refresh_token);
+  // Token expired — refresh, using per-user credentials if the mode is active
+  const credentials = isUserCredentialsMode()
+    ? await resolveStravaCredentials(supabase, userId)
+    : undefined;
+
+  const refreshed = await refreshStravaToken(connection.refresh_token, credentials);
 
   await supabase
     .from("strava_connections")

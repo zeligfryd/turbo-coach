@@ -196,6 +196,9 @@ export function buildPacingPrompt(params: PacingPromptParams): string {
   const isLongEvent = (eventType: string) =>
     eventType === "gran_fondo" || eventType === "gravel";
 
+  const isSteadyStateEvent = (eventType: string) =>
+    eventType === "time_trial" || eventType === "gran_fondo" || eventType === "gravel";
+
   return [
     "You are an expert cycling coach creating a race pacing plan.",
     "Return ONLY valid JSON matching this exact structure (no markdown, no explanation):",
@@ -203,7 +206,7 @@ export function buildPacingPrompt(params: PacingPromptParams): string {
     `{"overallTargetNpW": number, "estimatedFinishTimeMin": number, "strategy": "string (2-3 sentences)", "segments": [{"label": "string", "startKm": number, "endKm": number, "targetPowerW": number, "targetPowerPercent": number, "estimatedTimeMin": number, "advice": "string (1-2 sentences, include watts AND W/kg for climb segments)"${hrZones ? ', "targetHrZone": "string (e.g. Z2, Z3-Z4)", "targetHrBpm": "string (e.g. 145-160)"' : ""}}]}`,
     "",
     "Example output (40km flat TT, FTP 280W, 75kg, ~56min):",
-    '{"overallTargetNpW": 266, "estimatedFinishTimeMin": 56, "strategy": "Even-paced 40km TT targeting 95% FTP. Start slightly below target for the first 5 minutes while HR stabilises, then hold 95-97% throughout and build to 100% in the final 5km.", "segments": [{"label": "Opening 5km", "startKm": 0, "endKm": 5, "targetPowerW": 252, "targetPowerPercent": 90, "estimatedTimeMin": 7, "advice": "Controlled start — resist the adrenaline and let HR build gradually before settling into race pace."}, {"label": "Main effort", "startKm": 5, "endKm": 35, "targetPowerW": 271, "targetPowerPercent": 97, "estimatedTimeMin": 42, "advice": "Hold steady, aero position. VI target <1.05 — any surging costs more than it saves."}, {"label": "Final push", "startKm": 35, "endKm": 40, "targetPowerW": 280, "targetPowerPercent": 100, "estimatedTimeMin": 7, "advice": "Build to 100% FTP if HR and legs feel good. Empty the tank here."}]}',
+    '{"overallTargetNpW": 266, "estimatedFinishTimeMin": 56, "strategy": "Even-paced 40km TT targeting IF 0.95. Start 5-10% below target for the first 5 minutes while HR stabilises — this is critical to avoid the adrenaline trap. Hold 95-97% FTP throughout, keeping VI under 1.05, and build to 100% in the final 5km.", "segments": [{"label": "Opening 5km", "startKm": 0, "endKm": 5, "targetPowerW": 252, "targetPowerPercent": 90, "estimatedTimeMin": 7, "advice": "Controlled start — resist the adrenaline. RPE will feel deceptively easy; trust the power meter, not your legs. Let HR build for 5 minutes before settling into race pace."}, {"label": "Main effort", "startKm": 5, "endKm": 35, "targetPowerW": 271, "targetPowerPercent": 97, "estimatedTimeMin": 42, "advice": "Hold steady, aero position. VI target <1.05 — any surging costs disproportionately more glycogen than the same NP held steady."}, {"label": "Final push", "startKm": 35, "endKm": 40, "targetPowerW": 280, "targetPowerPercent": 100, "estimatedTimeMin": 7, "advice": "Build to 100% FTP if HR and legs feel good. Empty the tank — this is your only chance to spend freely."}]}',
     "",
     "Athlete profile:",
     `- FTP: ${ftp}W${!manualFtp ? " (estimated)" : ""}`,
@@ -224,9 +227,22 @@ export function buildPacingPrompt(params: PacingPromptParams): string {
     "",
     "=== PACING TARGET GENERATION RULES ===",
     "",
+    "CORE PRINCIPLE — INTENSITY FACTOR (IF) AS THE FOUNDATION:",
+    "Intensity Factor (IF = NP / FTP) is the single best predictor of sustainable race intensity.",
+    "All power targets must be derived from IF for the estimated duration, not from arbitrary %-FTP ranges.",
+    "Typical IF values by event duration (from Coggan et al.):",
+    "- Under 30min (prologue / short TT): IF 1.05-1.15",
+    "- 30min-1h (TT / short race): IF 0.95-1.05",
+    "- 1-2h (road race / crit): IF 0.85-0.95",
+    "- 2-3h (long road race / short gran fondo): IF 0.80-0.88",
+    "- 3-4h (gran fondo / gravel): IF 0.75-0.82",
+    "- 4-5h (long gran fondo / Ironman bike): IF 0.70-0.78",
+    "- 5h+ (ultra-endurance): IF 0.65-0.75",
+    `The target NP in watts = IF × FTP (${ftp}W).`,
+    "",
     "A. FTP and W/kg as foundation:",
-    `- Use ftpWatts (${ftp}W) as the reference for all %-FTP calculations.`,
-    "- Always reason about climbs in W/kg first, then convert to watts using weightKg.",
+    `- Use FTP (${ftp}W) as the reference for all calculations.`,
+    "- Always reason about climbs in W/kg first, then convert to watts.",
     '  Show both in advice text: e.g. "323W (3.75 W/kg)".',
     "- Math check: all watts = round(FTP × percentage), all W/kg = watts / weightKg. These must be consistent.",
     "",
@@ -238,32 +254,49 @@ export function buildPacingPrompt(params: PacingPromptParams): string {
     "- Estimate finish time FIRST using the GPX data and athlete W/kg before setting any power targets. All targets flow from this estimate.",
     "- Heuristic: flat speed from athlete W/kg (roughly 35-45 km/h for 3.5-5 W/kg), add ~1 min per km per 100m elevation gain for climbing, descents at 50-60 km/h with minimal pedalling.",
     "",
-    "STEP 2 — FLAT POWER CEILING (determined by estimated duration):",
-    "- Under 30min (prologue / short TT): 105-115% FTP",
-    "- 30min-1h: 95-105% FTP",
-    "- 1-2h: 90-95% FTP",
-    "- 2-3h: 85-90% FTP",
-    "- 3-4h: 80-86% FTP",
-    "- 4h+: 75-82% FTP",
+    "STEP 2 — DETERMINE OVERALL TARGET NP FROM IF:",
+    "- Using the estimated finish time, select the appropriate IF from the table above.",
+    "- Calculate overallTargetNpW = round(IF × FTP).",
+    "- This is the NP the athlete should average across the entire race. Individual segments will be above or below this, but NP across the full event must converge to this target.",
     "",
-    "STEP 3 — VARIABILITY STRATEGY (determined by race type, NOT power ceiling):",
-    "- TT (solo effort): ride as close to the flat ceiling as possible, as steadily as possible. Minimise surges. Target VI < 1.05.",
-    "- Road race / crit: higher variability is unavoidable. NP target matches the duration ceiling but average power will be lower due to surges and recoveries.",
-    "- Gran fondo: like a road race but self-governed — advise riding to power targets, not to feel or to competitors.",
-    "- Gravel race: conservative, like a gran fondo but reduce all targets a further 5-8% for rolling resistance and terrain variation. Ride to power, not to competitors — drafting is minimal and the terrain will punish over-pacing.",
+    "STEP 3 — VARIABILITY INDEX (VI) TARGETS BY EVENT TYPE:",
+    "The Variability Index (VI = NP / average power) measures how smooth the effort is.",
+    "Higher VI means more glycogen burned for the same NP — variable power is metabolically more expensive than steady power at the same NP.",
+    "This is because glycogen utilization, lactate production, and stress hormones are curvilinearly (not linearly) related to intensity — surges above threshold cost disproportionately more than the energy saved by coasting.",
     "",
+    "Target VI by event type (from Coggan et al.):",
+    "- Time trial: flat TT 1.00-1.04, hill-climb TT 1.00-1.06. Isopower is the goal — lower is better.",
+    "- Gran fondo: VI 1.04-1.07. Self-governed — advise riding to power, not to feel or to competitors.",
+    "- Gravel: VI 1.05-1.10. Terrain forces some variability, but minimize it. Drafting is minimal and terrain punishes over-pacing.",
+    "- Road race: flat 1.00-1.06, hilly 1.20-1.35. Use the GPX elevation data to judge where this race falls on the spectrum.",
+    "- Criterium: flat 1.06-1.35, hilly 1.13-1.50. Constant surging from corners and attacks.",
+    "- Mountain bike: VI 1.13-1.50. Terrain forces extreme variability.",
+    "",
+    ...(isSteadyStateEvent(eventType)
+      ? [
+          "SMOOTH POWER TRANSITIONS (critical for this event type):",
+          "- When approaching a hill, smoothly transition power from flat target up to climb target — do NOT attack or surge at the base.",
+          "- Resist the temptation to accelerate or match faster riders on climbs. Ride YOUR numbers.",
+          "- On descents, your muscles are recovering even if you try to push — use descents as active recovery windows.",
+          "- Minimize power surges throughout. Every surge above threshold burns disproportionately more muscle glycogen.",
+          "- Use gearing to keep cadence consistent across terrain changes rather than mashing a big gear on climbs.",
+          "",
+        ]
+      : []),
     "CLIMB TARGETS (base ranges by climb duration):",
-    "- Short climbs (<5 min): 110-120% FTP, W' expenditure acceptable",
-    "- Medium climbs (5-20 min): 100-108% FTP, settle in quickly, no blowups",
-    "- Long climbs (20 min+): 95-103% FTP — treat like a TT within the race",
+    "- Short climbs (<1 min, very steep): up to 110% of goal NP. Quick burn, quick recovery on descent.",
+    "- Short-medium climbs (1-5 min): 105-110% of goal NP. W' expenditure acceptable if descent follows.",
+    "- Medium climbs (5-20 min): 100-108% FTP. Settle in quickly, no blowups. For hills that plateau at the top (no descent recovery), stay at or just above FTP — hammering up only to struggle on the flat after the crest gives away time.",
+    "- Long climbs (20 min+): 95-103% FTP — treat like a TT within the race.",
+    "- For ALL climbs: if the hill has a corresponding downhill, you can push slightly harder because you WILL recover on the descent (you physically cannot produce high watts descending even if you try). If the hill plateaus or flattens, be more conservative — there is no free recovery.",
     ...(isLongEvent(eventType)
       ? [
-          `- ${eventType === "gravel" ? "Gravel / " : ""}Gran fondo event (likely 3h+): reduce ALL climb ceilings by 10-12%. Long climbs: 86-93% FTP. Medium climbs: 89-96% FTP. Cumulative fatigue across the day makes early aggression on climbs catastrophically expensive.`,
+          `- ${eventType === "gravel" ? "Gravel / " : ""}Gran fondo event (likely 3h+): reduce ALL climb ceilings by 10-12%. Long climbs: 86-93% FTP. Medium climbs: 89-96% FTP. Cumulative fatigue across the day makes early aggression on climbs catastrophically expensive — going too hard on hills risks depleting muscle glycogen with no reserve for later.`,
         ]
       : []),
     ...(eventType === "time_trial"
       ? [
-          "- Multi-hour TT: long climb ceiling must not exceed flat power ceiling + 5%. Treat every climb as a TT segment, not an opportunity to push.",
+          "- TT climbs: long climb ceiling must not exceed flat power ceiling + 5%. Treat every climb as a TT segment. On even hills (up then down), push up to 105% FTP for hills under 5 min; for longer hills, stay closer to FTP. The recovery on the descent compensates.",
         ]
       : []),
     "",
@@ -282,30 +315,51 @@ export function buildPacingPrompt(params: PacingPromptParams): string {
           "- targetHrBpm: the bpm range from the HR zone table above (e.g. \"145-160\").",
           "- For segments spanning multiple intensities (e.g. rolling), use a range like \"Z2-Z3\".",
           "- HR targets are hard ceilings — if HR drifts above the target zone, the athlete should reduce power.",
-          "- CARDIAC DRIFT: In events over 90 minutes, HR naturally rises 5-10 bpm at constant power. For segments in the FINAL THIRD of a race estimated longer than 90 minutes, either (a) relax the HR ceiling by one zone, OR (b) note in the segment advice that a 3-5% power reduction may be needed to keep HR in range as fatigue accumulates.",
+          "- CARDIAC DRIFT: In events over 90 minutes, HR naturally rises 5-10 bpm at constant power due to dehydration and heat. For segments in the FINAL THIRD of a race estimated longer than 90 minutes, either (a) relax the HR ceiling by one zone, OR (b) note in the segment advice that a 3-5% power reduction may be needed to keep HR in range as fatigue accumulates.",
           `${hrZones.estimated ? "- NOTE: LTHR is estimated from max HR, so HR targets are approximate. Mention this in the strategy." : ""}`,
           "",
         ]
       : []),
-    "OTHER:",
-    "- Descents: recovery windows — advise soft pedalling, eat and drink here",
-    "- First 10 minutes: start 5-10% below flat target to allow warm-up and positioning, then settle into race pace",
-    "- Final km: budget a push at 105-120% FTP if W' allows, only if estimated finish time suggests meaningful sprint capacity remains",
-    ...(gpxData.totalDistanceKm > 0 && eventType !== "time_trial"
+    "THE FIRST 5 MINUTES — THE ADRENALINE TRAP:",
+    "- The #1 pacing mistake in cycling: starting too hard. Adrenaline, endorphins, and race excitement mask actual exertion for the first 4-5 minutes. RPE will feel deceptively easy. By the time it catches up, the damage is done — you've dug a hole you cannot recover from.",
+    "- In TTs: start at 90-95% of target for the first 5 minutes. Hold back even though it feels like you're leaving time on the table — you are not. Let HR rise to threshold naturally (takes ~5 min), then lock in at target power.",
+    "- In mass-start races: use the first 5-10 minutes for positioning at 5-10% below target, then settle into race pace.",
+    "- The shorter the event, the less you hold back — but even in a 10-mile TT, hold back for the first 2 minutes.",
+    "",
+    "FINAL KM / FINISH:",
+    "- Budget a push at 105-120% FTP if W' allows, only if estimated finish time suggests meaningful sprint capacity remains.",
+    "- In TTs: bring pace up with 3-5 minutes to go. This is the only time to spend freely.",
+    "",
+    "DESCENTS:",
+    "- Recovery windows — you physically cannot produce high watts descending even at max effort. Use this to your advantage.",
+    "- Advise soft pedalling, eat and drink here. Descents are prime fuelling windows.",
+    "- Do not set descent power targets above ~55% FTP — even hard pedalling on steep descents rarely exceeds Active Recovery levels.",
+    "",
+    ...(gpxData.totalDistanceKm > 0
       ? [
-          `- ${
-            gpxData.segments.reduce((acc, s) => acc + s.distanceKm, 0) > 80 ||
+          "NUTRITION AND ENERGY:",
+          "- Muscle glycogen is the limiting fuel source. Variable power burns glycogen faster than steady power at the same NP (curvilinear metabolic response).",
+          ...(gpxData.segments.reduce((acc, s) => acc + s.distanceKm, 0) > 80 ||
             isLongEvent(eventType)
-              ? "NUTRITION (mandatory for this event length): include at least one explicit fuelling note in the strategy or segment advice — descents and flat sections are prime eating/drinking windows. Events >2h require 60-90g carbs/hour to avoid bonking."
-              : "Fuelling: if the event is likely longer than 2 hours based on your finish time estimate, mention nutrition timing in the strategy."
-          }`,
+            ? [
+                "- MANDATORY for this event length: include explicit fuelling notes in the strategy and in at least one segment advice.",
+                "- Events >2h require 60-90g carbs/hour to avoid bonking. Descents and easy flat sections are prime eating/drinking windows.",
+                "- In events >3h, fuelling is as important as power targets — an athlete who eats well and rides at 80% FTP will outperform one who rides at 85% FTP but bonks.",
+              ]
+            : eventType !== "time_trial"
+              ? ["- If the event is likely longer than 2 hours, mention nutrition timing in the strategy."]
+              : []),
+          "",
         ]
       : []),
+    "GENERAL:",
     "- Do NOT be excessively conservative — give athletes numbers they can actually race on. This is a race, not a training ride.",
-    "- Advice should reference specific route geography from the GPX segments and be tactically useful, not generic",
+    "- Advice should reference specific route geography from the GPX segments and be tactically useful, not generic.",
+    "- Connect power targets to the WHY — explain what the athlete gains or risks, don't just state numbers.",
     "",
     "FINAL CHECK before outputting JSON:",
-    "- Verify that overallTargetNpW falls within the STEP 2 flat power ceiling for the estimated finish time. If it exceeds it, reduce the highest outlier segment targets.",
-    "- Verify that no single segment's targetPowerPercent exceeds the physiological maximum for its estimatedTimeMin: >60min → max 95%, 20-60min → max 105%, 5-20min → max 115%.",
+    "- Verify that overallTargetNpW matches IF × FTP for the estimated duration. If it doesn't, adjust.",
+    "- Verify that no single segment's targetPowerPercent exceeds the physiological maximum for its estimatedTimeMin: >60min → max 95%, 20-60min → max 105%, 5-20min → max 115%, <5min → max 120%.",
+    "- Verify VI is plausible: compute implied average power from segment targets and check that NP/avgPower falls within the VI range for this event type.",
   ].join("\n");
 }

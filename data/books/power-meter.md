@@ -1873,6 +1873,38 @@ were taken into consideration in developing the power-based levels. At
 the end of the chapter you will see an example of how to determine
 training levels and use that knowledge in developing a training program.
 
+| Level | Description | % of FTP* | % of FTHR* | RPE** | Typical Duration of Continuous Ride | Typical Duration of Interval Effort |
+|---|---|---|---|---|---|---|
+| 1 | Active Recovery | <55 | <68 | <2 | 30–90 min. | N/A |
+| 2 | Endurance | 56–75 | 69–83 | 2–3 | 60–300 min. | N/A |
+| 3 | Tempo | 76–90 | 84–94 | 3–4 | 60–180 min. | N/A |
+| 4 | Lactate Threshold | 91–105 | 95–105 | 4–5 | N/A | 8–30 min. |
+| 5 | VO2max | 106–120 | >106 | 6–7 | N/A | 3–8 min. |
+| 6 | Anaerobic Capacity | 121–150 | N/A | >7 | N/A | 30 sec.–3 min. |
+| 7 | Neuromuscular Power | N/A | N/A | Maximal | N/A | <30 sec. |
+
+*Percentage of average power and average HR are at functional threshold.
+**RPE uses 10-point Borg Scale (see Table 3.3).
+
+Table 3.2: Expected Physiological and Performance Adaptations for Levels 1–7
+
+| Adaptation | 1 Active Recovery | 2 Endurance | 3 Tempo | 4 Lactate Threshold | 5 VO2max | 6 Anaerobic Capacity | 7 Neuromuscular Power |
+|---|---|---|---|---|---|---|---|
+| Increased plasma volume | | + | ++ | ++ | ++ | | |
+| Increased muscle mitochondrial enzymes | | + | ++ | ++++ | ++++ | + | |
+| Increased lactate threshold | | + | ++ | ++++ | ++ | + | |
+| Increased muscle glycogen storage | | + | ++ | ++++ | ++ | ++ | |
+| Hypertrophy of slow-twitch muscle fibers | | + | ++ | +++ | ++ | | |
+| Increased muscle capillarization | | + | ++ | +++ | ++ | | |
+| Interconversion of fast-twitch muscle fibers (Type IIx → Type IIa) | | + | ++ | +++ | +++ | ++ | |
+| Increased stroke volume/maximal cardiac output | | | + | ++ | ++++ | ++ | |
+| Increased VO2max | | | + | ++ | ++++ | ++ | |
+| Increased muscle high-energy phosphate (ATP/PCr) stores | | | | | + | +++ | ++++ |
+| Increased anaerobic capacity ("lactate tolerance") | | | | | + | ++++ | |
+| Hypertrophy of fast-twitch fibers / increased neuromuscular power | | | | | | + | ++++ |
+
+*Note: The plus signs represent the magnitude of adaptation for a given "dose" of training. The more plus signs, the greater the adaptation.*
+
 
 Coggan’s Classic Training Levels
 
@@ -1921,6 +1953,19 @@ time, even at a constant exercise intensity (power), the suggested
 values or ranges refer to perceived effort as determined relatively
 early in a training session or series of intervals.
 
+| Rating | Description |
+|---|---|
+| 0 | Nothing at all |
+| 0.5 | Extremely weak |
+| 1 | Very weak |
+| 2 | Weak (light) |
+| 3 | Moderate |
+| 4 | Somewhat strong |
+| 5 | Strong (heavy) |
+| 6–7 | Very strong |
+| 8–9–10 | Extremely strong |
+| • | Maximal |
+
 
 Other Issues
 
@@ -1958,6 +2003,16 @@ percentages of FTP for each level.
 
 Let’s look at how this works. Joe Athlete has a threshold of 290 watts.
 His training levels are defined in Table 3.4.
+
+| Level | Description | % of FTP | Power (W) |
+|---|---|---|---|
+| 1 | Active Recovery | <55 | 1–160 |
+| 2 | Endurance | 56–75 | 161–218 |
+| 3 | Tempo | 76–90 | 219–261 |
+| 4 | Lactate Threshold | 91–105 | 262–305 |
+| 5 | VO2max | 106–120 | 306–348 |
+| 6 | Anaerobic Capacity | 121–150 | 349–435 |
+| 7 | Neuromuscular Power | N/A | N/A |
 
 
 Because 55 percent of 290 is 159.5 (290 × 0.55 = 159.5), we can say that
@@ -2029,6 +2084,18 @@ inflection or transition points in the fitted Power Duration Curve,
 where significant changes take place in the primary performance
 parameter (e.g., Pmax versus FRC) that is being stressed.
 
+| Level | Description | Power | % of FTP | Duration (m:s) |
+|---|---|---|---|---|
+| 1 | Recovery | <171 W | <56 | |
+| 2 | Endurance | 171–232 W | 56–76 | |
+| 3 | Tempo | 232–269 W | 76–88 | |
+| 4a | Sweet Spot | 269–290 W | 88–95 | |
+| 4 | FTP | 290–321 W | 95–105 | |
+| 5 | FRC/FTP | 321–471 W | | 17:40–1:33 |
+| 6 | FRC | 471–711 W | | 1:33–0:28 |
+| 7a | Pmax/FRC | 711–961 W | | 0:28–0:09 |
+| 7 | Pmax | >961 W | | <0:09 |
+
 
 Joe can now begin to make the shift from his previous heart rate–based
 training into a power-based training scheme. We recommend that he start
@@ -2089,6 +2156,66 @@ when we started to plot rider profiles, we became determined to find out
 if this way of looking at the data would give us clues to the relative
 strengths and weaknesses of individual riders and their physiological
 systems.
+
+Table 4.1: Power Profile Chart — Maximal Power Output (in W/kg)
+
+| Category | Men 5s | Men 1min | Men 5min | Men FT | Women 5s | Women 1min | Women 5min | Women FT |
+|---|---|---|---|---|---|---|---|---|
+| World class | 25.18 | 11.50 | 7.60 | 6.60 | 19.42 | 9.29 | 6.74 | 5.74 |
+| | 24.88 | 11.38 | 7.49 | 6.50 | 19.20 | 9.20 | 6.64 | 5.66 |
+| | 24.57 | 11.27 | 7.39 | 6.41 | 18.98 | 9.10 | 6.55 | 5.57 |
+| | 24.27 | 11.15 | 7.28 | 6.31 | 18.76 | 9.01 | 6.45 | 5.49 |
+| | 23.97 | 11.03 | 7.18 | 6.22 | 18.54 | 8.92 | 6.35 | 5.40 |
+| | 23.67 | 10.91 | 7.07 | 6.12 | 18.32 | 8.83 | 6.25 | 5.32 |
+| | 23.36 | 10.80 | 6.97 | 6.03 | 18.10 | 8.73 | 6.16 | 5.23 |
+| Exceptional | 22.46 | 10.44 | 6.65 | 5.74 | 17.44 | 8.46 | 5.86 | 4.98 |
+| | 22.15 | 10.33 | 6.54 | 5.65 | 17.22 | 8.36 | 5.77 | 4.89 |
+| | 21.85 | 10.21 | 6.44 | 5.55 | 17.00 | 8.27 | 5.67 | 4.81 |
+| | 21.55 | 10.09 | 6.33 | 5.46 | 16.78 | 8.18 | 5.57 | 4.72 |
+| | 21.25 | 9.97 | 6.23 | 5.36 | 16.56 | 8.09 | 5.47 | 4.64 |
+| | 20.94 | 9.86 | 6.12 | 5.27 | 16.34 | 7.99 | 5.38 | 4.55 |
+| Excellent | 20.64 | 9.74 | 6.02 | 5.17 | 16.12 | 7.90 | 5.28 | 4.47 |
+| | 20.34 | 9.62 | 5.91 | 5.08 | 15.90 | 7.81 | 5.18 | 4.38 |
+| | 20.04 | 9.50 | 5.80 | 4.98 | 15.68 | 7.72 | 5.08 | 4.30 |
+| | 19.73 | 9.39 | 5.70 | 4.89 | 15.46 | 7.62 | 4.99 | 4.21 |
+| | 19.43 | 9.27 | 5.59 | 4.79 | 15.24 | 7.53 | 4.89 | 4.13 |
+| | 19.13 | 9.15 | 5.49 | 4.70 | 15.02 | 7.44 | 4.79 | 4.04 |
+| Very good | 18.83 | 9.03 | 5.38 | 4.60 | 14.80 | 7.35 | 4.69 | 3.96 |
+| | 18.52 | 8.92 | 5.28 | 4.51 | 14.58 | 7.25 | 4.60 | 3.87 |
+| | 18.22 | 8.80 | 5.17 | 4.41 | 14.35 | 7.16 | 4.50 | 3.79 |
+| | 17.92 | 8.68 | 5.06 | 4.31 | 14.13 | 7.07 | 4.40 | 3.70 |
+| | 17.61 | 8.57 | 4.96 | 4.22 | 13.91 | 6.97 | 4.31 | 3.62 |
+| | 17.31 | 8.45 | 4.85 | 4.12 | 13.69 | 6.88 | 4.21 | 3.53 |
+| Good | 17.01 | 8.33 | 4.75 | 4.03 | 13.47 | 6.79 | 4.11 | 3.45 |
+| | 16.71 | 8.21 | 4.64 | 3.93 | 13.25 | 6.70 | 4.01 | 3.36 |
+| | 16.40 | 8.10 | 4.54 | 3.84 | 13.03 | 6.60 | 3.92 | 3.28 |
+| | 16.10 | 7.98 | 4.43 | 3.74 | 12.81 | 6.51 | 3.82 | 3.19 |
+| | 15.80 | 7.86 | 4.32 | 3.65 | 12.59 | 6.42 | 3.72 | 3.11 |
+| | 15.50 | 7.74 | 4.22 | 3.55 | 12.37 | 6.33 | 3.62 | 3.02 |
+| Moderate | 15.19 | 7.63 | 4.11 | 3.46 | 12.15 | 6.23 | 3.53 | 2.94 |
+| | 14.89 | 7.51 | 4.01 | 3.36 | 11.93 | 6.14 | 3.43 | 2.85 |
+| | 14.59 | 7.39 | 3.90 | 3.27 | 11.71 | 6.05 | 3.33 | 2.77 |
+| | 14.29 | 7.27 | 3.80 | 3.17 | 11.49 | 5.96 | 3.23 | 2.68 |
+| | 13.98 | 7.16 | 3.69 | 3.08 | 11.27 | 5.86 | 3.14 | 2.60 |
+| | 13.68 | 7.04 | 3.59 | 2.98 | 11.05 | 5.77 | 3.04 | 2.51 |
+| Fair | 13.38 | 6.92 | 3.48 | 2.89 | 10.83 | 5.68 | 2.94 | 2.43 |
+| | 13.08 | 6.80 | 3.37 | 2.79 | 10.61 | 5.59 | 2.84 | 2.34 |
+| | 12.77 | 6.69 | 3.27 | 2.70 | 10.39 | 5.49 | 2.75 | 2.26 |
+| | 12.47 | 6.57 | 3.16 | 2.60 | 10.17 | 5.40 | 2.65 | 2.17 |
+| | 12.17 | 6.45 | 3.06 | 2.51 | 9.95 | 5.31 | 2.55 | 2.09 |
+| | 11.87 | 6.33 | 2.95 | 2.41 | 9.73 | 5.22 | 2.45 | 2.00 |
+| Novice 2 | 11.56 | 6.22 | 2.85 | 2.32 | 9.51 | 5.12 | 2.36 | 1.92 |
+| | 11.26 | 6.10 | 2.74 | 2.22 | 9.29 | 5.03 | 2.26 | 1.83 |
+| | 10.96 | 5.98 | 2.63 | 2.12 | 9.07 | 4.94 | 2.16 | 1.75 |
+| | 10.65 | 5.87 | 2.53 | 2.03 | 8.85 | 4.84 | 2.07 | 1.66 |
+| | 10.35 | 5.75 | 2.42 | 1.93 | 8.63 | 4.75 | 1.97 | 1.58 |
+| | 10.05 | 5.63 | 2.32 | 1.84 | 8.41 | 4.66 | 1.87 | 1.49 |
+| Novice 1 | 9.75 | 5.51 | 2.21 | 1.74 | 8.19 | 4.57 | 1.77 | 1.41 |
+| | 9.44 | 5.40 | 2.11 | 1.65 | 7.97 | 4.47 | 1.68 | 1.32 |
+| | 9.14 | 5.28 | 2.00 | 1.55 | 7.75 | 4.38 | 1.58 | 1.24 |
+| | 8.84 | 5.16 | 1.89 | 1.46 | 7.53 | 4.29 | 1.48 | 1.15 |
+| | 8.54 | 5.04 | 1.79 | 1.36 | 7.31 | 4.20 | 1.38 | 1.07 |
+| | 8.23 | 4.93 | 1.68 | 1.27 | 7.09 | 4.10 | 1.29 | 0.98 |
 
 
 If a rider had a strong anaerobic capacity as compared with his or her
@@ -2596,6 +2723,19 @@ been validated again and again in our work with hundreds of additional
 athletes over the past few years. In fact, it has proven to be so useful
 that we would like to expand on this concept and argue that this is one
 of the key reasons to use your power meter in every training session.
+
+| Interval | Average Drop in Power |
+|---|---|
+| 20 min. | 3–5% |
+| 10 min. | 4–6% |
+| 5 min. | 5–7% |
+| 3 min. | 8–9% |
+| 2 min. | 10–12% |
+| 1 min. | 10–12% |
+| 30 sec. | 12–15% |
+| 15 sec. | 10–15% (15–20% peak power) |
+
+*Note: The drop in power is based on the number of watts achieved in the third effort. For example, when doing 5-minute intervals, a rider is ready for a rest when his or her average watts for an interval are 5–7 percent lower than they were for the third effort.*
 
 
 When Joe Friel wrote the first edition of The Cyclist’s Training Bible
@@ -3255,6 +3395,18 @@ train Level 6, he would need to dramatically increase his watts above
 the Coggan Classic prescribed percentages. Table 5.2 shows the new
 iLevels for Joe Athlete.
 
+| Level | Description | Power | % of FTP | Duration (m:s) |
+|---|---|---|---|---|
+| 1 | Recovery | <171 W | <56 | |
+| 2 | Endurance | 171–232 W | 56–76 | |
+| 3 | Tempo | 232–269 W | 76–88 | |
+| 4a | Sweet Spot | 269–290 W | 88–95 | |
+| 4 | FTP | 290–321 W | 95–105 | |
+| 5 | FRC/FTP | 321–471 W | | 17:40–1:33 |
+| 6 | FRC | 471–711 W | | 1:33–0:28 |
+| 7a | Pmax/FRC | 711–961 W | | 0:28–0:09 |
+| 7 | Pmax | >961 W | | <0:09 |
+
 
 iLevels pertain only to efforts above Coggan Classic Level 4, because at
 Level 4 and below there is much less variation between individuals in
@@ -3837,7 +3989,11 @@ case, he did well. Note that his fifth interval was 403 watts. A 10
 percent decrease would be close to 360 watts. His 11th interval was 347
 watts, and he did one more, with his 12th interval being 382 watts. He
 knew that he was seriously struggling in his 11th interval, so he went
-all-out for the 12th and then headed home. This kind of analysis is also
+all-out for the 12th and then headed home.
+
+[Table 6.1: Comparing Hill Repeats — Hill Repeats Sorted — not yet extracted from source]
+
+This kind of analysis is also
 possible for a race across different years. Make certain that you select
 exactly the same range of data so you can compare apples with apples.
 Figure 6.13 illustrates a race that the athlete did in two consecutive
@@ -3943,7 +4099,16 @@ every individual. You may be able to use your training software to
 determine exactly when and how you burn your own set of matches. It may
 be illuminating to make a chart for yourself like the one presented in
 
-### Table 6.2, where you attempt to quantify your own matches.
+Table 6.2, where you attempt to quantify your own matches.
+
+| Time | % of FTP | Power |
+|---|---|---|
+| 1 min. | 120+ | 396 |
+| 5 min. | 114–120 | 376–396 |
+| 10 min. | 108–114 | 356–376 |
+| 20 min. | 100–108 | 330–356 |
+
+*Note: In this example, the athlete's FTP is 330 watts.*
 
 
 Now that you have a general idea of what a match is, you need to figure
@@ -4315,6 +4480,17 @@ power, cadence, and speed that you will encounter in your next
 mountain-bike race. You’ll learn more about this variability in the
 section on Quadrant Analysis later in this chapter.
 
+| Type of Ride | Variability Index |
+|---|---|
+| Steady isopower workout | 1.00–1.02 |
+| Flat road race | 1.00–1.06 |
+| Flat time trial | 1.00–1.04 |
+| Hill-climb time trial | 1.00–1.06 |
+| Flat criterium | 1.06–1.35 |
+| Hilly criterium | 1.13–1.50 |
+| Hilly road race | 1.20–1.35 |
+| Mountain-bike race | 1.13–1.50 |
+
 
 Figure 7.2 shows Normalized Power and average power on a steady,
 relatively constant-gradient climb. It is clear that this type of climb
@@ -4354,6 +4530,15 @@ relative intensity of a training session or race either over time for an
 individual rider or from one rider to the next, taking into account
 changes or differences in threshold power. Table 7.2 shows typical IF
 values for various training sessions or races.
+
+| Exertion | IF Value | Notes |
+|---|---|---|
+| Level 1, Active Recovery | <0.75 | |
+| Level 2, Endurance | 0.75–0.85 | |
+| Level 3, Tempo | 0.85–0.95 | Also includes road races lasting less than roughly 2.5 hr. |
+| Level 4, Lactate Threshold | 0.95–1.05 | Also includes road races lasting less than roughly 2.5 hr., criteriums, circuit races, and longer time trials |
+| Level 5 and higher | 1.05–1.15 | Shorter time trials |
+| | >1.15 | Prologue time trial, track pursuit, track miss-and-out |
 
 
 ### Using Intensity Factor to Recognize Changes in Fitness
@@ -4448,14 +4633,47 @@ that just 2 days of training at that level severely overreaches his or
 her abilities. Because of this difference, we created a scale that can
 be used as an approximate guide to training (see Table 7.3).
 
+| TSS | Intensity | Recovery Status |
+|---|---|---|
+| <150 | Low | Recovery is generally complete by the following day. |
+| 150–300 | Moderate | Some residual fatigue may be present the next day, but recovery is generally complete by the second day. |
+| 300–450 | High | Some residual fatigue may be present even after 2 days. |
+| >450 | Very high | Residual fatigue lasting for several days is likely. |
+
 
 Once you are able to associate your different rides with TSS and IF
 scores, you will be able to understand the type of ride that someone
 else did just by hearing what the TSS and IF scores were for that ride.
 
-### Table 7.4 lists some different types of rides and their corresponding
+Table 7.4 lists some different types of rides and their corresponding scores.
 
-scores.
+| Event Description | Duration (h:m) | TSS | IF |
+|---|---|---|---|
+| Easy Level 1 recovery ride, flat terrain, male Cat. III rider | 1:00 | 12 | 0.37 |
+| Easy Level 2 recovery ride, rolling terrain, male Cat. II rider | 2:30 | 85 | 0.49 |
+| CX race, female masters, 40–45 age group | 0:45 | 61 | 0.92 |
+| Division 1 pro in an American pro 1/2 criterium | 1:00 | 73 | 0.86 |
+| Women's pro criterium | 0:45 | 80 | 1.06 |
+| 40 km TT, male Cat. II rider | 0:53 | 89 | 1.02 |
+| Typical national caliber Cat. III Criterium | 1:57 | 109 | 0.75 |
+| Typical national caliber Pro 1/2 Criterium | 2:23 | 118 | 0.61 |
+| 2018 Mount Evans Hill Climb, Cat. I | 2:02 | 126 | 0.79 |
+| Masters National Road Race, 2018, 55–59 age group | 2:34 | 120 | 0.68 |
+| 2018 technical national caliber criterium, Cat. I | 2:28 | 166 | 0.70 |
+| Cat. IV road race, rolling terrain, in one small break, rest of time riding in the field | 2:50 | 185 | 0.81 |
+| Level 2/3, with 1 hour of threshold climbing | 2:50 | 241 | 0.92 |
+| Cat. II dead flat road race | 3:35 | 246 | 0.83 |
+| 2018 national caliber very hilly road race, Cat. I, small chase group | 4:55 | 258 | 0.68 |
+| 2018 US Elite National Championships, Cat. I | 5:22 | 272 | 0.71 |
+| 2018 Lake Placid Ironman, 1st female age grouper, top three 40–45 | 5:00 | 278 | 0.74 |
+| 2018 stage 1 road of USA National caliber stage race | 4:55 | 292 | 0.77 |
+| Cat. II Hilly Road Race in North East USA | 4:16 | 305 | 0.43 |
+| 2018 US Pro national championships | 4:16 | 305 | 0.84 |
+| 2018 Vuelta a Espana stage 12, breakaway, top 10 placing | 4:22 | 323 | 0.63 |
+| 2018 Leadville 100 MTB race, female age 35–40 winner | 9:18 | 355 | 0.62 |
+| 2018 Tour de France mountain stage 16, top 5 placing | 5:13 | 359 | 0.83 |
+| 24 hour MTB race, elite masters male | 24:00 | 1058 | 0.74 |
+| 1,000 km Brevet, done over 3 days, only 5 hours sleep total, female, age 40 | 42:00 | 1610 | 0.55 |
 
 
 By tracking NP, IF, and TSS for each workout and over time, individual
@@ -6242,6 +6460,15 @@ may also need to be adjusted for age. As we age, we recover more slowly.
 Here’s a quick and simple table (Table 9.1) that will help you to
 customize your ATL time constant.
 
+| Age | ATL Time Constant |
+|---|---|
+| <19 | 2–4 days |
+| 20–29 | 4–7 days |
+| 30–49 | 6–8 days |
+| 50–59 | 7–10 days |
+| 60–65 | 9–12 days |
+| 66–70+ | 11–14 days |
+
 
 Finally, the optimal ATL time constant to use is likely to depend on the
 duration of the event for which you are training, especially when
@@ -6388,6 +6615,17 @@ in short periods of time, less than two weeks long, such as a weeklong
 training camp. Typically, if you increase your ramp rate at the rates
 shown in Table 9.2 for one week, and especially for two weeks, you will
 need a rest week afterward.
+
+| Period | Training Age | CTL <100 Ramp Rate | CTL >100 Ramp Rate |
+|---|---|---|---|
+| Long-term (14–28 days) | 5+ years | 7–10 TSS/day | 5–7 TSS/day |
+| | 3–5 years | 5–8 TSS/day | 3–6 TSS/day |
+| | 1–3 years | 4–7 TSS/day | 3–5 TSS/day |
+| | <1 year | 3–5 TSS/day | 3–4 TSS/day |
+| Short-term (<14 days) | 5+ years | 14–20 TSS/day | 10–14 TSS/day |
+| | 3–5 years | 10–16 TSS/day | 6–12 TSS/day |
+| | 1–3 years | 8–14 TSS/day | 6–12 TSS/day |
+| | <1 year | 6–10 TSS/day | 6–8 TSS/day |
 
 
 By examining the Performance Manager Chart, and hovering just over the
@@ -8782,6 +9020,14 @@ try to hold a particular pace for half the race distance, followed by a
 half-distance run, for a solid brick workout. Pacing at this distance
 will provide you with a good indication of exactly how much energy you
 will have left at the beginning of the run and at the end of the run.
+
+| Type of Triathlon | Distance | Intensity Factor (fraction of NP) | Average Power (% of FTP) | Training Level |
+|---|---|---|---|---|
+| Sprint | 10 km (6.2 mi.) | 1.03–1.07 | 100–103 | 4 |
+| Olympic | 40 km (24.8 mi.) | 0.95–1.00 | 95–100 | 4 |
+| Half-Ironman | 90 km (56 mi.) | 0.83–0.87 | 80–85 | 3 |
+| Ironman | 180 km (112 mi.) | 0.70–0.76 | 68–78 | 2–3 |
+| Double Ironman | 361 km (224 mi.) | 0.55–0.67 | 56–70 | 2 |
 
 
 Wattage Creation: Are All Watts Created Equally?

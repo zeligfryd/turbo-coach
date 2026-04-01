@@ -68,13 +68,17 @@ Work through each of these areas when reviewing. For each issue you find, explai
 
 ### 1. Power Target Validation
 
+**IF-based approach (preferred for race pacing):**
+
+Race pacing should be driven by Intensity Factor (IF = NP / FTP), not raw %-FTP. IF accounts for the variability inherent in real racing. Check that the prompt/strategy uses IF as the foundation and that the overall target NP corresponds to the appropriate IF for the estimated duration. See `references/cycling-physiology.md` for the IF table by duration.
+
 **Sustainability checks:**
 
-- Time trial: Targets near FTP (95-105%) are sustainable for ~60 min. If the TT is longer, targets should trend lower. If shorter (prologue, short TT), they can be higher (105-120%+ FTP depending on duration).
-- Road race: Variable power is expected. But if the strategy prescribes sustained efforts above FTP for extended segments, flag it — even in a road race, time above threshold accumulates fatigue.
-- Criterium: Expect repeated high-intensity surges (120%+ FTP) with recovery between. If the strategy looks like a steady-state TT plan, it doesn't match crit racing.
-- Gran fondo: Conservative pacing (75-85% FTP) is appropriate, especially early. Aggressive early targets are a red flag for bonking.
-- Gravel: Account for higher variability and mechanical losses. Power targets should generally be lower than equivalent road targets.
+- Time trial: Target IF 0.95-1.05 for ~1h. Higher for shorter events, lower for longer. The strategy should use isopower (steady-state) as the default.
+- Road race: NP typically implies IF 0.85-0.95. Average power will be much lower due to drafting and coasting.
+- Criterium: Expect repeated high-intensity surges (120%+ FTP) with recovery between. Average power 70-80% FTP. If the strategy looks like a steady-state TT plan, it doesn't match crit racing.
+- Gran fondo: Target IF 0.75-0.82 for 3-4h events. Aggressive early targets are a red flag for bonking.
+- Gravel: Target IF 0.70-0.78. Higher variability and mechanical losses mean power targets should be lower than equivalent road targets.
 
 **Power zone coherence:**
 
@@ -86,6 +90,12 @@ Work through each of these areas when reviewing. For each issue you find, explai
 - The last 5 activities with NP and average power provide a "current form" snapshot. The LLM should be using this to calibrate targets. Review whether the prompt actually instructs the LLM to do this, and whether the output reflects it.
 - A big gap between stated FTP and recent NP suggests the athlete may be detrained, recovering, or has an outdated FTP. The strategy should err conservative in this case.
 
+**Variability Index (VI) coherence:**
+
+- Check that the strategy's implied VI matches the event type. See `references/cycling-physiology.md` for target VI ranges.
+- A TT plan with implied VI > 1.08 is too variable. A gran fondo plan with VI > 1.10 burns glycogen unnecessarily.
+- Variable power is metabolically more expensive than steady power at the same NP because glycogen utilization is curvilinearly related to intensity. Surges above threshold cost disproportionately more than the energy saved by coasting. The strategy should advise minimizing variability, especially in events >2 hours.
+
 ### 2. Heart Rate Validation
 
 - HR targets should be consistent with power targets. If the strategy says "ride at 85% FTP" but also says "keep HR below zone 2," that's contradictory for most athletes.
@@ -96,21 +106,26 @@ Work through each of these areas when reviewing. For each issue you find, explai
 ### 3. Elevation & Segment Logic
 
 - **Climbing segments:** Power on climbs is heavily influenced by gradient and rider weight. Check whether the prompt includes gradient data per segment. A strategy that prescribes the same power on a 2% grade and a 10% grade is wrong.
-- **Descending segments:** Power targets on descents should be minimal (recovery) or zero for technical descents. If the strategy prescribes threshold power on a descent, something is off.
-- **Segment transitions:** Abrupt jumps in power targets between consecutive segments (e.g., recovery → VO2max → recovery → VO2max) should only appear in crit/interval contexts. For road races and TTs, transitions should be smoother.
-- **Cumulative elevation:** Total climbing load affects pacing. A race with 3000m of climbing needs more conservative early pacing than a flat race of the same distance.
+- **Climb topology — what comes after the crest matters:**
+  - Hills with corresponding descents: can push harder (up to 105-110% of goal NP for short climbs) because you physically cannot produce high watts on a descent even at max effort — your muscles are forced into recovery.
+  - Hills that plateau or flatten at the top: must be conservative (at or just above FTP). There is no free recovery period. Hammering up only to struggle on the flat after cresting gives away time.
+  - The prompt should distinguish between these two hill types and set different power targets accordingly.
+- **Smooth power transitions on climbs:** For TT, gran fondo, and gravel events, the strategy should advise smoothly transitioning power from flat target to climb target — NOT surging at the base. Surging costs disproportionate glycogen and risks early blowup. This is critical for any self-paced event.
+- **Descending segments:** Power targets on descents should not exceed ~55% FTP. Even hard pedaling on steep descents rarely exceeds Active Recovery levels. If the strategy prescribes threshold power on a descent, something is off. Descents should be flagged as recovery and fueling windows.
+- **Segment transitions:** Abrupt jumps in power targets between consecutive segments (e.g., recovery → VO2max → recovery → VO2max) should only appear in crit/interval contexts. For road races, TTs, and gran fondos, transitions should be smooth.
+- **Cumulative elevation:** Total climbing load affects pacing. A race with 3000m of climbing needs more conservative early pacing than a flat race of the same distance. Going too hard on early climbs depletes muscle glycogen with no reserve for the second half.
 
 ### 4. Event-Type Appropriateness
 
 Each event type has distinct pacing characteristics. The strategy should match:
 
-| Event Type | Typical Pacing Pattern                 | Red Flags                              |
-| ---------- | -------------------------------------- | -------------------------------------- |
-| Time Trial | Even or slight negative split          | Wild power swings, drafting references |
-| Road Race  | Variable, tactical, position-dependent | Steady-state TT-style plan             |
-| Criterium  | Surge/recover, lap-based               | Sustained steady efforts               |
-| Gran Fondo | Conservative, nutrition-focused        | Aggressive early pacing                |
-| Gravel     | Conservative, terrain-adaptive         | Road-race intensity assumptions        |
+| Event Type | Typical IF   | Target VI (flat/hilly) | Pacing Pattern                         | Red Flags                              |
+| ---------- | ------------ | ---------------------- | -------------------------------------- | -------------------------------------- |
+| Time Trial | 0.95-1.05    | 1.00-1.04 / 1.00-1.06 | Even or slight negative split          | Wild power swings, VI > 1.08           |
+| Road Race  | 0.85-0.95    | 1.00-1.06 / 1.20-1.35 | Variable, tactical, position-dependent | Steady-state TT-style plan             |
+| Criterium  | 0.85-0.95    | 1.06-1.35 / 1.13-1.50 | Surge/recover, lap-based               | Sustained steady efforts               |
+| Gran Fondo | 0.75-0.82    | 1.04-1.07              | Conservative, nutrition-focused        | Aggressive early pacing, VI > 1.10     |
+| Gravel     | 0.70-0.78    | 1.05-1.10              | Conservative, terrain-adaptive         | Road-race intensity assumptions        |
 
 ### 5. Environmental Factors (Currently a Gap)
 
@@ -124,11 +139,17 @@ The app does not currently collect temperature, wind, or altitude data for race 
 
 This is where implementation and domain logic meet. Review the prompt in `prompt.ts`:
 
+- **IF-based pacing framework:** Does the prompt derive power targets from IF (Intensity Factor = NP / FTP) for the estimated duration? IF is the correct foundation for race pacing because it accounts for variability. Raw %-FTP ranges are fine for training zones but not sufficient for race strategy. The prompt should include an IF table by duration and instruct the LLM to calculate overallTargetNpW = IF × FTP.
+- **Variability Index guidance:** Does the prompt set VI targets by event type? The LLM should understand that variable power is metabolically more expensive than steady power at the same NP, and should advise minimizing variability for TT/gran fondo/gravel events.
 - **Context completeness:** Does the prompt include all relevant athlete and race data? Missing inputs lead to hallucinated or generic strategies. In particular: `route.ts` fetches recent activities, but check whether the prompt explicitly instructs the LLM to compare recent NP against stated FTP and adjust targets downward if the athlete appears detrained.
 - **Output format instructions:** Is the expected JSON schema clearly specified? Ambiguous format instructions lead to parsing failures.
 - **Explicit physiological guardrails:** The prompt should include hard ceilings like "never prescribe power above X% FTP for segments longer than Y minutes." Without these, the LLM will sometimes produce impressive-sounding but unsustainable targets. Check the power-duration table in `references/cycling-physiology.md` for appropriate limits.
-- **Cardiac drift instruction:** For events over 2 hours, the prompt should instruct the LLM that HR will naturally rise at constant power and that HR ceilings in later segments should either be relaxed or power targets should decrease slightly to compensate.
-- **Few-shot examples:** Does the prompt include example outputs? If not, this is a significant gap — few-shot examples dramatically improve LLM output consistency and quality. If examples exist, verify they follow sound pacing principles. Bad examples teach bad pacing.
+- **The adrenaline trap:** Does the prompt explicitly instruct conservative pacing for the first 5 minutes? This is the #1 pacing mistake in cycling — adrenaline masks exertion for the first 4-5 minutes and athletes dig a hole they can't recover from. The prompt should prescribe 90-95% of target for the opening minutes, scaling with event length.
+- **Climb topology distinction:** Does the prompt distinguish between hills with descents (can push harder — forced recovery follows) and hills that plateau (must be conservative — no recovery period)? This distinction significantly affects climb targets.
+- **Smooth power transitions:** For TT/gran fondo/gravel events, does the prompt advise smooth power transitions on hills rather than surging at the base? Surges cost disproportionate glycogen.
+- **Descent power reality:** Does the prompt correctly set descent power expectations? Even at max effort on a steep descent, power rarely exceeds Active Recovery. Descents should be flagged as recovery/fueling windows with targets no higher than ~55% FTP.
+- **Cardiac drift instruction:** For events over 90 minutes, the prompt should instruct the LLM that HR naturally rises 5-10 bpm at constant power and that HR ceilings in later segments should either be relaxed or power targets should decrease slightly to compensate.
+- **Few-shot examples:** Does the prompt include example outputs? If so, verify they follow sound pacing principles (correct IF, reasonable VI, conservative start). Bad examples teach bad pacing.
 - **Edge case handling:** What happens when data is incomplete (no HR zones, no elevation data, unknown event type)? The prompt should handle degraded inputs gracefully.
 - **Segment definition:** How are race segments defined? By distance, by elevation change, by landmarks? This affects the granularity and usefulness of the output.
 

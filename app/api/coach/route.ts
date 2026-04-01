@@ -162,9 +162,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "No messages provided" }, { status: 400 });
     }
 
-    const isDev = process.env.NODE_ENV === "development";
-    const modelOverrides = isDev ? sanitizeModelOverrides(requestBody.modelOverrides) : undefined;
-    const ragEnabledOverride = isDev ? sanitizeBoolean(requestBody.ragEnabled) : undefined;
+    const modelOverrides = sanitizeModelOverrides(requestBody.modelOverrides);
+    const ragEnabledOverride = sanitizeBoolean(requestBody.ragEnabled);
     const ragEnabledByEnv = parseBooleanEnv(process.env.COACH_RAG_ENABLED, true);
     const isRagEnabled = ragEnabledOverride ?? ragEnabledByEnv;
     const { models } = resolveModels(modelOverrides);

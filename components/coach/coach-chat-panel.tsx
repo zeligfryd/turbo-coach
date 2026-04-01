@@ -45,7 +45,7 @@ const SUGGESTIONS = [
   "What should I focus on in my next 7 days based on my schedule?",
 ];
 
-const IS_DEV = process.env.NODE_ENV === "development";
+const IS_DEV = true;
 
 type Provider = "openai" | "anthropic" | "ollama";
 type DevRagSettings = {
@@ -834,8 +834,8 @@ export function CoachChatPanel({
                   size="icon"
                   className="h-8 w-8"
                   onClick={() => setSettingsOpen(true)}
-                  aria-label="Open developer coach settings"
-                  title="Developer coach settings"
+                  aria-label="Open coach settings"
+                  title="Coach settings"
                 >
                   <Cog className="h-4 w-4" />
                 </Button>
@@ -844,9 +844,9 @@ export function CoachChatPanel({
             <Dialog open={settingsOpen} onOpenChange={setSettingsOpen} modal={false}>
               <DialogContent className="max-w-sm z-[90]" onPointerDownOutside={(e) => e.preventDefault()}>
                 <DialogHeader>
-                  <DialogTitle>Developer coach settings</DialogTitle>
+                  <DialogTitle>Coach settings</DialogTitle>
                   <DialogDescription>
-                    Override model and RAG behavior for local testing.
+                    Override model and RAG behavior.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">

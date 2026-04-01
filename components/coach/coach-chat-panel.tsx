@@ -282,26 +282,34 @@ export const useCoachChatController = (options?: ControllerOptions) => {
 
   const raceContext = options?.raceContext ?? null;
 
+  // Keep a ref to the latest body so the transport always reads fresh
+  // settings. useChat holds a stale reference to the initial transport,
+  // so we pass body as a function — the AI SDK's resolve() utility calls
+  // it on every request, picking up the latest ref values.
+  const transportBodyRef = useRef<Record<string, unknown>>({});
+  transportBodyRef.current = {
+    ...(IS_DEV
+      ? {
+          modelOverrides: devOverrides,
+          ...(devRagSettings.useDefault
+            ? {}
+            : {
+                ragEnabled: devRagSettings.enabled,
+              }),
+        }
+      : {}),
+    ...(raceContext ? { raceContext } : {}),
+  };
+
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: "/api/coach",
-        body: {
-          ...(IS_DEV
-            ? {
-                modelOverrides: devOverrides,
-                ...(devRagSettings.useDefault
-                  ? {}
-                  : {
-                      ragEnabled: devRagSettings.enabled,
-                    }),
-              }
-            : {}),
-          ...(raceContext ? { raceContext } : {}),
-        },
+        body: () => transportBodyRef.current,
       }),
+    // Stable — never recreated. Reads fresh values from ref on each request.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [devCoachingModel, devRagSettings, raceContext]
+    []
   );
 
   const { messages, sendMessage, stop, status, error, setMessages } = useChat({

@@ -336,7 +336,7 @@ export function FitnessChart({ fitness, dailyLoads }: FitnessChartProps) {
                 axisLine={false}
                 tickLine={false}
               />
-              <Tooltip contentStyle={tooltipStyle} content={SharedTooltip} />
+              <Tooltip content={() => null} />
               <Line
                 yAxisId="tsb"
                 type="monotone"

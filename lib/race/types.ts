@@ -97,6 +97,7 @@ export type RaceEvent = {
   pacing_plan: PacingPlan | null;
   readiness_score: number | null;
   readiness_interpretation: string | null;
+  readiness_computed_at: string | null;
   created_at: string;
   updated_at: string;
 };

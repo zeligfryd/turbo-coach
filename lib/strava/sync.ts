@@ -92,6 +92,11 @@ export async function syncStravaActivities(
     const newest = new Date();
 
     const activities = await client.fetchAllActivities(oldest, newest);
+    console.log(`[Sync] mode=${mode} window=${oldest.toISOString().slice(0, 10)}..now fetched=${activities.length}`);
+
+    // Track when the upsert batch starts so we can count truly new rows afterwards.
+    const syncStart = new Date().toISOString();
+    let newActivitiesCount = 0;
 
     if (activities.length > 0) {
       // Upsert activity summaries
@@ -111,6 +116,16 @@ export async function syncStravaActivities(
 
       // Fetch streams and compute accurate metrics for all synced activities
       await computeMetricsForActivities(supabase, userId, client, activities);
+
+      // Count only rows that were actually inserted (created_at set on INSERT, not UPDATE).
+      const { count } = await supabase
+        .from("activities")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("source", "strava")
+        .gte("created_at", syncStart);
+      newActivitiesCount = count ?? 0;
+      console.log(`[Sync] upserted=${activities.length} new=${newActivitiesCount}`);
     }
 
     await supabase
@@ -123,7 +138,7 @@ export async function syncStravaActivities(
       })
       .eq("user_id", userId);
 
-    return { success: true, activitiesSynced: activities.length };
+    return { success: true, activitiesSynced: newActivitiesCount };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Sync failed";
 

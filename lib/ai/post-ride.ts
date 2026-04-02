@@ -73,6 +73,22 @@ export async function triggerPostRideAnalysis(
   // Generate analysis for the most recent unanalysed activity only (avoid burst of LLM calls)
   const activity = unanalysed[0] as Record<string, unknown>;
   try {
+    // Claim the slot before the LLM call so concurrent invocations can't both
+    // pass the dedup check. The unique index on (user_id, metadata->activity_id)
+    // makes this insert fail atomically if another process already claimed it.
+    const { error: claimError } = await supabase.from("coach_insights").insert({
+      user_id: userId,
+      type: "post_ride_analysis",
+      content: "",
+      metadata: { activity_id: activity.id },
+      read: true,
+    });
+    if (claimError) {
+      // Another concurrent call already claimed this activity — skip.
+      console.log("[PostRide] Dedup: analysis already claimed for activity", activity.id);
+      return;
+    }
+
     const analysis = await generatePostRideAnalysis(userId, activity);
     if (analysis) {
       const convId = await getOrCreateInsightsConversation(supabase, userId);
@@ -81,17 +97,16 @@ export async function triggerPostRideAnalysis(
         activity_name: activity.name ?? activity.type ?? "Ride",
         activity_date: activity.activity_date,
       });
-      // Insert a minimal record for deduplication (so the same activity isn't analyzed twice)
-      await supabase.from("coach_insights").insert({
-        user_id: userId,
-        type: "post_ride_analysis",
-        content: "",
-        metadata: { activity_id: activity.id },
-        read: true,
-      });
       console.log("[PostRide] Generated analysis for activity", activity.id);
     }
   } catch (err) {
     console.error("[PostRide] Failed to generate analysis:", err);
+    // Release the claim so the activity can be retried on the next sync.
+    await supabase
+      .from("coach_insights")
+      .delete()
+      .eq("user_id", userId)
+      .eq("type", "post_ride_analysis")
+      .contains("metadata", { activity_id: activity.id });
   }
 }

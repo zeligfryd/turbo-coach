@@ -78,12 +78,14 @@ export async function POST(request: Request) {
     const interpretation = result.text.trim();
 
     // Cache score and interpretation on the race event
+    const now = new Date().toISOString();
     await supabase
       .from("race_events")
       .update({
         readiness_score: score,
         readiness_interpretation: interpretation,
-        updated_at: new Date().toISOString(),
+        readiness_computed_at: now,
+        updated_at: now,
       })
       .eq("id", raceId)
       .eq("user_id", user.id);

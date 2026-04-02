@@ -65,9 +65,13 @@ export function RaceReadiness({ race, daysToRace, onScoreClick, onReadinessUpdat
   const [score, setScore] = useState<number | null>(race.readiness_score);
   const [interpretation, setInterpretation] = useState<string | null>(race.readiness_interpretation);
 
-  // Auto-fetch readiness on mount if not cached
+  // Auto-fetch readiness on mount if not cached or stale (older than today)
   useEffect(() => {
-    if (score != null && interpretation) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const computedDate = race.readiness_computed_at?.slice(0, 10);
+    const isStale = !computedDate || computedDate < today;
+
+    if (score != null && interpretation && !isStale) return;
     let cancelled = false;
 
     setIsLoading(true);

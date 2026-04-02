@@ -58,6 +58,20 @@ export async function syncWellness(
       }
     }
 
+    // Invalidate cached readiness scores on upcoming races
+    if (days.length > 0) {
+      const today = new Date().toISOString().slice(0, 10);
+      await supabase
+        .from("race_events")
+        .update({
+          readiness_score: null,
+          readiness_interpretation: null,
+          readiness_computed_at: null,
+        })
+        .eq("user_id", userId)
+        .gte("race_date", today);
+    }
+
     return { success: true, daysSynced: days.length };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Wellness sync failed";

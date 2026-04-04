@@ -1,5 +1,6 @@
-import type { PacingPlan, AmbitionLevel } from "@/lib/race/types";
+import type { PacingPlan, AmbitionLevel, GpxData } from "@/lib/race/types";
 import { AMBITION_SCALING } from "@/lib/race/types";
+import { recomputePlanTimes, type PhysicsOptions } from "@/lib/pacing/physics";
 
 /**
  * Maximum sustainable % FTP by segment duration.
@@ -21,13 +22,26 @@ function durationCeilingPct(estMin: number): number {
  * higher ambition settings the athlete will simply approach those ceilings
  * more closely; if they exceed them they are overcooking it.
  *
+ * When gpxData and riderWeightKg are provided, segment times are
+ * recomputed from scaled power targets using the physics model instead
+ * of applying a flat time multiplier.
+ *
  * @param ftp  Athlete's FTP in watts.  When provided, capped watts are
- *             re-derived from FTP × cappedPct for maximum accuracy.
+ *             re-derived from FTP x cappedPct for maximum accuracy.
  *             When omitted, proportional re-scaling is used as a fallback.
  */
-export function scalePlan(plan: PacingPlan, ambition: AmbitionLevel, ftp?: number): PacingPlan {
+export function scalePlan(
+  plan: PacingPlan,
+  ambition: AmbitionLevel,
+  ftp?: number,
+  gpxData?: GpxData,
+  riderWeightKg?: number,
+  eventType?: string,
+  physicsOptions?: PhysicsOptions,
+): PacingPlan {
   const { power, time } = AMBITION_SCALING[ambition];
-  return {
+
+  const scaled: PacingPlan = {
     overallTargetNpW: Math.round(plan.overallTargetNpW * power),
     estimatedFinishTimeMin: Math.round(plan.estimatedFinishTimeMin * time),
     strategy: plan.strategy,
@@ -38,13 +52,10 @@ export function scalePlan(plan: PacingPlan, ambition: AmbitionLevel, ftp?: numbe
 
       let cappedW: number;
       if (cappedPct === scaledPct) {
-        // No ceiling applied — use direct watt scaling for precision
         cappedW = Math.round(seg.targetPowerW * power);
       } else if (ftp) {
-        // Ceiling applied — derive watts from FTP for accuracy
         cappedW = Math.round(ftp * cappedPct / 100);
       } else {
-        // Ceiling applied, no FTP — proportional re-scaling from original
         cappedW = Math.round(seg.targetPowerW * (cappedPct / (seg.targetPowerPercent || 1)));
       }
 
@@ -53,8 +64,14 @@ export function scalePlan(plan: PacingPlan, ambition: AmbitionLevel, ftp?: numbe
         targetPowerW: cappedW,
         targetPowerPercent: cappedPct,
         estimatedTimeMin: Math.round(seg.estimatedTimeMin * time),
-        // HR fields kept as hard ceilings — not scaled with power
       };
     }),
   };
+
+  // Recompute times from physics if we have the data
+  if (gpxData && riderWeightKg) {
+    return recomputePlanTimes(scaled, gpxData, riderWeightKg, eventType ?? "other", physicsOptions);
+  }
+
+  return scaled;
 }

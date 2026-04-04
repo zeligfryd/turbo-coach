@@ -6,6 +6,7 @@ import type { GpxData } from "@/lib/race/types";
 import type { PowerProfile } from "@/lib/power/types";
 import { resolveFtp, buildPacingPrompt } from "@/lib/pacing/prompt";
 import { parsePacingResponse } from "@/lib/pacing/parse";
+import { recomputePlanTimes } from "@/lib/pacing/physics";
 import { buildHrZones } from "@/lib/pacing/hr-zones";
 import { checkRateLimit } from "@/lib/api/rate-limit";
 
@@ -118,6 +119,9 @@ export async function POST(request: Request) {
       }
     }
     if (!plan) throw lastError ?? new Error("Failed to generate pacing plan");
+
+    // Replace LLM time estimates with physics-based calculations
+    plan = recomputePlanTimes(plan, gpxData, weight ?? 75, race.event_type);
 
     // Sanity-check overall NP against duration-based ceiling
     const durationH = plan.estimatedFinishTimeMin / 60;

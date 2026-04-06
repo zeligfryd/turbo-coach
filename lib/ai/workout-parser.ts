@@ -18,23 +18,56 @@ export type ExtractedWorkout = z.infer<typeof WorkoutExtractionSchema>;
 
 // ── Prompt ───────────────────────────────────────────────────────────
 
-const buildExtractionPrompt = (description: string) => {
+/**
+ * Replace absolute watt values in the description with % FTP.
+ * LLMs can't do arithmetic reliably, so we pre-compute the conversion
+ * and rewrite the text so the LLM only needs to copy percentages.
+ * "252W" → "80% FTP", "< 170W" → "< 54% FTP", "400W+" → "127%+ FTP"
+ */
+const rewriteWattsAsFtp = (description: string, ftp: number): string => {
+  return description.replace(
+    /(<\s*)?(\d+)\s*W(\+?)/gi,
+    (_match, prefix, watts, plus) => {
+      const pct = Math.round(parseInt(watts) / ftp * 100);
+      return `${prefix ?? ""}${pct}%${plus} FTP`;
+    },
+  );
+};
+
+const buildExtractionPrompt = (description: string, ftp?: number) => {
+  const processedDescription = ftp ? rewriteWattsAsFtp(description, ftp) : description;
+
   return [
     "Convert the following cycling workout description into strict structured JSON.",
     "",
     "Rules:",
-    "- Use FTP-based interval structure compatible with the app.",
-    "- Allowed item types are interval and repeat groups.",
-    "- For interval items, include durationSeconds and intensityPercentStart (and intensityPercentEnd only for ramps).",
-    "- For range prescriptions like '105-120% FTP', use a constant interval at the midpoint (e.g. 113%) unless the text explicitly says ramp/progressive/from-to.",
-    "- For repeat groups, include count and a non-empty intervals array.",
-    "- Convert durations to seconds.",
-    "- category should be one of: recovery, endurance, tempo, sweet_spot, threshold, vo2max, anaerobic, race_simulation, custom.",
-    "- Include tags when clear from the description; otherwise return an empty array.",
-    "- Return only the JSON object, no markdown or explanation.",
+    "- Every interval MUST be wrapped as: { \"type\": \"interval\", \"data\": { \"durationSeconds\": <number>, \"intensityPercentStart\": <number> } }",
+    "- Repeat groups MUST be: { \"type\": \"repeat\", \"data\": { \"count\": <number>, \"intervals\": [ { \"durationSeconds\": <number>, \"intensityPercentStart\": <number> }, ... ] } }",
+    "- intensityPercentStart is the % FTP number from the description. Copy it exactly.",
+    "- Only include intensityPercentEnd when the text explicitly says ramp/progressive/build.",
+    "- For range prescriptions like '105-120% FTP', use a constant interval at the midpoint (e.g. 113%).",
+    "- Convert ALL durations to seconds (e.g. 10 min = 600, 30s = 30).",
+    "- category: one of recovery, endurance, tempo, sweet_spot, threshold, vo2max, anaerobic, race_simulation, custom.",
+    "- Return ONLY the JSON object, no markdown or explanation.",
+    "",
+    "Example output:",
+    '{',
+    '  "name": "Sweet Spot Intervals",',
+    '  "category": "sweet_spot",',
+    '  "description": "4x8min sweet spot with 4min recovery",',
+    '  "tags": ["sweet_spot", "intervals"],',
+    '  "intervals": [',
+    '    { "type": "interval", "data": { "name": "Warmup", "durationSeconds": 600, "intensityPercentStart": 55 } },',
+    '    { "type": "repeat", "data": { "count": 4, "intervals": [',
+    '      { "name": "Sweet Spot", "durationSeconds": 480, "intensityPercentStart": 90 },',
+    '      { "name": "Recovery", "durationSeconds": 240, "intensityPercentStart": 50 }',
+    '    ] } },',
+    '    { "type": "interval", "data": { "name": "Cooldown", "durationSeconds": 300, "intensityPercentStart": 50 } }',
+    '  ]',
+    '}',
     "",
     "Workout description:",
-    description,
+    processedDescription,
   ].join("\n");
 };
 
@@ -118,42 +151,107 @@ const normalizeIntervalIntensity = (interval: {
   return { intensityPercentStart: start, intensityPercentEnd: end };
 };
 
+/**
+ * Extract duration in seconds from an object, trying multiple field names.
+ * LLMs often use "duration", "durationMinutes", "seconds", etc.
+ */
+const extractDurationSeconds = (item: Record<string, unknown>): number | undefined => {
+  const ds = toNumber(item.durationSeconds) ?? toNumber(item.duration_seconds);
+  if (ds != null) return ds;
+
+  const dm = toNumber(item.durationMinutes) ?? toNumber(item.duration_minutes);
+  if (dm != null) return dm * 60;
+
+  const raw = item.duration;
+  if (typeof raw === "number" && raw > 0) return raw;
+  if (typeof raw === "string") {
+    const m = raw.match(/^(\d+(?:\.\d+)?)\s*(s|sec|seconds?|m|min|minutes?|h|hr|hours?)$/i);
+    if (m) {
+      const v = parseFloat(m[1]);
+      const u = m[2].toLowerCase();
+      if (u.startsWith("h")) return v * 3600;
+      if (u.startsWith("m")) return v * 60;
+      return v;
+    }
+  }
+
+  return toNumber(item.seconds) ?? toNumber(item.time) ?? undefined;
+};
+
+/**
+ * Extract intensity % FTP from an object, trying multiple field names.
+ */
+const extractIntensityFields = (item: Record<string, unknown>) => {
+  const start = toNumber(item.intensityPercentStart)
+    ?? toNumber(item.intensity_percent_start)
+    ?? toNumber(item.intensityPercent)
+    ?? toNumber(item.intensity_percent)
+    ?? toNumber(item.intensity)
+    ?? toNumber(item.power_percent)
+    ?? toNumber(item.powerPercent);
+  const end = toNumber(item.intensityPercentEnd)
+    ?? toNumber(item.intensity_percent_end);
+  return { intensityPercentStart: start, intensityPercentEnd: end };
+};
+
+/**
+ * Normalize a single inner interval (inside a repeat group) into WorkoutInterval shape.
+ */
+const normalizeInnerInterval = (interval: unknown): unknown => {
+  if (!isRecord(interval)) return interval;
+  const duration = extractDurationSeconds(interval);
+  const { intensityPercentStart, intensityPercentEnd } = extractIntensityFields(interval);
+  const normalizedIntensity = normalizeIntervalIntensity({
+    name: interval.name,
+    intensityPercentStart,
+    intensityPercentEnd,
+  });
+  return {
+    name: typeof interval.name === "string" ? interval.name : undefined,
+    durationSeconds: duration,
+    intensityPercentStart: normalizedIntensity.intensityPercentStart,
+    intensityPercentEnd: normalizedIntensity.intensityPercentEnd,
+  };
+};
+
 const normalizeIntervalLikeItem = (item: unknown): unknown => {
   if (!isRecord(item)) return item;
 
+  // Already in correct format — pass through
   if (item.type === "interval" && isRecord(item.data)) return item;
   if (item.type === "repeat" && isRecord(item.data)) return item;
 
-  // Common LLM output: raw interval object.
-  if ("durationSeconds" in item) {
-    const normalizedIntensity = normalizeIntervalIntensity(item);
+  // Interval: has a duration field (any naming variant) at top level
+  const duration = extractDurationSeconds(item);
+  if (duration !== undefined) {
+    const { intensityPercentStart, intensityPercentEnd } = extractIntensityFields(item);
+    const normalizedIntensity = normalizeIntervalIntensity({
+      name: item.name,
+      intensityPercentStart,
+      intensityPercentEnd,
+    });
     return {
       type: "interval",
       data: {
         name: typeof item.name === "string" ? item.name : undefined,
-        durationSeconds: item.durationSeconds,
+        durationSeconds: duration,
         intensityPercentStart: normalizedIntensity.intensityPercentStart,
         intensityPercentEnd: normalizedIntensity.intensityPercentEnd,
       },
     };
   }
 
-  // Common LLM output: repeat-like object.
-  if ("count" in item && Array.isArray(item.intervals)) {
+  // Repeat group: has count + intervals/steps array
+  const count = toNumber(item.count) ?? toNumber(item.repeat) ?? toNumber(item.repeats);
+  const innerArray = Array.isArray(item.intervals) ? item.intervals
+    : Array.isArray(item.steps) ? item.steps
+    : null;
+  if (count != null && innerArray) {
     return {
       type: "repeat",
       data: {
-        count: item.count,
-        intervals: item.intervals.map((interval) => {
-          if (!isRecord(interval)) return interval;
-          const normalizedIntensity = normalizeIntervalIntensity(interval);
-          return {
-            name: typeof interval.name === "string" ? interval.name : undefined,
-            durationSeconds: interval.durationSeconds,
-            intensityPercentStart: normalizedIntensity.intensityPercentStart,
-            intensityPercentEnd: normalizedIntensity.intensityPercentEnd,
-          };
-        }),
+        count,
+        intervals: innerArray.map(normalizeInnerInterval),
       },
     };
   }
@@ -212,9 +310,10 @@ const normalizeExtractionCandidate = (value: unknown): unknown => {
 export async function extractWorkoutFromDescription(
   description: string,
   modelOverrides?: RuntimeModelOverrides,
+  ftp?: number,
 ): Promise<ExtractedWorkout> {
   const { models } = resolveModels(modelOverrides);
-  const prompt = buildExtractionPrompt(description.trim());
+  const prompt = buildExtractionPrompt(description.trim(), ftp);
 
   const result = await generateText({
     model: models.workoutExtraction,

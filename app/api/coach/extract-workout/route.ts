@@ -27,12 +27,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
+    // Fetch athlete FTP so the extraction prompt can convert absolute watts to % FTP
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("ftp")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
     const isDev = process.env.NODE_ENV === "development";
     const modelOverrides = isDev ? sanitizeModelOverrides(payload.data.modelOverrides) : undefined;
 
     const extracted = await extractWorkoutFromDescription(
       payload.data.description,
       modelOverrides,
+      profile?.ftp ?? undefined,
     );
 
     return NextResponse.json(extracted);

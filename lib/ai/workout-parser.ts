@@ -25,13 +25,24 @@ export type ExtractedWorkout = z.infer<typeof WorkoutExtractionSchema>;
  * "252W" → "80% FTP", "< 170W" → "< 54% FTP", "400W+" → "127%+ FTP"
  */
 const rewriteWattsAsFtp = (description: string, ftp: number): string => {
-  return description.replace(
+  // First pass: replace range patterns like "155–200W" or "155-200W"
+  let result = description.replace(
+    /(\d+)\s*[–\-]\s*(\d+)\s*W/gi,
+    (_match, lo, hi) => {
+      const loPct = Math.round(parseInt(lo) / ftp * 100);
+      const hiPct = Math.round(parseInt(hi) / ftp * 100);
+      return `${loPct}–${hiPct}% FTP`;
+    },
+  );
+  // Second pass: replace remaining standalone watt values like "252W", "< 170W", "400W+"
+  result = result.replace(
     /(<\s*)?(\d+)\s*W(\+?)/gi,
     (_match, prefix, watts, plus) => {
       const pct = Math.round(parseInt(watts) / ftp * 100);
       return `${prefix ?? ""}${pct}%${plus} FTP`;
     },
   );
+  return result;
 };
 
 const buildExtractionPrompt = (description: string, ftp?: number) => {
@@ -48,6 +59,8 @@ const buildExtractionPrompt = (description: string, ftp?: number) => {
     "- For range prescriptions like '105-120% FTP', use a constant interval at the midpoint (e.g. 113%).",
     "- Convert ALL durations to seconds (e.g. 10 min = 600, 30s = 30).",
     "- category: one of recovery, endurance, tempo, sweet_spot, threshold, vo2max, anaerobic, race_simulation, custom.",
+    "- description: A short summary of the workout. If the text contains coaching notes, tactical instructions, or complex ride directives (e.g. 'surge every 20 min', 'push on climbs'), include them in the description so the athlete can read them.",
+    "- If a long section has embedded complex instructions (surges, conditional efforts, terrain-dependent cues), represent it as ONE steady interval at the base/average power for the full duration. Put the detail in the description field.",
     "- Return ONLY the JSON object, no markdown or explanation.",
     "",
     "Example output:",
@@ -63,6 +76,23 @@ const buildExtractionPrompt = (description: string, ftp?: number) => {
     '      { "name": "Recovery", "durationSeconds": 240, "intensityPercentStart": 50 }',
     '    ] } },',
     '    { "type": "interval", "data": { "name": "Cooldown", "durationSeconds": 300, "intensityPercentStart": 50 } }',
+    '  ]',
+    '}',
+    "",
+    "Example with complex ride section (simplified to one interval, detail in description):",
+    '{',
+    '  "name": "Race Simulation Long Ride",',
+    '  "category": "race_simulation",',
+    '  "description": "2h30 Z2 endurance with 30s surge at 130% FTP every 20 min to simulate pack accelerations. On climbs push to Z4, recover on descents. Final 20 min: 3x1 min at 115% FTP w/ 3 min recovery.",',
+    '  "tags": ["race_simulation", "endurance"],',
+    '  "intervals": [',
+    '    { "type": "interval", "data": { "name": "Warmup", "durationSeconds": 1200, "intensityPercentStart": 60 } },',
+    '    { "type": "interval", "data": { "name": "Z2 Base with surges", "durationSeconds": 9000, "intensityPercentStart": 67 } },',
+    '    { "type": "repeat", "data": { "count": 3, "intervals": [',
+    '      { "name": "Attack", "durationSeconds": 60, "intensityPercentStart": 115 },',
+    '      { "name": "Recovery", "durationSeconds": 180, "intensityPercentStart": 55 }',
+    '    ] } },',
+    '    { "type": "interval", "data": { "name": "Cooldown", "durationSeconds": 1200, "intensityPercentStart": 50 } }',
     '  ]',
     '}',
     "",

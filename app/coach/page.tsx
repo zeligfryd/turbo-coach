@@ -100,6 +100,8 @@ export default function CoachPage() {
         setConversations((prev) =>
           prev.map((c) => (c.id === id ? { ...c, unread_count: 0 } : c))
         );
+        // Notify the main sidebar to refresh its badge
+        window.dispatchEvent(new Event("coach-unread-changed"));
       } else {
         setFirstUnreadIndex(null);
       }

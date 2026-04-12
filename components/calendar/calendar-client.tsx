@@ -20,9 +20,9 @@ import {
 } from "./utils";
 import type { ScheduledWorkout, CalendarActivity, CalendarRaceEvent } from "./types";
 import type { Workout } from "@/lib/workouts/types";
-import { getScheduledWorkouts, getCalendarActivities, getCalendarWellness, getUserFtp, removeScheduledWorkout, scheduleWorkout } from "@/app/calendar/actions";
+import { getScheduledWorkouts, getCalendarActivities, getCalendarWellness, getUserFtp, removeScheduledWorkout, rescheduleWorkout, scheduleWorkout } from "@/app/calendar/actions";
 import type { CalendarWellness } from "@/app/calendar/actions";
-import { getRaceEvents } from "@/app/race/actions";
+import { getRaceEvents, updateRaceEvent } from "@/app/race/actions";
 import { WorkoutDetailModal } from "@/components/workouts/workout-detail-modal";
 import { RaceEventFormModal } from "./race-event-form";
 
@@ -370,6 +370,16 @@ export function CalendarClient() {
     fetchScheduled();
   };
 
+  const handleRescheduleWorkout = async (scheduledWorkoutId: string, newDate: string) => {
+    await rescheduleWorkout(scheduledWorkoutId, newDate);
+    fetchScheduled();
+  };
+
+  const handleRescheduleRace = async (raceId: string, newDate: string) => {
+    await updateRaceEvent(raceId, { race_date: newDate });
+    fetchScheduled();
+  };
+
   const handleSchedule = async (workoutId: string) => {
     if (!selectedDateKey) return;
     const targetDateKey = selectedDateKey;
@@ -414,6 +424,8 @@ export function CalendarClient() {
             racesByDate={racesByDate}
             onAdd={handleAdd}
             onRemove={handleRemove}
+            onRescheduleWorkout={handleRescheduleWorkout}
+            onRescheduleRace={handleRescheduleRace}
             onWorkoutClick={setSelectedWorkout}
             onActivityClick={handleActivityClick}
             onRaceClick={handleRaceClick}

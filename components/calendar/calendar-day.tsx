@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Plus, X, CheckCircle, Trash2, Flag } from "lucide-react";
+import { Plus, X, CheckCircle, Trash2, Flag, GripVertical } from "lucide-react";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { MiniIntensityChart } from "@/components/workouts/mini-intensity-chart";
 import { flattenBuilderItems } from "@/lib/workouts/utils";
 import { EVENT_TYPE_LABELS } from "@/lib/race/types";
@@ -12,6 +13,139 @@ import {
   formatHoursFromSeconds,
   getWorkoutMetrics,
 } from "./utils";
+
+// ── Draggable cards ─────────────────────────────────────────────────
+
+function DraggableWorkoutCard({
+  item,
+  onWorkoutClick,
+  confirmingId,
+  onConfirm,
+  onRemove,
+}: {
+  item: ScheduledWorkout;
+  onWorkoutClick?: (workout: Workout) => void;
+  confirmingId: string | null;
+  onConfirm: (id: string | null) => void;
+  onRemove: (id: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `workout:${item.id}`,
+  });
+  const metrics = getWorkoutMetrics(item.workout);
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`rounded-md bg-background px-1.5 py-1 text-xs flex items-start justify-between gap-1.5 shadow-sm cursor-pointer hover:ring-1 hover:ring-primary/40 transition-shadow ${isDragging ? "opacity-30" : ""}`}
+      onClick={() => onWorkoutClick?.(item.workout)}
+    >
+      <div
+        className="flex items-center self-stretch cursor-grab active:cursor-grabbing touch-none text-muted-foreground/50 hover:text-muted-foreground"
+        {...listeners}
+        {...attributes}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <GripVertical className="h-3 w-3" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[11px] font-bold leading-tight">{item.workout.name}</div>
+        <div className="text-[10px] text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis">
+          {formatHoursFromSeconds(metrics.durationSeconds)} • TSS {metrics.tss}
+        </div>
+        <div className="mt-1">
+          <MiniIntensityChart intervals={flattenBuilderItems(item.workout.intervals)} height={12} />
+        </div>
+      </div>
+      {confirmingId === item.id ? (
+        <button
+          onClick={(e) => { e.stopPropagation(); onConfirm(null); onRemove(item.id); }}
+          className="p-1 rounded bg-destructive/10 text-destructive hover:bg-destructive/20"
+          aria-label="Confirm remove"
+          onBlur={() => onConfirm(null)}
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      ) : (
+        <button
+          onClick={(e) => { e.stopPropagation(); onConfirm(item.id); }}
+          className="p-1 rounded hover:bg-accent text-muted-foreground"
+          aria-label="Remove workout"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function DraggableRaceCard({
+  race,
+  onRaceClick,
+}: {
+  race: CalendarRaceEvent;
+  onRaceClick?: (raceId: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `race:${race.id}`,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`rounded-md bg-red-500/10 border border-red-500/20 px-1.5 py-1 text-xs shadow-sm cursor-pointer hover:ring-1 hover:ring-red-500/40 transition-shadow ${isDragging ? "opacity-30" : ""}`}
+      onClick={() => onRaceClick?.(race.id)}
+    >
+      <div className="flex items-center gap-1 min-w-0">
+        <div
+          className="flex items-center cursor-grab active:cursor-grabbing touch-none text-muted-foreground/50 hover:text-muted-foreground"
+          {...listeners}
+          {...attributes}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <GripVertical className="h-3 w-3" />
+        </div>
+        <Flag className="h-3 w-3 text-red-600 shrink-0" />
+        <span className="truncate text-[11px] font-bold leading-tight text-red-700 dark:text-red-400">
+          {race.name}
+        </span>
+      </div>
+      <div className="text-[10px] text-muted-foreground mt-0.5 pl-4">
+        {EVENT_TYPE_LABELS[race.event_type as EventType] ?? race.event_type}
+        {race.distance_km != null && ` · ${race.distance_km}km`}
+      </div>
+    </div>
+  );
+}
+
+// ── Overlay previews (non-interactive copies shown while dragging) ───
+
+export function WorkoutDragOverlay({ item }: { item: ScheduledWorkout }) {
+  const metrics = getWorkoutMetrics(item.workout);
+  return (
+    <div className="rounded-md bg-background px-1.5 py-1 text-xs shadow-lg ring-2 ring-primary/50 w-[180px] opacity-90">
+      <div className="truncate text-[11px] font-bold leading-tight">{item.workout.name}</div>
+      <div className="text-[10px] text-muted-foreground">
+        {formatHoursFromSeconds(metrics.durationSeconds)} • TSS {metrics.tss}
+      </div>
+    </div>
+  );
+}
+
+export function RaceDragOverlay({ race }: { race: CalendarRaceEvent }) {
+  return (
+    <div className="rounded-md bg-red-500/10 border border-red-500/20 px-1.5 py-1 text-xs shadow-lg ring-2 ring-red-500/50 w-[180px] opacity-90">
+      <div className="flex items-center gap-1">
+        <Flag className="h-3 w-3 text-red-600 shrink-0" />
+        <span className="truncate text-[11px] font-bold leading-tight text-red-700 dark:text-red-400">
+          {race.name}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ── Day cell ────────────────────────────────────────────────────────
 
 interface CalendarDayProps {
   date: Date;
@@ -31,9 +165,14 @@ export function CalendarDay({ date, workouts, activities = [], races = [], onAdd
   const { monthPrefix, dayOfMonth } = getCalendarDayLabelParts(date);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
+  const { isOver, setNodeRef: setDropRef } = useDroppable({
+    id: `day:${dateKey}`,
+  });
+
   return (
     <div
-      className="group relative rounded-lg bg-card shadow-sm px-2 py-2 min-h-[120px] flex flex-col gap-2 text-foreground"
+      ref={setDropRef}
+      className={`group relative rounded-lg bg-card shadow-sm px-2 py-2 min-h-[120px] flex flex-col gap-2 text-foreground transition-colors ${isOver ? "ring-2 ring-primary/50 bg-primary/5" : ""}`}
       data-day-date={dateKey}
     >
       <div className="flex items-start justify-between">
@@ -67,44 +206,16 @@ export function CalendarDay({ date, workouts, activities = [], races = [], onAdd
       </div>
 
       <div className="flex flex-col gap-2">
-        {workouts.map((item) => {
-          const metrics = getWorkoutMetrics(item.workout);
-          return (
-            <div
-              key={item.id}
-              className="rounded-md bg-background px-1.5 py-1 text-xs flex items-start justify-between gap-1.5 shadow-sm cursor-pointer hover:ring-1 hover:ring-primary/40 transition-shadow"
-              onClick={() => onWorkoutClick?.(item.workout)}
-            >
-              <div className="min-w-0">
-                <div className="truncate text-[11px] font-bold leading-tight">{item.workout.name}</div>
-                <div className="text-[10px] text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis">
-                  {formatHoursFromSeconds(metrics.durationSeconds)} • TSS {metrics.tss}
-                </div>
-                <div className="mt-1">
-                  <MiniIntensityChart intervals={flattenBuilderItems(item.workout.intervals)} height={12} />
-                </div>
-              </div>
-              {confirmingId === item.id ? (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setConfirmingId(null); onRemove(item.id); }}
-                  className="p-1 rounded bg-destructive/10 text-destructive hover:bg-destructive/20"
-                  aria-label="Confirm remove"
-                  onBlur={() => setConfirmingId(null)}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              ) : (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setConfirmingId(item.id); }}
-                  className="p-1 rounded hover:bg-accent text-muted-foreground"
-                  aria-label="Remove workout"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              )}
-            </div>
-          );
-        })}
+        {workouts.map((item) => (
+          <DraggableWorkoutCard
+            key={item.id}
+            item={item}
+            onWorkoutClick={onWorkoutClick}
+            confirmingId={confirmingId}
+            onConfirm={setConfirmingId}
+            onRemove={onRemove}
+          />
+        ))}
 
         {activities.map((activity) => {
           const durationStr = activity.moving_time ? formatHoursFromSeconds(activity.moving_time) : null;
@@ -146,22 +257,7 @@ export function CalendarDay({ date, workouts, activities = [], races = [], onAdd
         })}
 
         {races.map((race) => (
-          <div
-            key={race.id}
-            className="rounded-md bg-red-500/10 border border-red-500/20 px-1.5 py-1 text-xs shadow-sm cursor-pointer hover:ring-1 hover:ring-red-500/40 transition-shadow"
-            onClick={() => onRaceClick?.(race.id)}
-          >
-            <div className="flex items-center gap-1 min-w-0">
-              <Flag className="h-3 w-3 text-red-600 shrink-0" />
-              <span className="truncate text-[11px] font-bold leading-tight text-red-700 dark:text-red-400">
-                {race.name}
-              </span>
-            </div>
-            <div className="text-[10px] text-muted-foreground mt-0.5">
-              {EVENT_TYPE_LABELS[race.event_type as EventType] ?? race.event_type}
-              {race.distance_km != null && ` · ${race.distance_km}km`}
-            </div>
-          </div>
+          <DraggableRaceCard key={race.id} race={race} onRaceClick={onRaceClick} />
         ))}
 
         {workouts.length === 0 && activities.length === 0 && races.length === 0 && (

@@ -116,6 +116,39 @@ export async function scheduleWorkout(workoutId: string, scheduledDate: string) 
   }
 }
 
+export async function rescheduleWorkout(scheduledWorkoutId: string, newDate: string) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return { success: false, error: "Not authenticated" };
+    }
+
+    const { error } = await supabase
+      .from("scheduled_workouts")
+      .update({ scheduled_date: newDate })
+      .eq("id", scheduledWorkoutId)
+      .eq("user_id", user.id);
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath("/calendar");
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
 export async function removeScheduledWorkout(scheduledWorkoutId: string) {
   try {
     const supabase = await createClient();

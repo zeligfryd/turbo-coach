@@ -32,9 +32,12 @@ export function Sidebar() {
     setIsMobileOpen(false);
   }, [pathname]);
 
-  // Fetch coach unread count on mount and route changes
+  // Fetch coach unread count on mount, route changes, and when a conversation is marked as read
   useEffect(() => {
-    getCoachUnreadCount().then(setCoachUnread).catch(() => setCoachUnread(0));
+    const refresh = () => getCoachUnreadCount().then(setCoachUnread).catch(() => setCoachUnread(0));
+    refresh();
+    window.addEventListener("coach-unread-changed", refresh);
+    return () => window.removeEventListener("coach-unread-changed", refresh);
   }, [pathname]);
 
   // Save collapsed state to localStorage (desktop only)

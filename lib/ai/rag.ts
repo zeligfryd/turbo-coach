@@ -160,7 +160,7 @@ export async function retrieveKnowledge(
   const supabase = await createClient();
   const matchCount = options?.matchCount ?? 5;
   const matchThreshold = options?.matchThreshold ?? 0.45;
-  const maxChunks = options?.maxChunks ?? 8;
+  const maxChunks = options?.maxChunks ?? 4;
 
   const results = await Promise.allSettled(
     queries.map(async (query, i) => {

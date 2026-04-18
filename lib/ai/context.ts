@@ -278,47 +278,71 @@ export async function loadCoachUserContext(userId: string): Promise<CoachUserCon
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const dayName = (dateStr: string) => DAY_NAMES[new Date(dateStr + "T00:00:00Z").getUTCDay()];
 
-const formatRecentActivities = (activities: RecentActivity[]): string => {
+const formatRecentActivitiesSummary = (activities: RecentActivity[]): string => {
   if (activities.length === 0) {
     return "Recent actual activities: none synced.";
   }
 
-  const lines = activities.map((a) => {
-    const duration = a.moving_time ? `${Math.round(a.moving_time / 60)}m` : "n/a";
-    const load =
-      a.icu_training_load != null ? `Load ${Math.round(a.icu_training_load)}` : "";
-    const power = a.avg_power != null ? `avg ${a.avg_power}W` : "";
+  const totalTss = activities.reduce((s, a) => s + (a.icu_training_load ?? 0), 0);
+  const totalMin = activities.reduce((s, a) => s + (a.moving_time ?? 0), 0);
+  const totalKm = activities.reduce((s, a) => s + (a.distance ?? 0), 0) / 1000;
+  const totalElev = activities.reduce((s, a) => s + (a.elevation_gain ?? 0), 0);
+  const withPower = activities.filter((a) => a.normalized_power != null);
+  const avgNp = withPower.length > 0
+    ? Math.round(withPower.reduce((s, a) => s + a.normalized_power!, 0) / withPower.length)
+    : null;
+
+  // Show last 5 activities by name/date for quick reference
+  const recent = activities.slice(0, 5).map((a) => {
+    const duration = a.moving_time ? `${Math.round(a.moving_time / 60)}m` : "";
+    const load = a.icu_training_load != null ? `TSS ${Math.round(a.icu_training_load)}` : "";
     const np = a.normalized_power != null ? `NP ${a.normalized_power}W` : "";
-    const hr = a.avg_hr != null ? `${a.avg_hr}bpm` : "";
-    const maxHr = a.max_hr != null ? `max ${a.max_hr}bpm` : "";
-    const cadence = a.avg_cadence != null ? `${a.avg_cadence}rpm` : "";
-    const dist = a.distance != null ? `${(a.distance / 1000).toFixed(1)}km` : "";
-    const elev = a.elevation_gain != null ? `${Math.round(a.elevation_gain)}m elev` : "";
-    const cal = a.calories != null ? `${a.calories}kcal` : "";
-    const metrics = [duration, dist, elev, load, power, np, hr, maxHr, cadence, cal].filter(Boolean).join(", ");
-    return `- ${a.activity_date} (${dayName(a.activity_date)}): ${a.name ?? a.type ?? "Activity"} (${metrics})`;
+    const parts = [duration, load, np].filter(Boolean).join(", ");
+    return `- ${a.activity_date} (${dayName(a.activity_date)}): ${a.name ?? a.type ?? "Activity"} (${parts})`;
   });
 
-  return `Recent actual activities:\n${lines.join("\n")}`;
+  const summaryLine = `Recent rides (last 14d): ${activities.length} rides, ${(totalMin / 3600).toFixed(1)}h, ${Math.round(totalTss)} TSS, ${totalKm.toFixed(0)}km, ${Math.round(totalElev)}m elev${avgNp ? `, avg NP ${avgNp}W` : ""}`;
+
+  return [
+    summaryLine,
+    `Last ${recent.length} activities:`,
+    ...recent,
+    activities.length > 5 ? `  (+ ${activities.length - 5} more — use searchActivities tool for full details)` : "",
+  ].filter(Boolean).join("\n");
 };
 
-const formatWellnessTrend = (days: WellnessDay[]): string => {
+const formatWellnessSummary = (days: WellnessDay[]): string => {
   if (days.length === 0) {
     return "Fitness/fatigue trend: no wellness data synced.";
   }
 
-  const lines = days.map((d) => {
-    const ctl = d.ctl != null ? `CTL ${Math.round(d.ctl)}` : "";
-    const atl = d.atl != null ? `ATL ${Math.round(d.atl)}` : "";
-    const tsb = d.tsb != null ? `TSB ${Math.round(d.tsb)}` : "";
-    const ramp = d.ramp_rate != null ? `ramp ${d.ramp_rate.toFixed(1)}` : "";
-    const restHr = d.resting_hr != null ? `RHR ${d.resting_hr}` : "";
-    const hrv = d.hrv != null ? `HRV ${d.hrv}` : "";
-    const parts = [ctl, atl, tsb, ramp, restHr, hrv].filter(Boolean).join(", ");
-    return `- ${d.date} (${dayName(d.date)}): ${parts}`;
-  });
+  // Show latest values + 7-day-ago values for trend
+  const latest = days[0];
+  const weekAgo = days.find((d, i) => i >= 6) ?? days[days.length - 1];
 
-  return `Fitness/fatigue trend (last 14 days):\n${lines.join("\n")}`;
+  const ctl = latest.ctl != null ? `CTL ${Math.round(latest.ctl)}` : "";
+  const atl = latest.atl != null ? `ATL ${Math.round(latest.atl)}` : "";
+  const tsb = latest.tsb != null ? `TSB ${Math.round(latest.tsb)}` : "";
+  const ramp = latest.ramp_rate != null ? `ramp ${latest.ramp_rate.toFixed(1)}` : "";
+  const restHr = latest.resting_hr != null ? `RHR ${latest.resting_hr}` : "";
+  const hrv = latest.hrv != null ? `HRV ${latest.hrv}` : "";
+  const parts = [ctl, atl, tsb, ramp, restHr, hrv].filter(Boolean).join(", ");
+
+  const lines = [`Current fitness (${latest.date}): ${parts}`];
+
+  if (weekAgo !== latest && weekAgo.ctl != null && latest.ctl != null) {
+    const ctlDelta = Math.round(latest.ctl - weekAgo.ctl);
+    const tsbDelta = weekAgo.tsb != null && latest.tsb != null ? Math.round(latest.tsb - weekAgo.tsb) : null;
+    const trend = [
+      `CTL ${ctlDelta >= 0 ? "+" : ""}${ctlDelta}`,
+      tsbDelta != null ? `TSB ${tsbDelta >= 0 ? "+" : ""}${tsbDelta}` : "",
+    ].filter(Boolean).join(", ");
+    lines.push(`7-day trend: ${trend}`);
+  }
+
+  lines.push("Use getWellnessTrend tool for full daily breakdown.");
+
+  return lines.join("\n");
 };
 
 const formatUpcomingRaces = (races: UpcomingRace[]): string => {
@@ -373,8 +397,8 @@ export const formatCoachUserContext = (context: CoachUserContext): string => {
     formatPowerProfile(context.powerProfile),
     formatScheduledWorkouts(context.recentScheduledWorkouts, "Recent"),
     formatScheduledWorkouts(context.upcomingScheduledWorkouts, "Upcoming"),
-    formatRecentActivities(context.recentActivities),
-    formatWellnessTrend(context.wellnessTrend),
+    formatRecentActivitiesSummary(context.recentActivities),
+    formatWellnessSummary(context.wellnessTrend),
     formatUpcomingRaces(context.upcomingRaces),
   ].join("\n\n");
 };

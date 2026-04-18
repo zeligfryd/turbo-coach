@@ -122,6 +122,55 @@ const sanitizeRaceContext = (value: unknown): string | null => {
   return lines.join("\n");
 };
 
+/**
+ * Compress conversation history to stay within token limits.
+ * - Keeps the last KEEP_RECENT messages in full.
+ * - For older messages, truncates large tool results to a summary.
+ * - Drops messages beyond MAX_HISTORY to bound total context size.
+ */
+const MAX_HISTORY = 40; // ~20 exchanges max
+const KEEP_RECENT = 14; // Last ~7 exchanges kept in full
+const TOOL_RESULT_TRUNCATE = 300; // chars — threshold for compressing old tool results
+
+function compactMessages(messages: UIMessage[]): UIMessage[] {
+  // Drop very old messages entirely
+  const trimmed = messages.length > MAX_HISTORY
+    ? messages.slice(-MAX_HISTORY)
+    : messages;
+
+  if (trimmed.length <= KEEP_RECENT) return trimmed;
+
+  return trimmed.map((msg, i) => {
+    const isOld = i < trimmed.length - KEEP_RECENT;
+    if (!isOld || !msg.parts) return msg;
+
+    // Compress tool output in old messages to save tokens
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const compactedParts = (msg.parts as any[]).map((part: any) => {
+      // Tool parts have type "tool-*" and state "output-available" with an output field
+      const partType = part.type as string;
+      if (!partType.startsWith("tool-") && partType !== "dynamic-tool") return part;
+      if (part.state !== "output-available" || part.output == null) return part;
+
+      const outputStr = typeof part.output === "string" ? part.output : JSON.stringify(part.output);
+      if (outputStr.length <= TOOL_RESULT_TRUNCATE) return part;
+
+      const output = part.output as Record<string, unknown>;
+      const count = typeof output === "object" && output !== null
+        ? (output.count ?? (Array.isArray(output) ? output.length : null))
+        : null;
+      const toolName = part.toolName ?? partType.replace("tool-", "");
+      const summary = count != null
+        ? `[${toolName}: returned ${count} items — details truncated from history]`
+        : `[${toolName}: returned data (${outputStr.length} chars) — truncated from history]`;
+
+      return { ...part, output: summary };
+    });
+
+    return { ...msg, parts: compactedParts };
+  });
+}
+
 const ENFORCED_WORKOUT_TAG_RULES = `
 CRITICAL OUTPUT FORMAT RULES:
 - If your answer includes any concrete workout prescription (single workout OR weekly/day-by-day plan with intervals/intensities), you MUST wrap each prescribed workout block in <workout>...</workout>.
@@ -189,7 +238,7 @@ export async function POST(request: Request) {
       ENFORCED_WORKOUT_TAG_RULES,
     ].join("\n\n");
 
-    const modelMessages = await convertToModelMessages(messages);
+    const modelMessages = await convertToModelMessages(compactMessages(messages));
 
     if (LOG_AI_STEPS) {
       console.log("[AI Config] RAG", {

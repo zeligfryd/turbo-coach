@@ -124,13 +124,15 @@ const sanitizeRaceContext = (value: unknown): string | null => {
 
 /**
  * Compress conversation history to stay within token limits.
- * - Keeps the last KEEP_RECENT messages in full.
- * - For older messages, truncates large tool results to a summary.
- * - Drops messages beyond MAX_HISTORY to bound total context size.
+ * - Drops messages beyond MAX_HISTORY.
+ * - Truncates ALL large tool results — the coach already processed them and
+ *   wrote a text response, so the raw JSON is dead weight on subsequent turns.
+ *   (The current step's tool results are added fresh by the AI SDK, not from history.)
+ * - Keeps the last KEEP_RECENT text messages in full (tool outputs still compressed).
+ * - For older text messages, drops them entirely beyond MAX_HISTORY.
  */
 const MAX_HISTORY = 40; // ~20 exchanges max
-const KEEP_RECENT = 14; // Last ~7 exchanges kept in full
-const TOOL_RESULT_TRUNCATE = 300; // chars — threshold for compressing old tool results
+const TOOL_RESULT_TRUNCATE = 200; // chars — compress any tool output larger than this
 
 function compactMessages(messages: UIMessage[]): UIMessage[] {
   // Drop very old messages entirely
@@ -138,16 +140,12 @@ function compactMessages(messages: UIMessage[]): UIMessage[] {
     ? messages.slice(-MAX_HISTORY)
     : messages;
 
-  if (trimmed.length <= KEEP_RECENT) return trimmed;
+  return trimmed.map((msg) => {
+    if (!msg.parts) return msg;
 
-  return trimmed.map((msg, i) => {
-    const isOld = i < trimmed.length - KEEP_RECENT;
-    if (!isOld || !msg.parts) return msg;
-
-    // Compress tool output in old messages to save tokens
+    // Compress tool output in ALL messages — past tool results are redundant
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const compactedParts = (msg.parts as any[]).map((part: any) => {
-      // Tool parts have type "tool-*" and state "output-available" with an output field
       const partType = part.type as string;
       if (!partType.startsWith("tool-") && partType !== "dynamic-tool") return part;
       if (part.state !== "output-available" || part.output == null) return part;
@@ -161,8 +159,8 @@ function compactMessages(messages: UIMessage[]): UIMessage[] {
         : null;
       const toolName = part.toolName ?? partType.replace("tool-", "");
       const summary = count != null
-        ? `[${toolName}: returned ${count} items — details truncated from history]`
-        : `[${toolName}: returned data (${outputStr.length} chars) — truncated from history]`;
+        ? `[${toolName}: returned ${count} items — truncated]`
+        : `[${toolName}: ${outputStr.length} chars — truncated]`;
 
       return { ...part, output: summary };
     });
@@ -267,7 +265,14 @@ export async function POST(request: Request) {
       system: systemPrompt,
       messages: modelMessages,
       tools,
+      maxRetries: 1,
       stopWhen: stepCountIs(5),
+      onError: ({ error }) => {
+        const msg = error instanceof Error ? error.message : String(error);
+        if (msg.includes("rate limit") || msg.includes("429")) {
+          console.warn("[Coach] Rate limit hit during streaming step:", msg);
+        }
+      },
     });
 
     if (LOG_AI_STEPS) {
@@ -279,6 +284,13 @@ export async function POST(request: Request) {
     return result.toUIMessageStreamResponse();
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error";
+    const isRateLimit = message.includes("rate limit") || message.includes("429");
+    if (isRateLimit) {
+      return NextResponse.json(
+        { error: "The coach is momentarily busy — please wait a few seconds and try again." },
+        { status: 429 }
+      );
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

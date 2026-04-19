@@ -139,9 +139,8 @@ const formatScheduledWorkouts = (
       typeof workout.avg_intensity_percent === "number"
         ? `${workout.avg_intensity_percent}%`
         : "n/a";
-    const intervalSummary = formatIntervalSummary(workout.intervals);
 
-    return `- ${entry.scheduled_date} (${dayName(entry.scheduled_date)}): ${workout.name} (${workout.category}, ${duration}, avg ${intensity}) | ${intervalSummary}`;
+    return `- ${entry.scheduled_date} (${dayName(entry.scheduled_date)}): ${workout.name} (${workout.category}, ${duration}, avg ${intensity})`;
   });
 
   return `${label} scheduled workouts:\n${lines.join("\n")}`;
@@ -192,7 +191,7 @@ export async function loadCoachUserContext(userId: string): Promise<CoachUserCon
         .gte("scheduled_date", toDate(recentStart))
         .lte("scheduled_date", toDate(today))
         .order("scheduled_date", { ascending: false })
-        .limit(12),
+        .limit(8),
       supabase
         .from("scheduled_workouts")
         .select(
@@ -213,7 +212,7 @@ export async function loadCoachUserContext(userId: string): Promise<CoachUserCon
         .gt("scheduled_date", toDate(today))
         .lte("scheduled_date", toDate(upcomingEnd))
         .order("scheduled_date", { ascending: true })
-        .limit(10),
+        .limit(7),
       supabase
         .from("activities")
         .select(

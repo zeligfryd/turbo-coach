@@ -23,19 +23,14 @@ export function createCoachTools(userId: string) {
 
     searchActivities: tool({
       description:
-        "Search individual activities by date range and/or name. Returns up to 15 rides with per-ride metrics. " +
-        "Use for specific rides or short periods (1-2 weeks). " +
-        "For multi-week/month trends, use getWeeklySummaries instead — it's more efficient and gives the big picture.",
+        "Search activities by date range/name. Max 15 rides. For multi-week trends use getWeeklySummaries.",
       inputSchema: z.object({
         startDate: z.string().describe("Start date in YYYY-MM-DD format"),
         endDate: z.string().describe("End date in YYYY-MM-DD format"),
         nameSearch: z
           .string()
           .optional()
-          .describe(
-            "Optional text to match against activity names (case-insensitive partial match). " +
-            "Use for specific events like 'cyclocross', 'tenerife', 'race', etc."
-          ),
+          .describe("Partial name match (case-insensitive)"),
       }),
       execute: async ({ startDate, endDate, nameSearch }) => {
         const supabase = await createClient();
@@ -87,8 +82,7 @@ export function createCoachTools(userId: string) {
 
     getWellnessTrend: tool({
       description:
-        "Get daily fitness/fatigue trend (CTL, ATL, TSB, ramp rate, resting HR, HRV) for a date range. " +
-        "Use for form, recovery, or readiness questions.",
+        "Daily fitness/fatigue trend (CTL, ATL, TSB, ramp, RHR, HRV) for a date range.",
       inputSchema: z.object({
         startDate: z.string().describe("Start date in YYYY-MM-DD format"),
         endDate: z.string().describe("End date in YYYY-MM-DD format"),
@@ -129,8 +123,7 @@ export function createCoachTools(userId: string) {
 
     getTrainingLoad: tool({
       description:
-        "Aggregate training load totals for a date range (total TSS, rides, hours, km, elevation). " +
-        "Use for a single-number summary of a period. For week-by-week trends, use getWeeklySummaries instead.",
+        "Aggregate load totals (TSS, rides, hours, km, elevation) for a date range.",
       inputSchema: z.object({
         startDate: z.string().describe("Start date in YYYY-MM-DD format"),
         endDate: z.string().describe("End date in YYYY-MM-DD format"),
@@ -175,9 +168,7 @@ export function createCoachTools(userId: string) {
 
     getWeeklySummaries: tool({
       description:
-        "Get per-week training summaries for a date range: rides, TSS, hours, distance, elevation, avg power, and intensity breakdown per week. " +
-        "Best tool for analysing volume/intensity trends over multi-week or multi-month periods. " +
-        "Use this instead of searchActivities when the athlete asks about training patterns, progression, or load trends over weeks/months.",
+        "Per-week summaries (rides, TSS, hours, km, power, intensity distribution). Best for multi-week/month trends.",
       inputSchema: z.object({
         startDate: z.string().describe("Start date YYYY-MM-DD (will be rounded to Monday)"),
         endDate: z.string().describe("End date YYYY-MM-DD"),
@@ -267,8 +258,7 @@ export function createCoachTools(userId: string) {
     // Feature 1: Planned vs Actual (ride_sessions)
     getWorkoutCompliance: tool({
       description:
-        "Compare planned workouts vs actual trainer sessions for a date range. Shows completion, power, duration, TSS. " +
-        "Use for workout adherence or execution quality questions.",
+        "Planned vs actual trainer sessions (completion, power, TSS) for a date range.",
       inputSchema: z.object({
         startDate: z.string().describe("Start date in YYYY-MM-DD format"),
         endDate: z.string().describe("End date in YYYY-MM-DD format"),
@@ -353,8 +343,7 @@ export function createCoachTools(userId: string) {
     // Feature 5: Broader compliance (scheduled vs any activity on that day)
     getComplianceRate: tool({
       description:
-        "Check how many scheduled days had actual riding activity (any source). Broader than getWorkoutCompliance. " +
-        "Use for consistency or training adherence questions.",
+        "Scheduled days vs actual riding days. Broader adherence check.",
       inputSchema: z.object({
         startDate: z.string().describe("Start date in YYYY-MM-DD format"),
         endDate: z.string().describe("End date in YYYY-MM-DD format"),
@@ -405,8 +394,7 @@ export function createCoachTools(userId: string) {
     // Feature 6: Period-over-Period Comparison
     comparePeriods: tool({
       description:
-        "Compare two date ranges side-by-side (TSS, volume, duration, distance, elevation, power, CTL). " +
-        "Use for improvement or period-vs-period questions.",
+        "Compare two date ranges side-by-side (TSS, volume, power, CTL).",
       inputSchema: z.object({
         period1Start: z.string().describe("Start date of first period (YYYY-MM-DD)"),
         period1End: z.string().describe("End date of first period (YYYY-MM-DD)"),
@@ -487,8 +475,7 @@ export function createCoachTools(userId: string) {
     // Feature 8: Peak Powers
     getPeakPowers: tool({
       description:
-        "Get best peak power values across activities in a date range. " +
-        "Use for peak performance, sprint power, or power records questions.",
+        "Best peak power values across activities in a date range.",
       inputSchema: z.object({
         startDate: z.string().describe("Start date in YYYY-MM-DD format"),
         endDate: z.string().describe("End date in YYYY-MM-DD format"),
@@ -541,21 +528,11 @@ export function createCoachTools(userId: string) {
 
     getActivityDetail: tool({
       description:
-        "Fetch detailed analysis of a single activity (intervals, peak powers, advanced metrics). " +
-        "Look up by UUID or by date + name search.",
+        "Detailed single-activity analysis (intervals, peaks, zones). Lookup by ID or date+name.",
       inputSchema: z.object({
-        activityId: z
-          .string()
-          .optional()
-          .describe("UUID of the activity from the database (if known from context)"),
-        date: z
-          .string()
-          .optional()
-          .describe("Activity date YYYY-MM-DD (used if activityId not known)"),
-        nameSearch: z
-          .string()
-          .optional()
-          .describe("Partial name match (used with date to disambiguate)"),
+        activityId: z.string().optional().describe("Activity UUID"),
+        date: z.string().optional().describe("Activity date YYYY-MM-DD"),
+        nameSearch: z.string().optional().describe("Partial name match"),
       }),
       execute: async ({ activityId, date, nameSearch }) => {
         const supabase = await createClient();
@@ -607,8 +584,7 @@ export function createCoachTools(userId: string) {
     // Feature 3a: Schedule an existing workout
     scheduleWorkout: tool({
       description:
-        "Schedule an existing library workout onto a calendar date. Needs workout ID + date. " +
-        "For multiple workouts, use batchScheduleWorkouts.",
+        "Schedule a library workout on a date. For multiple, use batchScheduleWorkouts.",
       inputSchema: z.object({
         workoutId: z.string().describe("UUID of the workout to schedule"),
         date: z.string().describe("Date to schedule in YYYY-MM-DD format"),
@@ -648,8 +624,7 @@ export function createCoachTools(userId: string) {
 
     batchScheduleWorkouts: tool({
       description:
-        "Schedule multiple library workouts onto multiple dates in one call. " +
-        "Use instead of repeated scheduleWorkout calls for multi-day plans.",
+        "Schedule multiple library workouts on multiple dates in one call.",
       inputSchema: z.object({
         workouts: z.array(
           z.object({
@@ -715,8 +690,7 @@ export function createCoachTools(userId: string) {
     // This is a deferred action — the client handles actual creation after the response completes.
     scheduleDescribedWorkout: tool({
       description:
-        "Schedule a NEW workout from <workout> tags onto the calendar. " +
-        "MUST write <workout>...</workout> tags BEFORE calling this tool.",
+        "Schedule a new workout from <workout> tags onto calendar. Tags MUST precede this call.",
       inputSchema: z.object({
         date: z.string().describe("Date to schedule in YYYY-MM-DD format"),
       }),
@@ -727,7 +701,7 @@ export function createCoachTools(userId: string) {
 
     listScheduledWorkouts: tool({
       description:
-        "List scheduled workouts on the calendar for a date range. Check before modifying the schedule.",
+        "List scheduled workouts for a date range.",
       inputSchema: z.object({
         startDate: z.string().describe("Start date YYYY-MM-DD"),
         endDate: z.string().describe("End date YYYY-MM-DD"),
@@ -767,9 +741,9 @@ export function createCoachTools(userId: string) {
 
     removeScheduledWorkout: tool({
       description:
-        "Remove a scheduled workout from the calendar. Use listScheduledWorkouts first to get the ID.",
+        "Remove a scheduled workout from the calendar by ID.",
       inputSchema: z.object({
-        scheduledWorkoutId: z.string().describe("The scheduled_workout_id (NOT the workout_id) from listScheduledWorkouts"),
+        scheduledWorkoutId: z.string().describe("scheduled_workout_id from listScheduledWorkouts"),
       }),
       execute: async ({ scheduledWorkoutId }) => {
         const supabase = await createClient();
@@ -805,17 +779,10 @@ export function createCoachTools(userId: string) {
 
     getRaceEvents: tool({
       description:
-        "Fetch upcoming (or past) race events with pacing plans and route profiles. " +
-        "Use when athlete asks about races without race context in the conversation.",
+        "Fetch race events with pacing plans and route profiles.",
       inputSchema: z.object({
-        name: z
-          .string()
-          .optional()
-          .describe("Partial race name to filter by (case-insensitive). Leave empty to list all upcoming races."),
-        include_past: z
-          .boolean()
-          .optional()
-          .describe("Set true to include past races. Default: only upcoming races."),
+        name: z.string().optional().describe("Partial race name filter"),
+        include_past: z.boolean().optional().describe("Include past races (default: false)"),
       }),
       execute: async ({ name, include_past }) => {
         const supabase = await createClient();
@@ -892,16 +859,10 @@ export function createCoachTools(userId: string) {
 
     searchWorkoutLibrary: tool({
       description:
-        "Search workout library (presets + custom). Use when athlete mentions a workout by name or wants to schedule from library.",
+        "Search workout library (presets + custom) by name or category.",
       inputSchema: z.object({
-        query: z
-          .string()
-          .optional()
-          .describe("Text to search workout names (case-insensitive partial match). Leave empty to list all."),
-        category: z
-          .string()
-          .optional()
-          .describe("Filter by category: 'endurance', 'threshold', 'vo2max', 'sprint', 'recovery', 'sweetspot', etc."),
+        query: z.string().optional().describe("Partial name search"),
+        category: z.string().optional().describe("Filter by category"),
       }),
       execute: async ({ query, category }) => {
         const supabase = await createClient();
@@ -1158,7 +1119,6 @@ function formatActivityDetailForCoach(
   const metrics = compact({
     name: d.name,
     date: d.start_date_local?.slice(0, 10),
-    type: d.type,
     duration_min: durationMin,
     distance_km: distanceKm,
     elevation_m: elevationM,
@@ -1173,15 +1133,10 @@ function formatActivityDetailForCoach(
     ftp: ftp,
     ef: d.icu_efficiency_factor ? Number(d.icu_efficiency_factor.toFixed(2)) : null,
     decoupling_pct: d.decoupling != null ? Number(d.decoupling.toFixed(1)) : null,
-    work_kj: workKj,
-    work_above_ftp_kj: workAboveFtpKj,
-    ctl: d.icu_ctl != null ? Math.round(d.icu_ctl) : null,
-    atl: d.icu_atl != null ? Math.round(d.icu_atl) : null,
-    tsb: tsb,
   });
 
   // Peak powers at key durations (only include durations with data)
-  const keyDurations = [5, 30, 60, 300, 600, 1200, 3600];
+  const keyDurations = [5, 60, 300, 1200, 3600];
   const peaks: Record<string, number> = {};
   for (const sec of keyDurations) {
     const pt = powerCurve.find((p) => p.secs === sec);
@@ -1192,8 +1147,8 @@ function formatActivityDetailForCoach(
     }
   }
 
-  // Intervals summary (max 10)
-  const intervalsFormatted = intervals.slice(0, 10).map((iv) => compact({
+  // Intervals summary (max 8)
+  const intervalsFormatted = intervals.slice(0, 8).map((iv) => compact({
     label: iv.label ?? iv.type ?? "—",
     duration_s: iv.elapsed_time ?? iv.moving_time ?? null,
     avg_power_w: iv.average_watts ?? null,

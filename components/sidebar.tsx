@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
-import { Menu, Home, Bike, User, Calendar, Activity, Bot, BarChart3, TrendingUp } from "lucide-react";
+import { Menu, Home, Bike, User, Calendar, Activity, Bot, BarChart3, TrendingUp, ListChecks } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getCoachUnreadCount } from "@/app/coach/actions";
 
@@ -57,6 +57,7 @@ export function Sidebar() {
     { href: "/dashboard", label: "Home", icon: Home, badge: 0 },
     { href: "/ride", label: "Ride", icon: Activity, badge: 0 },
     { href: "/calendar", label: "Calendar", icon: Calendar, badge: 0 },
+    { href: "/plans", label: "Plans", icon: ListChecks, badge: 0 },
     { href: "/fitness", label: "Fitness", icon: TrendingUp, badge: 0 },
     { href: "/performance", label: "Performance", icon: BarChart3, badge: 0 },
     { href: "/coach", label: "Coach", icon: Bot, badge: coachUnread },

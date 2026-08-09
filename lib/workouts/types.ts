@@ -6,6 +6,11 @@ export const WorkoutIntervalSchema = z.object({
   durationSeconds: z.number().positive(),
   intensityPercentStart: z.number().min(0).optional(),
   intensityPercentEnd: z.number().min(0).optional(),
+  // Optional cadence prescription. When omitted, cadence is "free" — rider
+  // self-selects. Min/max are inclusive bounds in rpm; both must be set
+  // together when present.
+  cadenceRpmMin: z.number().int().min(20).max(200).optional(),
+  cadenceRpmMax: z.number().int().min(20).max(200).optional(),
 });
 
 // New: Repeat group schema
@@ -44,6 +49,11 @@ export const WorkoutSchema = z.object({
   // Metrics (optional for backwards compatibility during migration)
   duration_seconds: z.number().int().optional(),
   avg_intensity_percent: z.number().int().optional(),
+  // Archetype tagging — set by the library seed; used by the matcher to
+  // resolve coach prescriptions to concrete workouts. Null for legacy
+  // presets that predate the archetype taxonomy.
+  archetype: z.string().nullable().optional(),
+  time_in_zone_seconds: z.number().int().nullable().optional(),
 });
 
 // Infer TypeScript types from Zod schemas

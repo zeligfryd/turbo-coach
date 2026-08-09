@@ -51,3 +51,9 @@ Thumbs.db
 
 # Supabase
 .supabase
+
+# Raw book sources for RAG ingestion (large OCR dumps; processed output lives in data/books/)
+*.pdf
+the-cyclists-training-bible.txt
+training-bible-boxes.md
+training_and_racing_with_a_power_meter.txt

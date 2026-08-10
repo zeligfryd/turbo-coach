@@ -21,6 +21,7 @@ import { readTrainingWindow } from "@/lib/training/read";
 import * as service from "@/lib/training/service";
 import type {
   AreaCoverage,
+  BlockTemplateRow,
   CoverageGoalRow,
   PlannedItem,
   RoutineCoverage,
@@ -224,19 +225,30 @@ export async function scheduleRoutineAction(
   return result;
 }
 
-/** Schedule a routine for today and tick it in one go — the "just did it" path. */
+/**
+ * Schedule a routine for today and tick it in one go — the "just did it" path.
+ *
+ * The two writes are not in one transaction, so the block is removed again if
+ * the completion fails. Without that, a failed tick silently leaves a *planned*
+ * session behind: the button reports an error, and the user is then also shown
+ * work they have already done.
+ */
 export async function logRoutineNowAction(routineId: string) {
   const result = await withUser(async (supabase, userId) => {
     const today = new Date().toISOString().slice(0, 10);
     const scheduled = await service.scheduleRoutine(supabase, userId, routineId, today, "am");
     if (!scheduled.success) return { success: false as const, error: scheduled.error };
+
     const done = await service.recordBlockCompletion(supabase, userId, scheduled.data.id, {
       status: "done",
       actualDurationMin: scheduled.data.planned_duration_min,
     });
-    return done.success
-      ? { success: true as const, data: scheduled.data }
-      : { success: false as const, error: done.error };
+
+    if (!done.success) {
+      await service.deleteBlock(supabase, userId, scheduled.data.id);
+      return { success: false as const, error: done.error };
+    }
+    return { success: true as const, data: scheduled.data };
   });
   if (result.success) revalidateTraining();
   return result;
@@ -432,7 +444,7 @@ export async function getWeeklySessionLoad(weeks = 12): Promise<Result<WeekLoad[
   });
 }
 
-export async function getBlockTemplates() {
+export async function getBlockTemplates(): Promise<Result<BlockTemplateRow[]>> {
   return withUser(async (supabase, userId) => {
     const { data, error } = await supabase
       .from("block_template")
@@ -440,7 +452,7 @@ export async function getBlockTemplates() {
       .eq("user_id", userId)
       .order("name");
     if (error) return { success: false, error: error.message };
-    return { success: true, data: data ?? [] };
+    return { success: true, data: (data ?? []) as BlockTemplateRow[] };
   });
 }
 
@@ -519,6 +531,27 @@ export async function clearCompletionAction(blockId: string) {
 export async function createBlockTemplateAction(input: service.BlockTemplateInput) {
   const result = await withUser(async (supabase, userId) => {
     const res = await service.createBlockTemplate(supabase, userId, input);
+    return res.success ? { success: true as const, data: res.data } : { success: false as const, error: res.error };
+  });
+  if (result.success) revalidateTraining();
+  return result;
+}
+
+export async function updateBlockTemplateAction(
+  templateId: string,
+  input: service.BlockTemplateInput,
+) {
+  const result = await withUser(async (supabase, userId) => {
+    const res = await service.updateBlockTemplate(supabase, userId, templateId, input);
+    return res.success ? { success: true as const, data: res.data } : { success: false as const, error: res.error };
+  });
+  if (result.success) revalidateTraining();
+  return result;
+}
+
+export async function deleteBlockTemplateAction(templateId: string) {
+  const result = await withUser(async (supabase, userId) => {
+    const res = await service.deleteBlockTemplate(supabase, userId, templateId);
     return res.success ? { success: true as const, data: res.data } : { success: false as const, error: res.error };
   });
   if (result.success) revalidateTraining();

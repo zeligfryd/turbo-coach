@@ -211,6 +211,54 @@ export async function createBlockTemplate(
   return ok(data as { id: string });
 }
 
+export async function updateBlockTemplate(
+  supabase: SupabaseClient,
+  userId: string,
+  templateId: string,
+  input: BlockTemplateInput,
+): Promise<ServiceResult<{ id: string }>> {
+  const parsed = BlockTemplateInput.safeParse(input);
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid template");
+  const value = parsed.data;
+
+  const { data, error } = await supabase
+    .from("block_template")
+    .update({
+      modality: value.modality,
+      name: value.name.trim(),
+      duration_min: value.durationMin ?? null,
+      area_tags: value.areaTags,
+      default_rpe: value.defaultRpe ?? null,
+    })
+    .eq("id", templateId)
+    .eq("user_id", userId)
+    .select("id")
+    .single();
+
+  if (error) return fail(error.message);
+  return ok(data as { id: string });
+}
+
+/**
+ * Templates are safe to hard-delete: blocks reference them with
+ * `on delete set null`, so past sessions keep their own name, duration and
+ * area tags. Nothing about coverage history depends on the template surviving.
+ */
+export async function deleteBlockTemplate(
+  supabase: SupabaseClient,
+  userId: string,
+  templateId: string,
+): Promise<ServiceResult<{ id: string }>> {
+  const { error } = await supabase
+    .from("block_template")
+    .delete()
+    .eq("id", templateId)
+    .eq("user_id", userId);
+
+  if (error) return fail(error.message);
+  return ok({ id: templateId });
+}
+
 /**
  * Schedule one of the named routines.
  *

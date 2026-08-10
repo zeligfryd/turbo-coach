@@ -20,12 +20,14 @@ import {
 } from "./utils";
 import type { ScheduledWorkout, CalendarActivity, CalendarRaceEvent, DayContent, CalendarHandlers } from "./types";
 import type { Workout } from "@/lib/workouts/types";
-import type { PlannedItem, WeekLoad } from "@/lib/training/types";
+import type { BlockTemplateRow, PlannedItem, WeekLoad } from "@/lib/training/types";
 import { MODALITIES, type Modality } from "@/lib/training/taxonomy";
 import { ModalityFilter } from "@/components/training/modality-filter";
 import { InfoPanel } from "@/components/training/hint";
 import { AddBlockDialog, type NewBlockDraft } from "@/components/training/add-block-dialog";
 import {
+  createBlockTemplateAction,
+  getBlockTemplates,
   getTrainingWindow,
   scheduleBlockAction,
   rescheduleBlockAction,
@@ -73,6 +75,7 @@ export function CalendarClient() {
   const [weekLoads, setWeekLoads] = useState<Record<string, WeekLoad>>({});
   const [activeModalities, setActiveModalities] = useState<Set<Modality>>(() => new Set(MODALITIES));
   const [blockFormDate, setBlockFormDate] = useState<string | null>(null);
+  const [blockTemplates, setBlockTemplates] = useState<BlockTemplateRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
@@ -184,6 +187,9 @@ export function CalendarClient() {
 
   useEffect(() => {
     getUserFtp().then(setUserFtp);
+    getBlockTemplates().then((result) => {
+      if (result.success) setBlockTemplates(result.data);
+    });
   }, []);
 
   const updateViewingMonth = useCallback(() => {
@@ -428,7 +434,19 @@ export function CalendarClient() {
 
   const handleCreateBlock = async (draft: NewBlockDraft) => {
     if (!blockFormDate) return;
-    await scheduleBlockAction({ ...draft, date: blockFormDate });
+    const { saveAsTemplate, ...block } = draft;
+    await scheduleBlockAction({ ...block, date: blockFormDate });
+    if (saveAsTemplate) {
+      await createBlockTemplateAction({
+        modality: block.modality,
+        name: block.name,
+        durationMin: block.plannedDurationMin,
+        defaultRpe: block.plannedRpe,
+        areaTags: block.areaTags,
+      });
+      const refreshed = await getBlockTemplates();
+      if (refreshed.success) setBlockTemplates(refreshed.data);
+    }
     setBlockFormDate(null);
     fetchScheduled();
   };
@@ -608,6 +626,7 @@ export function CalendarClient() {
       <AddBlockDialog
         open={blockFormDate !== null}
         dateLabel={blockFormDate}
+        templates={blockTemplates}
         onClose={() => setBlockFormDate(null)}
         onSubmit={handleCreateBlock}
       />

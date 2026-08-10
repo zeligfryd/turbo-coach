@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { Bookmark } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -36,6 +37,8 @@ import {
   type DayPart,
   type FocusArea,
 } from "@/lib/training/taxonomy";
+import type { BlockTemplateRow } from "@/lib/training/types";
+import { formatMinutes } from "@/lib/training/display";
 import { cn } from "@/lib/utils";
 
 export type NewBlockDraft = {
@@ -45,6 +48,8 @@ export type NewBlockDraft = {
   plannedDurationMin: number | null;
   plannedRpe: number | null;
   areaTags: FocusArea[];
+  /** Also store this as a saved session for next time. */
+  saveAsTemplate?: boolean;
 };
 
 /** Sensible starting points so the common case is two clicks. */
@@ -58,11 +63,13 @@ const MODALITY_DEFAULTS: Record<BlockModality, { name: string; duration: number;
 export function AddBlockDialog({
   open,
   dateLabel,
+  templates = [],
   onClose,
   onSubmit,
 }: {
   open: boolean;
   dateLabel: string | null;
+  templates?: BlockTemplateRow[];
   onClose: () => void;
   onSubmit: (draft: NewBlockDraft) => Promise<void> | void;
 }) {
@@ -72,6 +79,7 @@ export function AddBlockDialog({
   const [duration, setDuration] = useState(String(MODALITY_DEFAULTS.prehab.duration));
   const [rpe, setRpe] = useState(String(MODALITY_DEFAULTS.prehab.rpe));
   const [areaTags, setAreaTags] = useState<FocusArea[]>([]);
+  const [saveAsTemplate, setSaveAsTemplate] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // Reset to defaults each time the dialog opens, so a previous session's
@@ -85,8 +93,19 @@ export function AddBlockDialog({
     setDuration(String(defaults.duration));
     setRpe(String(defaults.rpe));
     setAreaTags([]);
+    setSaveAsTemplate(false);
     setIsSaving(false);
   }, [open]);
+
+  /** Fill the form from a saved session — the two-tap path for a repeat. */
+  function applyTemplate(template: BlockTemplateRow) {
+    setModality(template.modality);
+    setName(template.name);
+    setDuration(template.duration_min ? String(template.duration_min) : "");
+    setRpe(template.default_rpe ? String(template.default_rpe) : "");
+    setAreaTags(template.area_tags ?? []);
+    setSaveAsTemplate(false);
+  }
 
   function pickModality(next: BlockModality) {
     setModality(next);
@@ -115,6 +134,7 @@ export function AddBlockDialog({
       plannedDurationMin: duration ? Number(duration) : null,
       plannedRpe: rpe ? Number(rpe) : null,
       areaTags,
+      saveAsTemplate,
     });
     setIsSaving(false);
   }
@@ -131,6 +151,34 @@ export function AddBlockDialog({
         </DialogHeader>
 
         <div className="grid gap-4 py-1">
+          {templates.length > 0 && (
+            <div className="grid gap-2">
+              <Label>Saved sessions</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {templates.map((template) => {
+                  const Icon = MODALITY_ICONS[template.modality];
+                  return (
+                    <button
+                      key={template.id}
+                      type="button"
+                      onClick={() => applyTemplate(template)}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <Icon
+                        className="h-3.5 w-3.5"
+                        style={{ color: modalityColor(template.modality) }}
+                      />
+                      {template.name}
+                      <span className="text-muted-foreground">
+                        {formatMinutes(template.duration_min)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="grid gap-2">
             <Label>Kind</Label>
             <div className="flex flex-wrap gap-1.5">
@@ -256,13 +304,31 @@ export function AddBlockDialog({
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="sm:justify-between">
+          <button
+            type="button"
+            aria-pressed={saveAsTemplate}
+            onClick={() => setSaveAsTemplate((current) => !current)}
+            className={cn(
+              "inline-flex items-center gap-1.5 self-center rounded-md px-2 py-1 text-xs transition-colors",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              saveAsTemplate ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Bookmark
+              className={cn("h-3.5 w-3.5", saveAsTemplate && "fill-current")}
+              aria-hidden="true"
+            />
+            Save as a repeatable session
+          </button>
+          <div className="flex gap-2">
           <Button variant="outline" onClick={onClose} disabled={isSaving}>
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={isSaving || !name.trim()}>
             {isSaving ? "Adding…" : "Add session"}
           </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

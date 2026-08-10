@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { CoverageView } from "@/components/training/coverage-view";
+import { TemplateManager } from "@/components/training/template-manager";
 import { NextRoutineCallout, RoutineRotation } from "@/components/training/routine-rotation";
 import {
   getTrainingOverview,
@@ -101,6 +102,10 @@ export function TrainingClient() {
           onSetTarget={handleSetTarget}
           onResetAll={handleResetAll}
         />
+      </section>
+
+      <section>
+        <TemplateManager />
       </section>
     </div>
   );

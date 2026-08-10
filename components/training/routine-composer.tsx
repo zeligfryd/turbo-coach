@@ -241,7 +241,7 @@ export function RoutineComposer({
               className="block h-full rounded-full transition-[width] duration-200"
               style={{
                 width: `${Math.min(100, (totalMinutes / targetMinutes) * 100)}%`,
-                backgroundColor: overTarget ? coverageColor("due") : coverageColor("fresh"),
+                backgroundColor: overTarget ? coverageColor("due") : "hsl(var(--foreground))",
               }}
             />
           </span>

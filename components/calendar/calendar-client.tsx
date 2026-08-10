@@ -537,13 +537,15 @@ export function CalendarClient() {
   }, [scheduledByDate, activitiesByDate, racesByDate, blocksByDate, activeModalities]);
 
   const modalityCounts = useMemo(() => {
-    const counts: Partial<Record<Modality, number>> = {};
+    // Every modality gets a number, including zero. Showing a count for bike
+    // and nothing for the rest made the set look broken rather than empty.
+    const counts = Object.fromEntries(MODALITIES.map((m) => [m, 0])) as Record<Modality, number>;
     Object.values(scheduledByDate).forEach((items) => {
-      counts.bike = (counts.bike ?? 0) + items.length;
+      counts.bike += items.length;
     });
     Object.values(blocksByDate).forEach((items) => {
       items.forEach((item) => {
-        counts[item.modality] = (counts[item.modality] ?? 0) + 1;
+        counts[item.modality] += 1;
       });
     });
     return counts;

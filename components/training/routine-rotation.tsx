@@ -43,21 +43,33 @@ export type RotationRoutine = {
  * shoulders, 9 days" is checkable; "urgency 2.25" is not.
  */
 function reasonFor(routine: RotationRoutine, coverage: AreaCoverage[]): string | null {
-  const behind = coverage
-    .filter((area) => routine.fixesAreas.includes(area.area))
-    .filter((area) => area.status === "overdue" || area.status === "never")
-    .sort((a, b) => (b.ratio ?? Infinity) - (a.ratio ?? Infinity));
+  const relevant = coverage.filter((area) => routine.fixesAreas.includes(area.area));
+  const overdue = relevant
+    .filter((area) => area.status === "overdue")
+    .sort((a, b) => (b.ratio ?? 0) - (a.ratio ?? 0));
+  const untracked = relevant.filter((area) => area.status === "never");
 
-  if (behind.length === 0) return null;
+  if (overdue.length === 0 && untracked.length === 0) return null;
 
-  const phrase = (area: AreaCoverage) =>
-    area.daysSince === null
-      ? `${AREA_LABELS[area.area].toLowerCase()} not yet tracked`
-      : `${AREA_LABELS[area.area].toLowerCase()} ${area.daysSince} days`;
+  const label = (area: AreaCoverage) => AREA_LABELS[area.area].toLowerCase();
+  const list = (areas: AreaCoverage[], max: number) => {
+    const named = areas.slice(0, max).map(label);
+    const rest = areas.length - named.length;
+    return named.join(", ") + (rest > 0 ? ` and ${rest} more` : "");
+  };
 
-  const named = behind.slice(0, 2).map(phrase);
-  const rest = behind.length - named.length;
-  return named.join(", ") + (rest > 0 ? `, and ${rest} more` : "");
+  // Untracked areas are grouped under one phrase rather than repeating
+  // "not yet tracked" per area, which is how the first run read.
+  const parts: string[] = [];
+  if (overdue.length > 0) {
+    parts.push(overdue.slice(0, 2).map((a) => `${label(a)} ${a.daysSince} days`).join(", "));
+    const rest = overdue.length - 2;
+    if (rest > 0) parts[parts.length - 1] += ` and ${rest} more overdue`;
+  }
+  if (untracked.length > 0) {
+    parts.push(`${list(untracked, 3)} not tracked yet`);
+  }
+  return parts.join(" · ");
 }
 
 function AreaChips({

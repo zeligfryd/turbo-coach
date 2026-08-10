@@ -123,9 +123,12 @@ export function CoverageView({
                     </Hint>
                   )}
                 </div>
-                <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                  {AREA_REGIONS[area.area].map((r) => REGION_LABELS[r]).join(" · ")}
-                </p>
+                {!(AREA_REGIONS[area.area].length === 1 &&
+                   REGION_LABELS[AREA_REGIONS[area.area][0]] === AREA_LABELS[area.area]) && (
+                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                    {AREA_REGIONS[area.area].map((r) => REGION_LABELS[r]).join(" · ")}
+                  </p>
+                )}
               </div>
 
               <div className="flex items-center gap-2">

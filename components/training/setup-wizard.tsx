@@ -128,9 +128,14 @@ export function SetupWizard({ onDone }: { onDone: () => void }) {
               {FOCUS_AREAS.map((area) => (
                 <li key={area} className="rounded-md border border-border px-3 py-2">
                   <span className="text-sm font-medium">{AREA_LABELS[area]}</span>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    {AREA_REGIONS[area].map((region) => REGION_LABELS[region]).join(" · ")}
-                  </p>
+                  {/* Thoracic spine is its own only region, so the second line
+                      would just repeat the first. */}
+                  {!(AREA_REGIONS[area].length === 1 &&
+                     REGION_LABELS[AREA_REGIONS[area][0]] === AREA_LABELS[area]) && (
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {AREA_REGIONS[area].map((region) => REGION_LABELS[region]).join(" · ")}
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>

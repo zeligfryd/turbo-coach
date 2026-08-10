@@ -289,7 +289,7 @@ export function CalendarDay({ date, content, handlers }: CalendarDayProps) {
         ))}
 
         {workouts.length === 0 && activities.length === 0 && races.length === 0 && blocks.length === 0 && (
-          <div className="text-xs text-muted-foreground">No workouts</div>
+          <div className="text-xs text-muted-foreground">Nothing scheduled</div>
         )}
       </div>
     </div>

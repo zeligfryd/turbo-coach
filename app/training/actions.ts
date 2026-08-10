@@ -473,6 +473,15 @@ export async function getWeeklySessionLoad(weeks = 12): Promise<Result<WeekLoad[
   });
 }
 
+export async function restoreExerciseAction(exerciseId: string) {
+  const result = await withUser(async (supabase, userId) => {
+    const res = await service.restoreExercise(supabase, userId, exerciseId);
+    return res.success ? { success: true as const, data: res.data } : { success: false as const, error: res.error };
+  });
+  if (result.success) revalidateTraining();
+  return result;
+}
+
 export async function getBlockTemplates(): Promise<Result<BlockTemplateRow[]>> {
   return withUser(async (supabase, userId) => {
     const { data, error } = await supabase

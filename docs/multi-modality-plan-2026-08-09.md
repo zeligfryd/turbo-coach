@@ -224,14 +224,16 @@ requirement in v0, not a polish pass in v3.
    surface (coverage, composer, `/today`), stating in one sentence what the
    screen is for and how to read its main visual. Dismissal is remembered per
    surface.
-3. **Wizard** — a short guided flow where a screen would otherwise present an
-   empty state with no obvious first move:
-   - **First-run goal profile** — confirm or adjust the six targets, with the
-     cyclist rationale for each default.
-   - **First routine** — walk the composer once: pick duration → see the ranking
-     → add three → save.
-   - **First block template** — capture the user's handful of standing strength
-     sessions, since that is what makes coverage correct at zero marginal effort.
+3. **Wizard** — one guided flow, on `/training`, where the screen would
+   otherwise be an empty state with no obvious first move. Three steps: what
+   the six areas are and what the colours mean; confirm or adjust the six
+   targets; capture the sessions the user already does, as templates.
+
+   *Revised from three separate wizards.* They all wanted the same moment — the
+   first time `/training` is opened — and only two carried weight. A guided tour
+   of the composer was dropped: it is a single screen with a ranked list and an
+   info panel, and walking someone through it would be ceremony. One mechanic
+   serving several purposes, per P3.
 
 **Rules.** Help never blocks: tooltips on hover *and* focus, wizards skippable
 and re-runnable from the surface they belong to, info panels dismissible. Copy

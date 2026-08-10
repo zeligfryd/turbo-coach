@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { CoverageView } from "@/components/training/coverage-view";
+import { SetupWizard, hasCompletedSetup } from "@/components/training/setup-wizard";
 import { TemplateManager } from "@/components/training/template-manager";
 import { RoutineRotation } from "@/components/training/routine-rotation";
 import {
@@ -21,6 +22,13 @@ export function TrainingClient() {
   const [overview, setOverview] = useState<TrainingOverview | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Undefined until localStorage has been read, so the wizard never flashes in
+  // for someone who has already dismissed it.
+  const [showSetup, setShowSetup] = useState<boolean | undefined>(undefined);
+
+  useEffect(() => {
+    setShowSetup(!hasCompletedSetup());
+  }, []);
 
   const refresh = useCallback(async () => {
     const result = await getTrainingOverview();
@@ -76,6 +84,23 @@ export function TrainingClient() {
     ) : null;
   }
 
+  if (showSetup) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold">Set up</h2>
+          <p className="text-sm text-muted-foreground">Three short steps. Skip any time.</p>
+        </div>
+        <SetupWizard
+          onDone={() => {
+            setShowSetup(false);
+            refresh();
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       {error && (
@@ -97,6 +122,18 @@ export function TrainingClient() {
           <Link href="/training/routines" className="text-muted-foreground underline underline-offset-4 hover:text-foreground">
             Manage routines
           </Link>
+          <span className="mx-2 text-muted-foreground">·</span>
+          <Link href="/training/exercises" className="text-muted-foreground underline underline-offset-4 hover:text-foreground">
+            Exercises
+          </Link>
+          <span className="mx-2 text-muted-foreground">·</span>
+          <button
+            type="button"
+            onClick={() => setShowSetup(true)}
+            className="text-muted-foreground underline underline-offset-4 hover:text-foreground"
+          >
+            Run setup again
+          </button>
         </p>
       </section>
 

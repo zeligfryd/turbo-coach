@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { CoverageView } from "@/components/training/coverage-view";
@@ -81,13 +82,18 @@ export function TrainingClient() {
           onLogNow={handleLogNow}
           onSchedule={handleSchedule}
         />
+        <p className="text-sm">
+          <Link href="/training/routines" className="text-muted-foreground underline underline-offset-4 hover:text-foreground">
+            Manage routines
+          </Link>
+        </p>
       </section>
 
       <section className="space-y-3">
         <div>
           <h2 className="text-lg font-semibold">Coverage</h2>
           <p className="text-sm text-muted-foreground">
-            Six areas, one target interval each. Ticking a tagged session is what keeps this honest.
+            Six areas, one target interval each.
           </p>
         </div>
         <CoverageView

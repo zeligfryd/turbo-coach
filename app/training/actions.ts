@@ -26,7 +26,13 @@ import type {
   RoutineCoverage,
   WeekLoad,
 } from "@/lib/training/types";
-import type { FocusArea } from "@/lib/training/taxonomy";
+import {
+  areaOfRegion,
+  isLoaded,
+  type BodyRegion,
+  type FocusArea,
+  type StimulusType,
+} from "@/lib/training/taxonomy";
 
 type Result<T> = { success: true; data: T } | { success: false; error: string };
 
@@ -245,6 +251,184 @@ export async function getRoutineDetail(routineId: string) {
       .order("position");
     if (error) return { success: false, error: error.message };
     return { success: true, data: data ?? [] };
+  });
+}
+
+export type BankExercise = {
+  id: string;
+  name: string;
+  regions: BodyRegion[];
+  stimulus: StimulusType;
+  area: FocusArea;
+  defaultDose: unknown;
+  equipment: string[];
+  difficulty: number | null;
+  cues: string | null;
+  notes: string | null;
+  isPreset: boolean;
+  isOwn: boolean;
+  archivedAt: string | null;
+  /** Staleness of the area this exercise serves — drives the ranking. */
+  areaStatus: AreaCoverage["status"];
+  areaRatio: number | null;
+  loaded: boolean;
+};
+
+/**
+ * The bank, ranked stalest-first.
+ *
+ * The ranking is a deterministic sort on current coverage — same input, same
+ * order, every time. No model, no round-trip: the ordering is the guidance and
+ * the clicking is the control.
+ */
+export async function getExerciseBank(
+  options: { includeArchived?: boolean } = {},
+): Promise<Result<{ exercises: BankExercise[]; coverage: AreaCoverage[] }>> {
+  return withUser(async (supabase, userId) => {
+    const today = new Date().toISOString().slice(0, 10);
+
+    let query = supabase.from("exercise").select("*").order("name");
+    if (!options.includeArchived) query = query.is("archived_at", null);
+
+    const [exercisesResult, window, goalsResult] = await Promise.all([
+      query,
+      readTrainingWindow(supabase, userId, addDaysISO(today, -120), today),
+      supabase.from("coverage_goal").select("area, target_days, is_default").eq("user_id", userId),
+    ]);
+
+    if (exercisesResult.error) return { success: false, error: exercisesResult.error.message };
+
+    const goals = (goalsResult.data ?? []) as Pick<
+      CoverageGoalRow,
+      "area" | "target_days" | "is_default"
+    >[];
+    const coverage = computeAreaCoverage(window.coverageEvents, goals, today);
+    const byArea = new Map(coverage.map((c) => [c.area, c]));
+
+    type Row = {
+      id: string;
+      user_id: string | null;
+      name: string;
+      regions: BodyRegion[];
+      stimulus: StimulusType;
+      default_dose: unknown;
+      equipment: string[];
+      difficulty: number | null;
+      cues: string | null;
+      notes: string | null;
+      is_preset: boolean;
+      archived_at: string | null;
+    };
+
+    const exercises: BankExercise[] = ((exercisesResult.data ?? []) as Row[]).map((row) => {
+      // An exercise can name several regions; it is ranked by the area it
+      // serves first, which is the one its primary region belongs to.
+      const area = areaOfRegion(row.regions[0]);
+      const state = byArea.get(area);
+      return {
+        id: row.id,
+        name: row.name,
+        regions: row.regions,
+        stimulus: row.stimulus,
+        area,
+        defaultDose: row.default_dose,
+        equipment: row.equipment ?? [],
+        difficulty: row.difficulty,
+        cues: row.cues,
+        notes: row.notes,
+        isPreset: row.is_preset,
+        isOwn: row.user_id === userId,
+        archivedAt: row.archived_at,
+        areaStatus: state?.status ?? "never",
+        areaRatio: state?.ratio ?? null,
+        loaded: isLoaded(row.stimulus),
+      };
+    });
+
+    // Stalest area first; a never-covered area outranks any ratio.
+    exercises.sort((a, b) => {
+      const rank = (x: BankExercise) => (x.areaRatio === null ? Number.POSITIVE_INFINITY : x.areaRatio);
+      const diff = rank(b) - rank(a);
+      if (diff !== 0 && Number.isFinite(diff)) return diff;
+      if (rank(a) !== rank(b)) return rank(b) === Number.POSITIVE_INFINITY ? 1 : -1;
+      return a.name.localeCompare(b.name);
+    });
+
+    return { success: true, data: { exercises, coverage } };
+  });
+}
+
+export async function createRoutineAction(input: service.RoutineInput) {
+  const result = await withUser(async (supabase, userId) => {
+    const res = await service.createRoutine(supabase, userId, input);
+    return res.success ? { success: true as const, data: res.data } : { success: false as const, error: res.error };
+  });
+  if (result.success) revalidateTraining();
+  return result;
+}
+
+export async function archiveRoutineAction(routineId: string) {
+  const result = await withUser(async (supabase, userId) => {
+    const res = await service.archiveRoutine(supabase, userId, routineId);
+    return res.success ? { success: true as const, data: res.data } : { success: false as const, error: res.error };
+  });
+  if (result.success) revalidateTraining();
+  return result;
+}
+
+export async function createExerciseAction(input: service.ExerciseInput) {
+  const result = await withUser(async (supabase, userId) => {
+    const res = await service.createExercise(supabase, userId, input);
+    return res.success ? { success: true as const, data: res.data } : { success: false as const, error: res.error };
+  });
+  if (result.success) revalidateTraining();
+  return result;
+}
+
+export async function updateExerciseAction(exerciseId: string, input: service.ExerciseInput) {
+  const result = await withUser(async (supabase, userId) => {
+    const res = await service.updateExercise(supabase, userId, exerciseId, input);
+    return res.success ? { success: true as const, data: res.data } : { success: false as const, error: res.error };
+  });
+  if (result.success) revalidateTraining();
+  return result;
+}
+
+export async function duplicateExerciseAction(exerciseId: string) {
+  const result = await withUser(async (supabase, userId) => {
+    const res = await service.duplicateExercise(supabase, userId, exerciseId);
+    return res.success ? { success: true as const, data: res.data } : { success: false as const, error: res.error };
+  });
+  if (result.success) revalidateTraining();
+  return result;
+}
+
+export async function archiveExerciseAction(exerciseId: string) {
+  const result = await withUser(async (supabase, userId) => {
+    const res = await service.archiveExercise(supabase, userId, exerciseId);
+    return res.success ? { success: true as const, data: res.data } : { success: false as const, error: res.error };
+  });
+  if (result.success) revalidateTraining();
+  return result;
+}
+
+/**
+ * Weekly session load for the last `weeks` weeks, for the Fitness page. Kept
+ * separate from the PMC data, which stays bike-TSS-only.
+ */
+export async function getWeeklySessionLoad(weeks = 12): Promise<Result<WeekLoad[]>> {
+  return withUser(async (supabase, userId) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const firstWeekStart = startOfWeek(addDaysISO(today, -7 * (weeks - 1)));
+    const window = await readTrainingWindow(supabase, userId, firstWeekStart, today);
+
+    const series: WeekLoad[] = [];
+    let cursor = firstWeekStart;
+    while (cursor <= today) {
+      series.push(computeWeekLoad(window.loadInputs, cursor));
+      cursor = addDaysISO(cursor, 7);
+    }
+    return { success: true, data: series };
   });
 }
 

@@ -239,6 +239,13 @@ names things the way the user recognises them ("last done 9 days ago"), not the
 way the system stores them (`days_since / target_days`). Any hint that would
 merely restate its label is not written.
 
+**No rationale on screen.** UI copy states what a thing *is* or *does*. It never
+argues for the design — not "six targets, not twenty-four", not "this is what
+keeps coverage honest". The reasoning belongs here and in code comments, where
+it is useful to whoever is changing the code; on screen it is noise the reader
+did not ask for. This applies to headings, empty states, field hints and
+glossary entries alike.
+
 **Implementation.** `components/ui/tooltip.tsx` (Radix) plus
 `components/training/hint.tsx` for the labelled-term case, so the pattern is one
 component and the copy lives in one place per concept — see

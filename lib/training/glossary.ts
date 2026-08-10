@@ -12,6 +12,8 @@
  *   • `why` is the second line, and only exists where the reason is not obvious
  *     from the definition. It answers "why should I care", not "how is it computed".
  *   • If a hint would only restate its own label, don't write it.
+ *   • State what a thing is or does, never why it was designed that way. Build
+ *     rationale belongs in the plan doc and in code comments, not on screen.
  */
 
 export type GlossaryEntry = {
@@ -61,18 +63,16 @@ export const GLOSSARY = {
   // ── Coverage ──────────────────────────────────────────────────────
   focus_area: {
     term: "Focus area",
-    short: "One of six parts of the body this app tracks separately for prehab.",
-    why: "Grouped by what you do about them rather than by anatomy, so each one maps to a routine you can actually start.",
+    short: "One of six parts of the body tracked separately for prehab.",
   },
   staleness: {
     term: "Time since last",
     short: "How long since anything covered this area, against how often you want to cover it.",
-    why: "This is the whole point of the coverage view: it turns 'I should do more prehab' into 'thoracic spine, 9 days'.",
   },
   target_interval: {
     term: "Target interval",
     short: "How many days you want to go, at most, between sessions covering this area.",
-    why: "The defaults suit a cyclist's load pattern and are a starting point to tune, not a prescription.",
+    why: "Defaults are applied until you change one.",
   },
   stretch_only: {
     term: "Stretch only",
@@ -95,14 +95,13 @@ export const GLOSSARY = {
   coverage_never: {
     term: "Not yet tracked",
     short: "Nothing has covered this area since you started tracking.",
-    why: "Shown apart from 'overdue' on purpose — there is nothing to be late for yet.",
   },
 
   // ── Scheduling ────────────────────────────────────────────────────
   day_part: {
     term: "Day part",
     short: "Morning, midday or evening — not a clock time.",
-    why: "You rarely know that a session starts at 18:30, only that it is after work. Ordering within a part is enough.",
+    why: "Sessions are ordered within a part rather than by the clock.",
   },
   modality: {
     term: "Modality",
@@ -111,17 +110,15 @@ export const GLOSSARY = {
   bike_anchor: {
     term: "Ride",
     short: "Rides are shown here for context but are still created and edited through the cycling flow.",
-    why: "They anchor the week: everything else is planned around them.",
   },
   block_template: {
     term: "Template",
     short: "A session you do often, saved once with its usual length and the areas it covers.",
-    why: "Ticking one keeps your coverage correct without logging every exercise.",
+    why: "Ticking one updates coverage without logging every exercise.",
   },
   routine: {
     term: "Routine",
     short: "An ordered list of exercises you can schedule and repeat.",
-    why: "Rotating a few fixed routines beats composing a new session each time — it is what people actually keep doing.",
   },
   ghost: {
     term: "Suggested session",
@@ -130,8 +127,8 @@ export const GLOSSARY = {
   },
   carry_over: {
     term: "Carry-over",
-    short: "Something you missed, offered once more before it expires quietly.",
-    why: "Missed sessions expire on their own so this never becomes a backlog you feel bad about.",
+    short: "Something you missed, offered once more before it expires.",
+    why: "Missed sessions expire on their own after a few days.",
   },
   partial: {
     term: "Partial",

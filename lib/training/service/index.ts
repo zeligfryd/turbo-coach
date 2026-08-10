@@ -28,3 +28,15 @@ export {
   setAreaGoal,
   RecordCompletionInput,
 } from "./completion";
+
+export {
+  archiveExercise,
+  archiveRoutine,
+  createExercise,
+  createRoutine,
+  duplicateExercise,
+  restoreExercise,
+  updateExercise,
+  ExerciseInput,
+  RoutineInput,
+} from "./exercises";

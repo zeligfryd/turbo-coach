@@ -228,7 +228,7 @@ export function AddBlockDialog({
                 Areas covered
               </Hint>
               <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                optional, but this is what keeps coverage honest
+                optional
               </span>
             </Label>
             <div className="flex flex-wrap gap-1.5">

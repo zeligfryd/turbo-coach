@@ -557,7 +557,7 @@ export function CalendarClient() {
           hide a kind of training; sessions group into morning, midday and evening rather than
           clock times.
         </p>
-        <p>Rides are still created and edited in the cycling flow — they appear here as anchors.</p>
+        <p>Rides are still created and edited in the cycling flow.</p>
       </InfoPanel>
 
       <ModalityFilter

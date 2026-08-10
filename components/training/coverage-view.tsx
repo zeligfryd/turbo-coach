@@ -12,7 +12,7 @@
 import { useState, useTransition } from "react";
 import { AlertCircle, Check, Clock, Minus, RotateCcw } from "lucide-react";
 
-import { Hint, HintIcon, InfoPanel } from "@/components/training/hint";
+import { Hint, InfoPanel } from "@/components/training/hint";
 import { Button } from "@/components/ui/button";
 import {
   AREA_LABELS,
@@ -187,13 +187,8 @@ export function CoverageView({
         })}
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs text-muted-foreground">
-          Six targets, not twenty-four. Defaults suit a cyclist&apos;s load pattern and are a
-          starting point to tune.
-          <HintIcon term="target_interval" className="ml-1 align-text-bottom" />
-        </p>
-        {anyOverridden && (
+      {anyOverridden && (
+        <div className="flex justify-end">
           <Button
             variant="ghost"
             size="sm"
@@ -203,8 +198,8 @@ export function CoverageView({
             <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
             Reset to defaults
           </Button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

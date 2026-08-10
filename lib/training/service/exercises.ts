@@ -160,6 +160,41 @@ export async function archiveExercise(
   return ok({ id: exerciseId });
 }
 
+/**
+ * Permanently remove one of your own exercises.
+ *
+ * Only when nothing references it — a routine that points at a deleted exercise
+ * would either break or silently lose a movement, and past completions must
+ * keep describing what was actually done. Anything referenced can only be
+ * archived. This is the escape hatch for a row created by mistake, which
+ * archiving alone would leave hanging around forever.
+ */
+export async function deleteExercise(
+  supabase: SupabaseClient,
+  userId: string,
+  exerciseId: string,
+): Promise<ServiceResult<{ id: string }>> {
+  const { count, error: refError } = await supabase
+    .from("routine_item")
+    .select("id", { count: "exact", head: true })
+    .eq("exercise_id", exerciseId);
+
+  if (refError) return fail(refError.message);
+  if ((count ?? 0) > 0) {
+    return fail("This exercise is used by a routine. Archive it instead.");
+  }
+
+  const { error } = await supabase
+    .from("exercise")
+    .delete()
+    .eq("id", exerciseId)
+    .eq("user_id", userId)
+    .eq("is_preset", false);
+
+  if (error) return fail(error.message);
+  return ok({ id: exerciseId });
+}
+
 export async function restoreExercise(
   supabase: SupabaseClient,
   userId: string,

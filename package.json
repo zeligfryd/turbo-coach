@@ -14,7 +14,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:eval": "vitest run __tests__/evaluation/",
-    "qa:screens": "node scripts/qa-screens.mjs"
+    "qa": "node scripts/qa.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.64",

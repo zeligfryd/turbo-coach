@@ -10,7 +10,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
-import { Archive, Copy, Pencil, Plus, RotateCcw } from "lucide-react";
+import { Archive, Copy, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 
 import { ExerciseEditor, type EditableExercise, type ExerciseDraft } from "@/components/training/exercise-editor";
 import { InfoPanel } from "@/components/training/hint";
@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import {
   archiveExerciseAction,
   createExerciseAction,
+  deleteExerciseAction,
   duplicateExerciseAction,
   getExerciseBank,
   restoreExerciseAction,
@@ -214,6 +215,17 @@ export function ExerciseBank() {
                 >
                   <Copy className="h-3.5 w-3.5" />
                 </Button>
+                {exercise.isOwn && isArchived && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Delete ${exercise.name}`}
+                    disabled={isPending}
+                    onClick={() => run(() => deleteExerciseAction(exercise.id))}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
                 {exercise.isOwn && (
                   <Button
                     variant="ghost"

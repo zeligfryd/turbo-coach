@@ -36,6 +36,7 @@ export {
   archiveRoutine,
   createExercise,
   createRoutine,
+  deleteExercise,
   duplicateExercise,
   restoreExercise,
   updateExercise,

@@ -18,8 +18,22 @@ import {
   startOfMonth,
   startOfWeekMonday,
 } from "./utils";
-import type { ScheduledWorkout, CalendarActivity, CalendarRaceEvent } from "./types";
+import type { ScheduledWorkout, CalendarActivity, CalendarRaceEvent, DayContent, CalendarHandlers } from "./types";
 import type { Workout } from "@/lib/workouts/types";
+import type { PlannedItem, WeekLoad } from "@/lib/training/types";
+import { MODALITIES, type Modality } from "@/lib/training/taxonomy";
+import { ModalityFilter } from "@/components/training/modality-filter";
+import { InfoPanel } from "@/components/training/hint";
+import { AddBlockDialog, type NewBlockDraft } from "@/components/training/add-block-dialog";
+import {
+  getTrainingWindow,
+  scheduleBlockAction,
+  rescheduleBlockAction,
+  deleteBlockAction,
+  acceptBlockAction,
+  recordCompletionAction,
+  clearCompletionAction,
+} from "@/app/training/actions";
 import { getScheduledWorkouts, getCalendarActivities, getCalendarWellness, getUserFtp, removeScheduledWorkout, rescheduleWorkout, scheduleWorkout } from "@/app/calendar/actions";
 import type { CalendarWellness } from "@/app/calendar/actions";
 import { getRaceEvents, updateRaceEvent } from "@/app/race/actions";
@@ -55,6 +69,10 @@ export function CalendarClient() {
   const [activitiesByDate, setActivitiesByDate] = useState<Record<string, CalendarActivity[]>>({});
   const [wellnessByDate, setWellnessByDate] = useState<Record<string, CalendarWellness>>({});
   const [racesByDate, setRacesByDate] = useState<Record<string, CalendarRaceEvent[]>>({});
+  const [blocksByDate, setBlocksByDate] = useState<Record<string, PlannedItem[]>>({});
+  const [weekLoads, setWeekLoads] = useState<Record<string, WeekLoad>>({});
+  const [activeModalities, setActiveModalities] = useState<Set<Modality>>(() => new Set(MODALITIES));
+  const [blockFormDate, setBlockFormDate] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
@@ -98,11 +116,12 @@ export function CalendarClient() {
 
   const fetchScheduled = useCallback(async () => {
     setIsLoading(true);
-    const [workoutsResult, activitiesResult, wellnessResult, racesResult] = await Promise.all([
+    const [workoutsResult, activitiesResult, wellnessResult, racesResult, trainingResult] = await Promise.all([
       getScheduledWorkouts(range.startDate, range.endDate),
       getCalendarActivities(range.startDate, range.endDate),
       getCalendarWellness(range.startDate, range.endDate),
       getRaceEvents(range.startDate, range.endDate),
+      getTrainingWindow(range.startDate, range.endDate),
     ]);
     if (workoutsResult.success) {
       const grouped: Record<string, ScheduledWorkout[]> = {};
@@ -137,6 +156,24 @@ export function CalendarClient() {
         grouped[key].push(item);
       });
       setRacesByDate(grouped);
+    }
+    if (trainingResult.success) {
+      const grouped: Record<string, PlannedItem[]> = {};
+      // Rides come from the existing scheduled-workout stream; taking them from
+      // here too would render every ride twice.
+      trainingResult.data.items
+        .filter((item) => item.modality !== "bike")
+        .forEach((item) => {
+          grouped[item.date] = grouped[item.date] || [];
+          grouped[item.date].push(item);
+        });
+      setBlocksByDate(grouped);
+
+      const loads: Record<string, WeekLoad> = {};
+      trainingResult.data.weeks.forEach((week) => {
+        loads[week.weekStart] = week;
+      });
+      setWeekLoads(loads);
     }
     setIsLoading(false);
   }, [range.startDate, range.endDate]);
@@ -380,6 +417,31 @@ export function CalendarClient() {
     fetchScheduled();
   };
 
+  const handleRescheduleBlock = async (blockId: string, newDate: string) => {
+    await rescheduleBlockAction(blockId, newDate);
+    fetchScheduled();
+  };
+
+  const handleAddBlock = (dateKey: string) => {
+    setBlockFormDate(dateKey);
+  };
+
+  const handleCreateBlock = async (draft: NewBlockDraft) => {
+    if (!blockFormDate) return;
+    await scheduleBlockAction({ ...draft, date: blockFormDate });
+    setBlockFormDate(null);
+    fetchScheduled();
+  };
+
+  const handleToggleModality = (modality: Modality) => {
+    setActiveModalities((current) => {
+      const next = new Set(current);
+      if (next.has(modality)) next.delete(modality);
+      else next.add(modality);
+      return next;
+    });
+  };
+
   const handleSchedule = async (workoutId: string) => {
     if (!selectedDateKey) return;
     const targetDateKey = selectedDateKey;
@@ -390,6 +452,84 @@ export function CalendarClient() {
     await scheduleWorkout(workoutId, targetDateKey);
     fetchScheduled();
   };
+
+  const blockHandlers = useMemo(
+    () => ({
+      onTick: async (item: PlannedItem) => {
+        if (item.status === "done") await clearCompletionAction(item.id);
+        else await recordCompletionAction(item.id, { status: "done" });
+        fetchScheduled();
+      },
+      onRemove: async (item: PlannedItem) => {
+        await deleteBlockAction(item.id);
+        fetchScheduled();
+      },
+      onAccept: async (item: PlannedItem) => {
+        await acceptBlockAction(item.id);
+        fetchScheduled();
+      },
+      onDismiss: async (item: PlannedItem) => {
+        await deleteBlockAction(item.id);
+        fetchScheduled();
+      },
+    }),
+    [fetchScheduled],
+  );
+
+  const handlers: CalendarHandlers = useMemo(
+    () => ({
+      onAdd: handleAdd,
+      onRemove: handleRemove,
+      onWorkoutClick: setSelectedWorkout,
+      onActivityClick: handleActivityClick,
+      onRaceClick: handleRaceClick,
+      onAddRace: handleAddRace,
+      onAddBlock: handleAddBlock,
+      block: blockHandlers,
+    }),
+    // handleAdd and friends are stable enough for this component's lifetime;
+    // blockHandlers is the only one that meaningfully changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [blockHandlers],
+  );
+
+  /**
+   * One content map per day, filtered by the active modality chips. Filtering
+   * here rather than inside the day cells keeps the week totals and the cells
+   * showing the same thing.
+   */
+  const contentByDate = useMemo(() => {
+    const map: Record<string, DayContent> = {};
+    const keys = new Set([
+      ...Object.keys(scheduledByDate),
+      ...Object.keys(activitiesByDate),
+      ...Object.keys(racesByDate),
+      ...Object.keys(blocksByDate),
+    ]);
+    const bikeVisible = activeModalities.has("bike");
+    keys.forEach((key) => {
+      map[key] = {
+        workouts: bikeVisible ? scheduledByDate[key] ?? [] : [],
+        activities: bikeVisible ? activitiesByDate[key] ?? [] : [],
+        races: racesByDate[key] ?? [],
+        blocks: (blocksByDate[key] ?? []).filter((block) => activeModalities.has(block.modality)),
+      };
+    });
+    return map;
+  }, [scheduledByDate, activitiesByDate, racesByDate, blocksByDate, activeModalities]);
+
+  const modalityCounts = useMemo(() => {
+    const counts: Partial<Record<Modality, number>> = {};
+    Object.values(scheduledByDate).forEach((items) => {
+      counts.bike = (counts.bike ?? 0) + items.length;
+    });
+    Object.values(blocksByDate).forEach((items) => {
+      items.forEach((item) => {
+        counts[item.modality] = (counts[item.modality] ?? 0) + 1;
+      });
+    });
+    return counts;
+  }, [scheduledByDate, blocksByDate]);
 
   return (
     <div className="flex flex-col h-full min-h-0 gap-4">
@@ -411,6 +551,21 @@ export function CalendarClient() {
         </div>
       </div>
 
+      <InfoPanel id="calendar-modalities" title="Your whole training week, not just the riding">
+        <p>
+          Strength, mobility, yoga and prehab sit alongside your rides. Use the chips to show or
+          hide a kind of training; sessions group into morning, midday and evening rather than
+          clock times.
+        </p>
+        <p>Rides are still created and edited in the cycling flow — they appear here as anchors.</p>
+      </InfoPanel>
+
+      <ModalityFilter
+        active={activeModalities}
+        counts={modalityCounts}
+        onToggle={handleToggleModality}
+      />
+
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-auto pr-2" onScroll={handleScroll}>
         {isLoading && (
           <div className="text-sm text-muted-foreground">Loading scheduled workouts...</div>
@@ -418,33 +573,22 @@ export function CalendarClient() {
         <div className="hidden md:block">
           <CalendarGrid
             weeks={weeks}
-            scheduledByDate={scheduledByDate}
-            activitiesByDate={activitiesByDate}
+            contentByDate={contentByDate}
             wellnessByDate={wellnessByDate}
-            racesByDate={racesByDate}
-            onAdd={handleAdd}
-            onRemove={handleRemove}
+            weekLoads={weekLoads}
+            handlers={handlers}
             onRescheduleWorkout={handleRescheduleWorkout}
             onRescheduleRace={handleRescheduleRace}
-            onWorkoutClick={setSelectedWorkout}
-            onActivityClick={handleActivityClick}
-            onRaceClick={handleRaceClick}
-            onAddRace={handleAddRace}
+            onRescheduleBlock={handleRescheduleBlock}
           />
         </div>
         <div className="md:hidden">
           <CalendarAgenda
             weeks={weeks}
-            scheduledByDate={scheduledByDate}
-            activitiesByDate={activitiesByDate}
+            contentByDate={contentByDate}
             wellnessByDate={wellnessByDate}
-            racesByDate={racesByDate}
-            onAdd={handleAdd}
-            onRemove={handleRemove}
-            onWorkoutClick={setSelectedWorkout}
-            onActivityClick={handleActivityClick}
-            onRaceClick={handleRaceClick}
-            onAddRace={handleAddRace}
+            weekLoads={weekLoads}
+            handlers={handlers}
           />
         </div>
       </div>
@@ -459,6 +603,13 @@ export function CalendarClient() {
         workout={selectedWorkout}
         onClose={() => setSelectedWorkout(null)}
         userFtp={userFtp}
+      />
+
+      <AddBlockDialog
+        open={blockFormDate !== null}
+        dateLabel={blockFormDate}
+        onClose={() => setBlockFormDate(null)}
+        onSubmit={handleCreateBlock}
       />
 
       <RaceEventFormModal

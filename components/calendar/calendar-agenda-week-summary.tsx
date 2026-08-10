@@ -1,5 +1,7 @@
 import { formatHoursFromSeconds, getWorkoutMetrics } from "./utils";
-import type { ScheduledWorkout, CalendarActivity } from "./types";
+import type { ScheduledWorkout, CalendarActivity, WeekLoad } from "./types";
+import { modalityColor } from "@/lib/training/display";
+import { MODALITY_LABELS } from "@/lib/training/taxonomy";
 import type { CalendarWellness } from "@/app/calendar/actions";
 
 function formColor(tsb: number) {
@@ -13,10 +15,11 @@ function formColor(tsb: number) {
 interface CalendarAgendaWeekSummaryProps {
   weekWorkouts: ScheduledWorkout[];
   weekActivities?: CalendarActivity[];
+  weekLoad?: WeekLoad | null;
   endOfWeekWellness?: CalendarWellness | null;
 }
 
-export function CalendarAgendaWeekSummary({ weekWorkouts, weekActivities = [], endOfWeekWellness }: CalendarAgendaWeekSummaryProps) {
+export function CalendarAgendaWeekSummary({ weekWorkouts, weekActivities = [], weekLoad = null, endOfWeekWellness }: CalendarAgendaWeekSummaryProps) {
   const planned = weekWorkouts.reduce(
     (acc, item) => {
       const metrics = getWorkoutMetrics(item.workout);
@@ -38,8 +41,29 @@ export function CalendarAgendaWeekSummary({ weekWorkouts, weekActivities = [], e
 
   const hasActual = weekActivities.length > 0;
 
+  const loadRows = weekLoad ? weekLoad.byModality.filter((m) => m.load > 0) : [];
+
   return (
     <div className="rounded-lg bg-muted/40 px-3 py-2 text-xs flex flex-col gap-1">
+      {weekLoad && weekLoad.totalLoad > 0 && (
+        <div className="flex items-center justify-between gap-2 pb-1 mb-1 border-b border-border/50">
+          <span className="text-muted-foreground">Session load</span>
+          <span className="flex items-center gap-1.5">
+            {loadRows.map((m) => (
+              <span
+                key={m.modality}
+                title={`${MODALITY_LABELS[m.modality]} ${m.load}`}
+                className="h-1.5 rounded-full"
+                style={{
+                  width: `${Math.max(6, (m.load / weekLoad.totalLoad) * 48)}px`,
+                  backgroundColor: modalityColor(m.modality),
+                }}
+              />
+            ))}
+            <span className="font-medium tabular-nums">{weekLoad.totalLoad.toLocaleString("en-GB")}</span>
+          </span>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <span className="text-muted-foreground">Planned</span>
         <span className="font-medium">{formatHoursFromSeconds(planned.totalSeconds)}</span>

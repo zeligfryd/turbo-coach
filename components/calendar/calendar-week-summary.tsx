@@ -1,6 +1,9 @@
 import { formatHoursFromSeconds, getWorkoutMetrics } from "./utils";
-import type { ScheduledWorkout, CalendarActivity } from "./types";
+import type { ScheduledWorkout, CalendarActivity, WeekLoad } from "./types";
 import type { CalendarWellness } from "@/app/calendar/actions";
+import { Hint } from "@/components/training/hint";
+import { modalityColor } from "@/lib/training/display";
+import { MODALITY_LABELS } from "@/lib/training/taxonomy";
 
 function formColor(tsb: number) {
   if (tsb < -30) return "text-red-500";
@@ -13,10 +16,11 @@ function formColor(tsb: number) {
 interface CalendarWeekSummaryProps {
   weekWorkouts: ScheduledWorkout[];
   weekActivities?: CalendarActivity[];
+  weekLoad?: WeekLoad | null;
   endOfWeekWellness?: CalendarWellness | null;
 }
 
-export function CalendarWeekSummary({ weekWorkouts, weekActivities = [], endOfWeekWellness }: CalendarWeekSummaryProps) {
+export function CalendarWeekSummary({ weekWorkouts, weekActivities = [], weekLoad = null, endOfWeekWellness }: CalendarWeekSummaryProps) {
   const planned = weekWorkouts.reduce(
     (acc, item) => {
       const metrics = getWorkoutMetrics(item.workout);
@@ -50,6 +54,41 @@ export function CalendarWeekSummary({ weekWorkouts, weekActivities = [], endOfWe
           <div className="text-green-600/70">TSS {Math.round(actual.totalTss)}</div>
         </>
       )}
+      {weekLoad && weekLoad.totalLoad > 0 && (
+        <div className="mt-2 pt-2 border-t border-border/50">
+          <Hint term="session_load" className="text-[11px] text-muted-foreground" side="left">
+            Session load
+          </Hint>
+          <div className="font-medium tabular-nums">{weekLoad.totalLoad.toLocaleString("en-GB")}</div>
+          <div className="mt-1 flex flex-col gap-1">
+            {weekLoad.byModality
+              .filter((m) => m.load > 0)
+              .map((m) => {
+                const share = (m.load / weekLoad.totalLoad) * 100;
+                return (
+                  <div key={m.modality} className="flex items-center gap-1.5">
+                    <span
+                      className="h-1.5 w-1.5 shrink-0 rounded-sm"
+                      style={{ backgroundColor: modalityColor(m.modality) }}
+                      aria-hidden="true"
+                    />
+                    <span className="h-1 flex-1 overflow-hidden rounded-full bg-secondary">
+                      <span
+                        className="block h-full rounded-full"
+                        style={{ width: `${share}%`, backgroundColor: modalityColor(m.modality) }}
+                      />
+                    </span>
+                    <span className="w-8 text-right text-[9px] tabular-nums text-muted-foreground">
+                      {Math.round(share)}%
+                    </span>
+                    <span className="sr-only">{MODALITY_LABELS[m.modality]}</span>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
       {endOfWeekWellness && (endOfWeekWellness.ctl != null || endOfWeekWellness.atl != null) && (
         <div className="mt-2 pt-2 border-t border-border/50 text-[11px]">
           {endOfWeekWellness.ctl != null && (

@@ -5,6 +5,7 @@ import { FloatingCoach } from "@/components/coach/floating-coach";
 import { CoachRaceProvider } from "@/components/coach/coach-race-context";
 import { Sidebar } from "@/components/sidebar";
 import { ThemeSwitcher } from "@/components/theme-switcher";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
@@ -29,22 +30,24 @@ export async function ProtectedAppShell({
   }
 
   return (
-    <div className="md:flex h-screen overflow-hidden">
-      <Sidebar />
-      <CoachRaceProvider>
-        <main className="flex flex-col overflow-auto h-screen md:flex-1">
-          <header className="h-16 min-h-16 flex-shrink-0 flex items-center justify-end px-4 sm:px-6 gap-2 sm:gap-4 bg-card shadow-sm">
-            <Suspense>
-              <AuthButton />
-            </Suspense>
-            <ThemeSwitcher />
-          </header>
-          <div className={cn("flex-1 p-4 sm:p-6", contentClassName)}>
-            <div className={cn("max-w-7xl mx-auto", contentInnerClassName)}>{children}</div>
-          </div>
-          {showFloatingCoach && <FloatingCoach />}
-        </main>
-      </CoachRaceProvider>
-    </div>
+    <TooltipProvider>
+      <div className="md:flex h-screen overflow-hidden">
+        <Sidebar />
+        <CoachRaceProvider>
+          <main className="flex flex-col overflow-auto h-screen md:flex-1">
+            <header className="h-16 min-h-16 flex-shrink-0 flex items-center justify-end px-4 sm:px-6 gap-2 sm:gap-4 bg-card shadow-sm">
+              <Suspense>
+                <AuthButton />
+              </Suspense>
+              <ThemeSwitcher />
+            </header>
+            <div className={cn("flex-1 p-4 sm:p-6", contentClassName)}>
+              <div className={cn("max-w-7xl mx-auto", contentInnerClassName)}>{children}</div>
+            </div>
+            {showFloatingCoach && <FloatingCoach />}
+          </main>
+        </CoachRaceProvider>
+      </div>
+    </TooltipProvider>
   );
 }

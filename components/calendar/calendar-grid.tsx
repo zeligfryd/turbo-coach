@@ -10,47 +10,47 @@ import {
 } from "@dnd-kit/core";
 import { CalendarDay, WorkoutDragOverlay, RaceDragOverlay } from "./calendar-day";
 import { CalendarWeekSummary } from "./calendar-week-summary";
-import type { ScheduledWorkout, CalendarActivity, CalendarRaceEvent } from "./types";
-import type { Workout } from "@/lib/workouts/types";
+import { BlockDragOverlay } from "@/components/training/block-card";
+import type {
+  ScheduledWorkout,
+  CalendarActivity,
+  CalendarRaceEvent,
+  CalendarHandlers,
+  DayContent,
+  PlannedItem,
+  WeekLoad,
+} from "./types";
 import type { CalendarWellness } from "@/app/calendar/actions";
+import { EMPTY_DAY_CONTENT } from "./types";
 import { formatDateKey } from "./utils";
 
 type DragItem =
   | { type: "workout"; item: ScheduledWorkout }
-  | { type: "race"; item: CalendarRaceEvent };
+  | { type: "race"; item: CalendarRaceEvent }
+  | { type: "block"; item: PlannedItem };
 
 interface CalendarGridProps {
   weeks: Date[][];
-  scheduledByDate: Record<string, ScheduledWorkout[]>;
-  activitiesByDate: Record<string, CalendarActivity[]>;
+  contentByDate: Record<string, DayContent>;
   wellnessByDate: Record<string, CalendarWellness>;
-  racesByDate: Record<string, CalendarRaceEvent[]>;
-  onAdd: (dateKey: string) => void;
-  onRemove: (scheduledWorkoutId: string) => void;
+  weekLoads: Record<string, WeekLoad>;
+  handlers: CalendarHandlers;
   onRescheduleWorkout?: (scheduledWorkoutId: string, newDate: string) => void;
   onRescheduleRace?: (raceId: string, newDate: string) => void;
-  onWorkoutClick?: (workout: Workout) => void;
-  onActivityClick?: (activityId: string) => void;
-  onRaceClick?: (raceId: string) => void;
-  onAddRace?: (dateKey: string) => void;
+  onRescheduleBlock?: (blockId: string, newDate: string) => void;
 }
 
 const weekDayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Week"];
 
 export function CalendarGrid({
   weeks,
-  scheduledByDate,
-  activitiesByDate,
+  contentByDate,
   wellnessByDate,
-  racesByDate,
-  onAdd,
-  onRemove,
+  weekLoads,
+  handlers,
   onRescheduleWorkout,
   onRescheduleRace,
-  onWorkoutClick,
-  onActivityClick,
-  onRaceClick,
-  onAddRace,
+  onRescheduleBlock,
 }: CalendarGridProps) {
   const [activeItem, setActiveItem] = useState<DragItem | null>(null);
 
@@ -63,24 +63,19 @@ export function CalendarGrid({
     const id = String(event.active.id);
     const [type, itemId] = id.split(":");
 
-    if (type === "workout") {
-      for (const items of Object.values(scheduledByDate)) {
-        const found = items.find((w) => w.id === itemId);
-        if (found) {
-          setActiveItem({ type: "workout", item: found });
-          return;
-        }
-      }
-    } else if (type === "race") {
-      for (const items of Object.values(racesByDate)) {
-        const found = items.find((r) => r.id === itemId);
-        if (found) {
-          setActiveItem({ type: "race", item: found });
-          return;
-        }
+    for (const content of Object.values(contentByDate)) {
+      if (type === "workout") {
+        const found = content.workouts.find((w) => w.id === itemId);
+        if (found) return setActiveItem({ type: "workout", item: found });
+      } else if (type === "race") {
+        const found = content.races.find((r) => r.id === itemId);
+        if (found) return setActiveItem({ type: "race", item: found });
+      } else if (type === "block") {
+        const found = content.blocks.find((b) => b.id === itemId);
+        if (found) return setActiveItem({ type: "block", item: found });
       }
     }
-  }, [scheduledByDate, racesByDate]);
+  }, [contentByDate]);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     setActiveItem(null);
@@ -94,23 +89,20 @@ export function CalendarGrid({
     const newDate = dropId.slice(4); // "day:2026-04-07" → "2026-04-07"
     const [type, itemId] = dragId.split(":");
 
-    if (type === "workout") {
-      // Find current date to skip no-ops
-      for (const [dateKey, items] of Object.entries(scheduledByDate)) {
-        if (items.some((w) => w.id === itemId) && dateKey !== newDate) {
-          onRescheduleWorkout?.(itemId, newDate);
-          return;
-        }
+    // Find the current date so a drop onto the same day is a no-op.
+    for (const [dateKey, content] of Object.entries(contentByDate)) {
+      if (dateKey === newDate) continue;
+      if (type === "workout" && content.workouts.some((w) => w.id === itemId)) {
+        return onRescheduleWorkout?.(itemId, newDate);
       }
-    } else if (type === "race") {
-      for (const [dateKey, items] of Object.entries(racesByDate)) {
-        if (items.some((r) => r.id === itemId) && dateKey !== newDate) {
-          onRescheduleRace?.(itemId, newDate);
-          return;
-        }
+      if (type === "race" && content.races.some((r) => r.id === itemId)) {
+        return onRescheduleRace?.(itemId, newDate);
+      }
+      if (type === "block" && content.blocks.some((b) => b.id === itemId)) {
+        return onRescheduleBlock?.(itemId, newDate);
       }
     }
-  }, [scheduledByDate, racesByDate, onRescheduleWorkout, onRescheduleRace]);
+  }, [contentByDate, onRescheduleWorkout, onRescheduleRace, onRescheduleBlock]);
 
   return (
     <DndContext
@@ -134,9 +126,10 @@ export function CalendarGrid({
             const weekWorkouts: ScheduledWorkout[] = [];
             const weekActivities: CalendarActivity[] = [];
             week.forEach((day) => {
-              const key = formatDateKey(day);
-              weekWorkouts.push(...(scheduledByDate[key] ?? []));
-              weekActivities.push(...(activitiesByDate[key] ?? []));
+              const dayContent = contentByDate[formatDateKey(day)];
+              if (!dayContent) return;
+              weekWorkouts.push(...dayContent.workouts);
+              weekActivities.push(...dayContent.activities);
             });
 
             const weekStartKey = formatDateKey(week[0]);
@@ -148,28 +141,19 @@ export function CalendarGrid({
               >
                 {week.map((day) => {
                   const key = formatDateKey(day);
-                  const items = scheduledByDate[key] ?? [];
-                  const activities = activitiesByDate[key] ?? [];
-                  const races = racesByDate[key] ?? [];
                   return (
                     <CalendarDay
                       key={key}
                       date={day}
-                      workouts={items}
-                      activities={activities}
-                      races={races}
-                      onAdd={onAdd}
-                      onRemove={onRemove}
-                      onWorkoutClick={onWorkoutClick}
-                      onActivityClick={onActivityClick}
-                      onRaceClick={onRaceClick}
-                      onAddRace={onAddRace}
+                      content={contentByDate[key] ?? EMPTY_DAY_CONTENT}
+                      handlers={handlers}
                     />
                   );
                 })}
                 <CalendarWeekSummary
                   weekWorkouts={weekWorkouts}
                   weekActivities={weekActivities}
+                  weekLoad={weekLoads[weekStartKey] ?? null}
                   endOfWeekWellness={wellnessByDate[formatDateKey(week[week.length - 1])] ?? null}
                 />
               </div>
@@ -184,6 +168,9 @@ export function CalendarGrid({
         )}
         {activeItem?.type === "race" && (
           <RaceDragOverlay race={activeItem.item} />
+        )}
+        {activeItem?.type === "block" && (
+          <BlockDragOverlay item={activeItem.item} />
         )}
       </DragOverlay>
     </DndContext>

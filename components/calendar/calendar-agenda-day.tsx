@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Plus, X, CheckCircle, Trash2, Flag } from "lucide-react";
+import { Plus, X, CheckCircle, Trash2, Flag, Dumbbell } from "lucide-react";
 import { MiniIntensityChart } from "@/components/workouts/mini-intensity-chart";
 import { flattenBuilderItems } from "@/lib/workouts/utils";
 import { EVENT_TYPE_LABELS } from "@/lib/race/types";
-import type { ScheduledWorkout, CalendarActivity, CalendarRaceEvent } from "./types";
-import type { Workout } from "@/lib/workouts/types";
+import type { DayContent, CalendarHandlers } from "./types";
+import { BlockCard } from "@/components/training/block-card";
+import { DAY_PARTS, DAY_PART_LABELS } from "@/lib/training/taxonomy";
 import type { EventType } from "@/lib/race/types";
 import {
   getCalendarDayLabelParts,
@@ -15,18 +16,13 @@ import {
 
 interface CalendarAgendaDayProps {
   date: Date;
-  workouts: ScheduledWorkout[];
-  activities?: CalendarActivity[];
-  races?: CalendarRaceEvent[];
-  onAdd: (dateKey: string) => void;
-  onRemove: (scheduledWorkoutId: string) => void;
-  onWorkoutClick?: (workout: Workout) => void;
-  onActivityClick?: (activityId: string) => void;
-  onRaceClick?: (raceId: string) => void;
-  onAddRace?: (dateKey: string) => void;
+  content: DayContent;
+  handlers: CalendarHandlers;
 }
 
-export function CalendarAgendaDay({ date, workouts, activities = [], races = [], onAdd, onRemove, onWorkoutClick, onActivityClick, onRaceClick, onAddRace }: CalendarAgendaDayProps) {
+export function CalendarAgendaDay({ date, content, handlers }: CalendarAgendaDayProps) {
+  const { workouts, activities, races, blocks } = content;
+  const { onAdd, onRemove, onWorkoutClick, onActivityClick, onRaceClick, onAddRace } = handlers;
   const dateKey = formatDateKey(date);
   const weekday = date.toLocaleString("en-US", { weekday: "short" });
   const { monthPrefix, dayOfMonth } = getCalendarDayLabelParts(date);
@@ -66,6 +62,13 @@ export function CalendarAgendaDay({ date, workouts, activities = [], races = [],
             aria-label="Add workout"
           >
             <Plus className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => handlers.onAddBlock?.(dateKey)}
+            className="p-1 rounded-md hover:bg-accent"
+            aria-label="Add strength, mobility, yoga or prehab session"
+          >
+            <Dumbbell className="h-3.5 w-3.5" />
           </button>
         </div>
 
@@ -151,6 +154,22 @@ export function CalendarAgendaDay({ date, workouts, activities = [], races = [],
             );
           })}
 
+          {DAY_PARTS.map((part) => {
+            const partBlocks = blocks.filter((block) => block.dayPart === part);
+            if (partBlocks.length === 0) return null;
+            return (
+              <div key={part} className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.13em] text-muted-foreground">
+                  {DAY_PART_LABELS[part]}
+                  <span className="h-px flex-1 bg-border/60" />
+                </div>
+                {partBlocks.map((block) => (
+                  <BlockCard key={block.id} item={block} handlers={handlers.block} compact />
+                ))}
+              </div>
+            );
+          })}
+
           {races.map((race) => (
             <div
               key={race.id}
@@ -171,8 +190,8 @@ export function CalendarAgendaDay({ date, workouts, activities = [], races = [],
             </div>
           ))}
 
-          {workouts.length === 0 && activities.length === 0 && races.length === 0 && (
-            <div className="text-xs text-muted-foreground">No workouts</div>
+          {workouts.length === 0 && activities.length === 0 && races.length === 0 && blocks.length === 0 && (
+            <div className="text-xs text-muted-foreground">Nothing scheduled</div>
           )}
         </div>
       </div>

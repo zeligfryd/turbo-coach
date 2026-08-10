@@ -1,12 +1,14 @@
 import { useState } from "react";
-import { Plus, X, CheckCircle, Trash2, Flag, GripVertical } from "lucide-react";
+import { Plus, X, CheckCircle, Trash2, Flag, GripVertical, Dumbbell } from "lucide-react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { MiniIntensityChart } from "@/components/workouts/mini-intensity-chart";
 import { flattenBuilderItems } from "@/lib/workouts/utils";
 import { EVENT_TYPE_LABELS } from "@/lib/race/types";
-import type { ScheduledWorkout, CalendarActivity, CalendarRaceEvent } from "./types";
+import type { ScheduledWorkout, CalendarRaceEvent, DayContent, CalendarHandlers } from "./types";
 import type { Workout } from "@/lib/workouts/types";
 import type { EventType } from "@/lib/race/types";
+import { BlockCard } from "@/components/training/block-card";
+import { DAY_PARTS, DAY_PART_LABELS } from "@/lib/training/taxonomy";
 import {
   getCalendarDayLabelParts,
   formatDateKey,
@@ -149,18 +151,13 @@ export function RaceDragOverlay({ race }: { race: CalendarRaceEvent }) {
 
 interface CalendarDayProps {
   date: Date;
-  workouts: ScheduledWorkout[];
-  activities?: CalendarActivity[];
-  races?: CalendarRaceEvent[];
-  onAdd: (dateKey: string) => void;
-  onRemove: (scheduledWorkoutId: string) => void;
-  onWorkoutClick?: (workout: Workout) => void;
-  onActivityClick?: (activityId: string) => void;
-  onRaceClick?: (raceId: string) => void;
-  onAddRace?: (dateKey: string) => void;
+  content: DayContent;
+  handlers: CalendarHandlers;
 }
 
-export function CalendarDay({ date, workouts, activities = [], races = [], onAdd, onRemove, onWorkoutClick, onActivityClick, onRaceClick, onAddRace }: CalendarDayProps) {
+export function CalendarDay({ date, content, handlers }: CalendarDayProps) {
+  const { workouts, activities, races, blocks } = content;
+  const { onAdd, onRemove, onWorkoutClick, onActivityClick, onRaceClick, onAddRace } = handlers;
   const dateKey = formatDateKey(date);
   const { monthPrefix, dayOfMonth } = getCalendarDayLabelParts(date);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
@@ -168,6 +165,16 @@ export function CalendarDay({ date, workouts, activities = [], races = [], onAdd
   const { isOver, setNodeRef: setDropRef } = useDroppable({
     id: `day:${dateKey}`,
   });
+
+  // Group the day's sessions by part. A part is only shown when it holds
+  // something, so a day with one morning ride looks exactly as it does today.
+  const parts = DAY_PARTS.map((part) => ({
+    part,
+    workouts: workouts.filter((w) => (w.day_part ?? "am") === part),
+    blocks: blocks.filter((b) => b.dayPart === part),
+  })).filter((group) => group.workouts.length > 0 || group.blocks.length > 0);
+
+  const showPartLabels = parts.length > 1;
 
   return (
     <div
@@ -202,19 +209,40 @@ export function CalendarDay({ date, workouts, activities = [], races = [], onAdd
           >
             <Plus className="h-4 w-4" />
           </button>
+          <button
+            onClick={() => handlers.onAddBlock?.(dateKey)}
+            className="opacity-50 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-accent"
+            aria-label="Add strength, mobility, yoga or prehab session"
+            title="Add a non-riding session"
+          >
+            <Dumbbell className="h-3.5 w-3.5" />
+          </button>
         </div>
       </div>
 
       <div className="flex flex-col gap-2">
-        {workouts.map((item) => (
-          <DraggableWorkoutCard
-            key={item.id}
-            item={item}
-            onWorkoutClick={onWorkoutClick}
-            confirmingId={confirmingId}
-            onConfirm={setConfirmingId}
-            onRemove={onRemove}
-          />
+        {parts.map(({ part, workouts: partWorkouts, blocks: partBlocks }) => (
+          <div key={part} className="flex flex-col gap-1.5">
+            {showPartLabels && (
+              <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.13em] text-muted-foreground">
+                {DAY_PART_LABELS[part]}
+                <span className="h-px flex-1 bg-border/60" />
+              </div>
+            )}
+            {partWorkouts.map((item) => (
+              <DraggableWorkoutCard
+                key={item.id}
+                item={item}
+                onWorkoutClick={onWorkoutClick}
+                confirmingId={confirmingId}
+                onConfirm={setConfirmingId}
+                onRemove={onRemove}
+              />
+            ))}
+            {partBlocks.map((block) => (
+              <BlockCard key={block.id} item={block} handlers={handlers.block} />
+            ))}
+          </div>
         ))}
 
         {activities.map((activity) => {
@@ -260,7 +288,7 @@ export function CalendarDay({ date, workouts, activities = [], races = [], onAdd
           <DraggableRaceCard key={race.id} race={race} onRaceClick={onRaceClick} />
         ))}
 
-        {workouts.length === 0 && activities.length === 0 && races.length === 0 && (
+        {workouts.length === 0 && activities.length === 0 && races.length === 0 && blocks.length === 0 && (
           <div className="text-xs text-muted-foreground">No workouts</div>
         )}
       </div>

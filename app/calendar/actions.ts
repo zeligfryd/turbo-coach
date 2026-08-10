@@ -9,6 +9,7 @@ import type { ScheduledWorkout, CalendarActivity } from "@/components/calendar/t
 type ScheduledWorkoutRow = {
   id: string;
   scheduled_date: string;
+  day_part: "am" | "midday" | "pm" | null;
   workout: Workout | Workout[] | null;
 };
 
@@ -43,6 +44,7 @@ export async function getScheduledWorkouts(startDate: string, endDate: string) {
         `
           id,
           scheduled_date,
+          day_part,
           workout:workouts(*)
         `
       )
@@ -68,6 +70,7 @@ export async function getScheduledWorkouts(startDate: string, endDate: string) {
           return {
             id: row.id,
             scheduled_date: row.scheduled_date,
+            day_part: row.day_part ?? "am",
             workout,
           };
         })

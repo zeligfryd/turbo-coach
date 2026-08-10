@@ -1,22 +1,22 @@
 import { CalendarAgendaDay } from "./calendar-agenda-day";
 import { CalendarAgendaWeekSummary } from "./calendar-agenda-week-summary";
-import type { ScheduledWorkout, CalendarActivity, CalendarRaceEvent } from "./types";
-import type { Workout } from "@/lib/workouts/types";
+import type {
+  ScheduledWorkout,
+  CalendarActivity,
+  CalendarHandlers,
+  DayContent,
+  WeekLoad,
+} from "./types";
 import type { CalendarWellness } from "@/app/calendar/actions";
+import { EMPTY_DAY_CONTENT } from "./types";
 import { formatDateKey } from "./utils";
 
 interface CalendarAgendaProps {
   weeks: Date[][];
-  scheduledByDate: Record<string, ScheduledWorkout[]>;
-  activitiesByDate: Record<string, CalendarActivity[]>;
+  contentByDate: Record<string, DayContent>;
   wellnessByDate: Record<string, CalendarWellness>;
-  racesByDate: Record<string, CalendarRaceEvent[]>;
-  onAdd: (dateKey: string) => void;
-  onRemove: (scheduledWorkoutId: string) => void;
-  onWorkoutClick?: (workout: Workout) => void;
-  onActivityClick?: (activityId: string) => void;
-  onRaceClick?: (raceId: string) => void;
-  onAddRace?: (dateKey: string) => void;
+  weekLoads: Record<string, WeekLoad>;
+  handlers: CalendarHandlers;
 }
 
 function formatWeekRangeLabel(week: Date[]) {
@@ -29,16 +29,10 @@ function formatWeekRangeLabel(week: Date[]) {
 
 export function CalendarAgenda({
   weeks,
-  scheduledByDate,
-  activitiesByDate,
+  contentByDate,
   wellnessByDate,
-  racesByDate,
-  onAdd,
-  onRemove,
-  onWorkoutClick,
-  onActivityClick,
-  onRaceClick,
-  onAddRace,
+  weekLoads,
+  handlers,
 }: CalendarAgendaProps) {
   return (
     <section className="space-y-4">
@@ -46,9 +40,10 @@ export function CalendarAgenda({
         const weekWorkouts: ScheduledWorkout[] = [];
         const weekActivities: CalendarActivity[] = [];
         week.forEach((day) => {
-          const key = formatDateKey(day);
-          weekWorkouts.push(...(scheduledByDate[key] ?? []));
-          weekActivities.push(...(activitiesByDate[key] ?? []));
+          const dayContent = contentByDate[formatDateKey(day)];
+          if (!dayContent) return;
+          weekWorkouts.push(...dayContent.workouts);
+          weekActivities.push(...dayContent.activities);
         });
 
         const weekStartKey = formatDateKey(week[0]);
@@ -65,22 +60,12 @@ export function CalendarAgenda({
             <div className="space-y-2">
               {week.map((day) => {
                 const key = formatDateKey(day);
-                const items = scheduledByDate[key] ?? [];
-                const activities = activitiesByDate[key] ?? [];
-                const races = racesByDate[key] ?? [];
                 return (
                   <CalendarAgendaDay
                     key={key}
                     date={day}
-                    workouts={items}
-                    activities={activities}
-                    races={races}
-                    onAdd={onAdd}
-                    onRemove={onRemove}
-                    onWorkoutClick={onWorkoutClick}
-                    onActivityClick={onActivityClick}
-                    onRaceClick={onRaceClick}
-                    onAddRace={onAddRace}
+                    content={contentByDate[key] ?? EMPTY_DAY_CONTENT}
+                    handlers={handlers}
                   />
                 );
               })}
@@ -89,6 +74,7 @@ export function CalendarAgenda({
             <CalendarAgendaWeekSummary
               weekWorkouts={weekWorkouts}
               weekActivities={weekActivities}
+              weekLoad={weekLoads[weekStartKey] ?? null}
               endOfWeekWellness={wellnessByDate[formatDateKey(week[week.length - 1])] ?? null}
             />
           </div>

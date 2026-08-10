@@ -129,6 +129,13 @@ export type RoutineSummary = {
   lastDoneDate: string | null;
   daysSinceDone: number | null;
   exerciseCount: number;
+  /**
+   * The block logged for this routine today, if any. Drives the done-today
+   * state and gives Undo something to remove — without it, a routine that is
+   * already done looks identical to one that is not, and a second click just
+   * writes a duplicate.
+   */
+  completedTodayBlockId: string | null;
 };
 
 export type TrainingOverview = {
@@ -155,7 +162,7 @@ export async function getTrainingOverview(): Promise<Result<TrainingOverview>> {
         .order("est_duration_min"),
       supabase
         .from("block")
-        .select("routine_id, date, status")
+        .select("id, routine_id, date, status")
         .eq("user_id", userId)
         .not("routine_id", "is", null)
         .in("status", ["done", "partial"])
@@ -172,8 +179,16 @@ export async function getTrainingOverview(): Promise<Result<TrainingOverview>> {
     // Most recent completion per routine. The query is already sorted newest
     // first, so the first hit for a routine wins.
     const lastDone = new Map<string, string>();
-    for (const row of (doneBlocksResult.data ?? []) as { routine_id: string; date: string }[]) {
+    const doneToday = new Map<string, string>();
+    for (const row of (doneBlocksResult.data ?? []) as {
+      id: string;
+      routine_id: string;
+      date: string;
+    }[]) {
       if (!lastDone.has(row.routine_id)) lastDone.set(row.routine_id, row.date);
+      if (row.date === today && !doneToday.has(row.routine_id)) {
+        doneToday.set(row.routine_id, row.id);
+      }
     }
 
     type RoutineRow = {
@@ -196,6 +211,7 @@ export async function getTrainingOverview(): Promise<Result<TrainingOverview>> {
         lastDoneDate: doneDate,
         daysSinceDone: doneDate ? daysBetweenISO(doneDate, today) : null,
         exerciseCount: row.routine_item?.[0]?.count ?? 0,
+        completedTodayBlockId: doneToday.get(row.id) ?? null,
       };
     });
 
@@ -249,6 +265,19 @@ export async function logRoutineNowAction(routineId: string) {
       return { success: false as const, error: done.error };
     }
     return { success: true as const, data: scheduled.data };
+  });
+  if (result.success) revalidateTraining();
+  return result;
+}
+
+/**
+ * Undo a routine logged today. Removes the block; the completion row goes with
+ * it through the cascade, so nothing is left behind claiming the work was done.
+ */
+export async function undoRoutineTodayAction(blockId: string) {
+  const result = await withUser(async (supabase, userId) => {
+    const res = await service.deleteBlock(supabase, userId, blockId);
+    return res.success ? { success: true as const, data: res.data } : { success: false as const, error: res.error };
   });
   if (result.success) revalidateTraining();
   return result;

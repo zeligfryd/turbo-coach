@@ -22,6 +22,7 @@ import {
   getTrainingWindow,
   logRoutineNowAction,
   recordCompletionAction,
+  undoRoutineTodayAction,
   type TrainingOverview,
 } from "@/app/training/actions";
 import { MODALITY_ICONS, formatMinutes, modalityColor } from "@/lib/training/display";
@@ -83,6 +84,11 @@ export function TodayClient() {
     await refresh();
   };
 
+  const handleUndo = async (blockId: string) => {
+    await undoRoutineTodayAction(blockId);
+    await refresh();
+  };
+
   if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   const dateLabel = new Date().toLocaleDateString("en-GB", {
@@ -110,7 +116,12 @@ export function TodayClient() {
             </h2>
           </div>
           <NextRoutineCallout routine={overview.routines[0]} />
-          <RoutineRotation routines={overview.routines.slice(0, 2)} onLogNow={handleLogNow} compact />
+          <RoutineRotation
+            routines={overview.routines.slice(0, 2)}
+            onLogNow={handleLogNow}
+            onUndo={handleUndo}
+            compact
+          />
         </section>
       )}
 

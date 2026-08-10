@@ -12,6 +12,7 @@ import {
   resetAllAreaGoalsAction,
   scheduleRoutineAction,
   setAreaGoalAction,
+  undoRoutineTodayAction,
   type TrainingOverview,
 } from "@/app/training/actions";
 import type { FocusArea } from "@/lib/training/taxonomy";
@@ -46,33 +47,43 @@ export function TrainingClient() {
     await refresh();
   };
 
-  const handleLogNow = async (routineId: string) => {
-    await logRoutineNowAction(routineId);
+  // Failures were previously swallowed here, which is how a broken tick looked
+  // exactly like a working one.
+  const run = async (action: () => Promise<{ success: boolean; error?: string }>) => {
+    const result = await action();
+    setError(result.success ? null : (result.error ?? "Something went wrong"));
     await refresh();
   };
 
-  const handleSchedule = async (routineId: string) => {
+  const handleLogNow = (routineId: string) => run(() => logRoutineNowAction(routineId));
+
+  const handleUndo = (blockId: string) => run(() => undoRoutineTodayAction(blockId));
+
+  const handleSchedule = (routineId: string) => {
     const today = new Date().toISOString().slice(0, 10);
-    await scheduleRoutineAction(routineId, today);
-    await refresh();
+    return run(() => scheduleRoutineAction(routineId, today));
   };
 
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">Loading…</p>;
   }
 
-  if (error) {
-    return (
+  if (!overview) {
+    return error ? (
       <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
         Could not load your coverage: {error}
       </p>
-    );
+    ) : null;
   }
-
-  if (!overview) return null;
 
   return (
     <div className="space-y-8">
+      {error && (
+        <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm">
+          {error}
+        </p>
+      )}
+
       <section className="space-y-3">
         <div>
           <h2 className="text-lg font-semibold">What to do next</h2>
@@ -81,6 +92,7 @@ export function TrainingClient() {
         <RoutineRotation
           routines={overview.routines}
           onLogNow={handleLogNow}
+          onUndo={handleUndo}
           onSchedule={handleSchedule}
         />
         <p className="text-sm">

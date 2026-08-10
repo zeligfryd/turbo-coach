@@ -3,12 +3,16 @@
 /**
  * The routine rotation — the default path (D8).
  *
- * The cards are held in a **stable order** and the recommendation is marked in
- * place. Sorting the list by urgency meant the card you just clicked jumped to
- * the end and a different one took its place, which reads as the interface
- * rearranging itself in response to a click. The ranking still decides which
- * card is badged and which one the callout names; it no longer decides where
- * anything sits.
+ * One recommendation, stated with its reason, and the rest as a secondary
+ * list. An equal grid of cards invites comparison, which is the opposite of
+ * what this is for: the tool is supposed to answer "what next", not lay out
+ * five options and make you rank them yourself.
+ *
+ * It also removes the ordering problem rather than papering over it. Ranked
+ * order moved cards on every click; alphabetical order was stable but
+ * arbitrary. Here the ranking decides only what sits in the recommendation
+ * slot, and the list below is ordered by length — stable, and useful when the
+ * real question is "how long have I got".
  */
 
 import { useTransition } from "react";
@@ -17,8 +21,8 @@ import { CalendarPlus, Check, Clock, Undo2 } from "lucide-react";
 import { Hint } from "@/components/training/hint";
 import { Button } from "@/components/ui/button";
 import { AREA_LABELS, type FocusArea } from "@/lib/training/taxonomy";
-import { coverageColor, formatDaysAgo, formatMinutes, modalityColor } from "@/lib/training/display";
-import type { RoutineCoverage } from "@/lib/training/types";
+import { coverageColor, formatDaysAgo, formatMinutes } from "@/lib/training/display";
+import type { AreaCoverage, RoutineCoverage } from "@/lib/training/types";
 import { cn } from "@/lib/utils";
 
 export type RotationRoutine = {
@@ -34,18 +38,70 @@ export type RotationRoutine = {
   urgency: number;
 };
 
+/**
+ * Why this routine is the one — named areas rather than a score. "Neck and
+ * shoulders, 9 days" is checkable; "urgency 2.25" is not.
+ */
+function reasonFor(routine: RotationRoutine, coverage: AreaCoverage[]): string | null {
+  const behind = coverage
+    .filter((area) => routine.fixesAreas.includes(area.area))
+    .filter((area) => area.status === "overdue" || area.status === "never")
+    .sort((a, b) => (b.ratio ?? Infinity) - (a.ratio ?? Infinity));
+
+  if (behind.length === 0) return null;
+
+  const phrase = (area: AreaCoverage) =>
+    area.daysSince === null
+      ? `${AREA_LABELS[area.area].toLowerCase()} not yet tracked`
+      : `${AREA_LABELS[area.area].toLowerCase()} ${area.daysSince} days`;
+
+  const named = behind.slice(0, 2).map(phrase);
+  const rest = behind.length - named.length;
+  return named.join(", ") + (rest > 0 ? `, and ${rest} more` : "");
+}
+
+function AreaChips({
+  routine,
+  muted = false,
+}: {
+  routine: RotationRoutine;
+  muted?: boolean;
+}) {
+  const areas = Object.keys(routine.coverageVector) as FocusArea[];
+  return (
+    <div className="flex flex-wrap gap-1">
+      {areas.map((area) => {
+        const isFixing = !muted && routine.fixesAreas.includes(area);
+        return (
+          <span
+            key={area}
+            className={cn(
+              "rounded-full border px-2 py-0.5 text-[9px]",
+              isFixing ? "border-current font-medium" : "border-border text-muted-foreground"
+            )}
+            style={isFixing ? { color: coverageColor("overdue") } : undefined}
+          >
+            {AREA_LABELS[area]}
+            {!routine.coverageVector[area]?.loaded && " ~"}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 export function RoutineRotation({
   routines,
+  coverage,
   onLogNow,
   onUndo,
   onSchedule,
-  compact = false,
 }: {
   routines: RotationRoutine[];
+  coverage: AreaCoverage[];
   onLogNow: (routineId: string) => Promise<void>;
   onUndo?: (blockId: string) => Promise<void>;
   onSchedule?: (routineId: string) => Promise<void>;
-  compact?: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
 
@@ -57,135 +113,138 @@ export function RoutineRotation({
     );
   }
 
-  // The suggestion comes from the ranking; the layout does not.
-  const suggestedId =
+  const suggested =
     routines[0] && routines[0].fixesAreas.length > 0 && !routines[0].completedTodayBlockId
-      ? routines[0].id
+      ? routines[0]
       : null;
-  const ordered = [...routines].sort((a, b) => a.name.localeCompare(b.name));
+
+  // Length order: stable across clicks, and it answers the question you
+  // actually have when the recommendation does not suit — how long have I got.
+  const rest = routines
+    .filter((routine) => routine.id !== suggested?.id)
+    .sort((a, b) => (a.estDurationMin ?? 0) - (b.estDurationMin ?? 0));
+
+  const logNow = (id: string) => startTransition(async () => void (await onLogNow(id)));
+  const undo = (blockId: string) =>
+    startTransition(async () => void (onUndo && (await onUndo(blockId))));
 
   return (
-    <div className={cn("grid gap-3", compact ? "grid-cols-1" : "sm:grid-cols-2 lg:grid-cols-4")}>
-      {ordered.map((routine) => {
-        const isSuggested = routine.id === suggestedId;
-        const doneToday = routine.completedTodayBlockId !== null;
-        const areas = Object.keys(routine.coverageVector) as FocusArea[];
-
-        return (
-          <div
-            key={routine.id}
-            style={{
-              borderLeftColor: doneToday
-                ? coverageColor("fresh")
-                : isSuggested
-                  ? coverageColor("overdue")
-                  : modalityColor("prehab"),
-            }}
-            className={cn(
-              "flex flex-col gap-2.5 rounded-lg border border-l-[3px] border-border bg-card p-3.5 transition-colors",
-              isSuggested && "ring-1 ring-[hsl(var(--coverage-overdue))]/25",
-              doneToday && "bg-muted/40"
-            )}
-          >
-            <div>
-              <div className="flex items-baseline justify-between gap-2">
-                <h3 className="text-sm font-semibold">{routine.name}</h3>
-                {doneToday ? (
-                  <span
-                    className="inline-flex shrink-0 items-center gap-1 text-[9px] font-medium uppercase tracking-wide"
-                    style={{ color: coverageColor("fresh") }}
-                  >
-                    <Check className="h-3 w-3" aria-hidden="true" />
-                    Done today
-                  </span>
-                ) : (
-                  isSuggested && (
-                    <span
-                      className="shrink-0 text-[9px] font-medium uppercase tracking-wide"
-                      style={{ color: coverageColor("overdue") }}
-                    >
-                      Stalest
-                    </span>
-                  )
-                )}
-              </div>
-              <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
-                {formatMinutes(routine.estDurationMin)} · {routine.exerciseCount} exercises ·{" "}
-                {routine.daysSinceDone === null
-                  ? "never done"
-                  : `done ${formatDaysAgo(routine.daysSinceDone)}`}
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-1">
-              {areas.map((area) => {
-                const isFixing = !doneToday && routine.fixesAreas.includes(area);
-                return (
-                  <span
-                    key={area}
-                    className={cn(
-                      "rounded-full border px-2 py-0.5 text-[9px]",
-                      isFixing ? "border-current font-medium" : "border-border text-muted-foreground"
-                    )}
-                    style={isFixing ? { color: coverageColor("overdue") } : undefined}
-                  >
-                    {AREA_LABELS[area]}
-                    {!routine.coverageVector[area]?.loaded && " ~"}
-                  </span>
-                );
-              })}
-            </div>
-
-            <div className="mt-auto flex gap-1.5 pt-0.5">
-              {doneToday ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="flex-1"
-                  disabled={isPending || !onUndo}
-                  onClick={() =>
-                    startTransition(async () => {
-                      if (onUndo && routine.completedTodayBlockId) {
-                        await onUndo(routine.completedTodayBlockId);
-                      }
-                    })
-                  }
-                >
-                  <Undo2 className="mr-1 h-3.5 w-3.5" />
-                  Undo
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  variant={isSuggested ? "default" : "outline"}
-                  className="flex-1"
-                  disabled={isPending}
-                  onClick={() => startTransition(async () => void (await onLogNow(routine.id)))}
-                >
-                  <Check className="mr-1 h-3.5 w-3.5" />
-                  Did it
-                </Button>
-              )}
-              {onSchedule && !doneToday && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  aria-label={`Schedule ${routine.name} for today`}
-                  disabled={isPending}
-                  onClick={() => startTransition(async () => void (await onSchedule(routine.id)))}
-                >
-                  <CalendarPlus className="h-3.5 w-3.5" />
-                </Button>
-              )}
-            </div>
+    <div className="space-y-4">
+      {suggested ? (
+        <div
+          className="rounded-lg border border-border bg-card p-4"
+          style={{ borderLeftColor: coverageColor("overdue"), borderLeftWidth: 3 }}
+        >
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <h3 className="text-base font-semibold">{suggested.name}</h3>
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {formatMinutes(suggested.estDurationMin)} · {suggested.exerciseCount} exercises ·{" "}
+              {suggested.daysSinceDone === null
+                ? "never done"
+                : `done ${formatDaysAgo(suggested.daysSinceDone)}`}
+            </span>
           </div>
-        );
-      })}
+
+          {reasonFor(suggested, coverage) && (
+            <p className="mt-1 text-sm" style={{ color: coverageColor("overdue") }}>
+              {reasonFor(suggested, coverage)}
+            </p>
+          )}
+
+          <div className="mt-3">
+            <AreaChips routine={suggested} />
+          </div>
+
+          <div className="mt-3.5 flex gap-2">
+            <Button size="sm" variant="outline" disabled={isPending} onClick={() => logNow(suggested.id)}>
+              <Check className="mr-1.5 h-3.5 w-3.5" />
+              Did it
+            </Button>
+            {onSchedule && (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={isPending}
+                onClick={() => startTransition(async () => void (await onSchedule(suggested.id)))}
+              >
+                <CalendarPlus className="mr-1.5 h-3.5 w-3.5" />
+                Schedule
+              </Button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <p className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+          <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          Everything is inside its interval. Nothing is due.
+        </p>
+      )}
+
+      {rest.length > 0 && (
+        <div>
+          <h4 className="mb-1.5 text-[10px] uppercase tracking-[0.11em] text-muted-foreground">
+            {suggested ? "Other routines" : "Routines"}
+          </h4>
+          <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+            {rest.map((routine) => {
+              const doneToday = routine.completedTodayBlockId !== null;
+              return (
+                <li key={routine.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className={cn("text-sm font-medium", doneToday && "text-muted-foreground")}>
+                        {routine.name}
+                      </span>
+                      {doneToday && (
+                        <span
+                          className="inline-flex items-center gap-1 text-[9px] font-medium uppercase tracking-wide"
+                          style={{ color: coverageColor("fresh") }}
+                        >
+                          <Check className="h-3 w-3" aria-hidden="true" />
+                          Done today
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 truncate text-[11px] tabular-nums text-muted-foreground">
+                      {formatMinutes(routine.estDurationMin)} · {routine.exerciseCount} exercises ·{" "}
+                      {routine.daysSinceDone === null
+                        ? "never done"
+                        : `done ${formatDaysAgo(routine.daysSinceDone)}`}
+                    </p>
+                  </div>
+
+                  {doneToday ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={isPending || !onUndo}
+                      onClick={() => routine.completedTodayBlockId && undo(routine.completedTodayBlockId)}
+                    >
+                      <Undo2 className="mr-1.5 h-3.5 w-3.5" />
+                      Undo
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={isPending}
+                      onClick={() => logNow(routine.id)}
+                    >
+                      <Check className="mr-1.5 h-3.5 w-3.5" />
+                      Did it
+                    </Button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
 
-/** One-line summary of the rotation, for /today and the dashboard. */
+/** One-line summary of the rotation, for the dashboard. */
 export function NextRoutineCallout({ routine }: { routine: RotationRoutine | undefined }) {
   if (!routine) return null;
   const isDue = routine.fixesAreas.length > 0 && !routine.completedTodayBlockId;

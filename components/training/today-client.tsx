@@ -15,7 +15,7 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import { Check, CircleDotDashed, X } from "lucide-react";
 
 import { Hint } from "@/components/training/hint";
-import { NextRoutineCallout, RoutineRotation } from "@/components/training/routine-rotation";
+import { RoutineRotation } from "@/components/training/routine-rotation";
 import {
   clearCompletionAction,
   getTrainingOverview,
@@ -110,17 +110,14 @@ export function TodayClient() {
 
       {overview && overview.routines.length > 0 && (
         <section className="space-y-2.5">
-          <div className="flex items-baseline justify-between gap-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Suggested
-            </h2>
-          </div>
-          <NextRoutineCallout routine={overview.routines[0]} />
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            Suggested
+          </h2>
           <RoutineRotation
-            routines={overview.routines.slice(0, 2)}
+            routines={overview.routines}
+            coverage={overview.coverage}
             onLogNow={handleLogNow}
             onUndo={handleUndo}
-            compact
           />
         </section>
       )}

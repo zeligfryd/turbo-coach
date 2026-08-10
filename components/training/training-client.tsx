@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { CoverageView } from "@/components/training/coverage-view";
 import { TemplateManager } from "@/components/training/template-manager";
-import { NextRoutineCallout, RoutineRotation } from "@/components/training/routine-rotation";
+import { RoutineRotation } from "@/components/training/routine-rotation";
 import {
   getTrainingOverview,
   logRoutineNowAction,
@@ -85,12 +85,10 @@ export function TrainingClient() {
       )}
 
       <section className="space-y-3">
-        <div>
-          <h2 className="text-lg font-semibold">What to do next</h2>
-          <NextRoutineCallout routine={overview.routines[0]} />
-        </div>
+        <h2 className="text-lg font-semibold">What to do next</h2>
         <RoutineRotation
           routines={overview.routines}
+          coverage={overview.coverage}
           onLogNow={handleLogNow}
           onUndo={handleUndo}
           onSchedule={handleSchedule}

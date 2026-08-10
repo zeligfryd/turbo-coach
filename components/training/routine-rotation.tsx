@@ -16,7 +16,7 @@
  */
 
 import { useTransition } from "react";
-import { CalendarPlus, Check, Clock, Undo2 } from "lucide-react";
+import { CalendarPlus, CalendarX, Check, Clock, Undo2 } from "lucide-react";
 
 import { Hint } from "@/components/training/hint";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,7 @@ export type RotationRoutine = {
   lastDoneDate: string | null;
   daysSinceDone: number | null;
   completedTodayBlockId: string | null;
+  scheduledTodayBlockId: string | null;
   fixesAreas: string[];
   urgency: number;
 };
@@ -148,7 +149,14 @@ export function RoutineRotation({
           style={{ borderLeftColor: coverageColor("overdue"), borderLeftWidth: 3 }}
         >
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-            <h3 className="text-base font-semibold">{suggested.name}</h3>
+            <div className="flex items-baseline gap-2">
+              <h3 className="text-base font-semibold">{suggested.name}</h3>
+              {suggested.scheduledTodayBlockId && (
+                <span className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+                  On today
+                </span>
+              )}
+            </div>
             <span className="text-xs tabular-nums text-muted-foreground">
               {formatMinutes(suggested.estDurationMin)} · {suggested.exerciseCount} exercises ·{" "}
               {suggested.daysSinceDone === null
@@ -172,16 +180,28 @@ export function RoutineRotation({
               <Check className="mr-1.5 h-3.5 w-3.5" />
               Did it
             </Button>
-            {onSchedule && (
+            {suggested.scheduledTodayBlockId ? (
               <Button
                 size="sm"
                 variant="ghost"
-                disabled={isPending}
-                onClick={() => startTransition(async () => void (await onSchedule(suggested.id)))}
+                disabled={isPending || !onUndo}
+                onClick={() => suggested.scheduledTodayBlockId && undo(suggested.scheduledTodayBlockId)}
               >
-                <CalendarPlus className="mr-1.5 h-3.5 w-3.5" />
-                Schedule
+                <CalendarX className="mr-1.5 h-3.5 w-3.5" />
+                Take off today
               </Button>
+            ) : (
+              onSchedule && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={isPending}
+                  onClick={() => startTransition(async () => void (await onSchedule(suggested.id)))}
+                >
+                  <CalendarPlus className="mr-1.5 h-3.5 w-3.5" />
+                  Schedule for today
+                </Button>
+              )
             )}
           </div>
         </div>
@@ -200,6 +220,7 @@ export function RoutineRotation({
           <ul className="divide-y divide-border rounded-lg border border-border bg-card">
             {rest.map((routine) => {
               const doneToday = routine.completedTodayBlockId !== null;
+              const scheduledToday = routine.scheduledTodayBlockId !== null;
               return (
                 <li key={routine.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5">
                   <div className="min-w-0 flex-1">
@@ -214,6 +235,11 @@ export function RoutineRotation({
                         >
                           <Check className="h-3 w-3" aria-hidden="true" />
                           Done today
+                        </span>
+                      )}
+                      {!doneToday && scheduledToday && (
+                        <span className="text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+                          On today
                         </span>
                       )}
                     </div>

@@ -120,6 +120,49 @@ console.log("first-run setup:");
   await page.close();
 }
 
+/**
+ * Every button on the recommendation card gets exercised, not just the ones
+ * that were on my mind. The first version of this harness tested "Did it" and
+ * "Undo" only, and missed that "Schedule" changed nothing on screen while
+ * quietly writing a duplicate block on every click.
+ */
+console.log("schedule round trip:");
+{
+  const page = await openPage();
+  await page.goto(`${BASE}/training`, { waitUntil: "networkidle" });
+  await page.locator("h3").first().waitFor({ timeout: 15000 });
+
+  const scheduleButton = page.getByRole("button", { name: /Schedule for today/i }).first();
+  if (!(await scheduleButton.isVisible().catch(() => false))) {
+    problems.push("no Schedule button on the recommendation");
+  } else {
+    const before = await page.locator("body").innerText();
+    await scheduleButton.click();
+    await page.waitForTimeout(2500);
+    const after = await page.locator("body").innerText();
+    if (before === after) problems.push("Schedule changed nothing on screen");
+    console.log(`  page reflects the scheduled session: ${before !== after}`);
+
+    // Scheduling twice must not be possible from the same state.
+    const stillSchedulable = await page
+      .getByRole("button", { name: /Schedule for today/i })
+      .first()
+      .isVisible()
+      .catch(() => false);
+    if (stillSchedulable) problems.push("Schedule still offered after scheduling (duplicates)");
+
+    const takeOff = page.getByRole("button", { name: /Take off today/i }).first();
+    if (!(await takeOff.isVisible().catch(() => false))) {
+      problems.push("no way to remove a session scheduled by mistake");
+    } else {
+      await takeOff.click();
+      await page.waitForTimeout(2500);
+      console.log("  removed again");
+    }
+  }
+  await page.close();
+}
+
 // Round trip: log a routine, confirm the recommendation moves and Undo restores
 // it. Cleans up after itself so running QA leaves no training history behind.
 console.log("did-it round trip:");

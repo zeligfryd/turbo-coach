@@ -136,6 +136,12 @@ export type RoutineSummary = {
    * writes a duplicate.
    */
   completedTodayBlockId: string | null;
+  /**
+   * A block scheduled for today but not yet ticked. Same reasoning: without it
+   * the Schedule button silently stacked duplicates, because nothing on the
+   * page changed to say the routine was already on today.
+   */
+  scheduledTodayBlockId: string | null;
 };
 
 export type TrainingOverview = {
@@ -165,7 +171,7 @@ export async function getTrainingOverview(): Promise<Result<TrainingOverview>> {
         .select("id, routine_id, date, status")
         .eq("user_id", userId)
         .not("routine_id", "is", null)
-        .in("status", ["done", "partial"])
+        .in("status", ["done", "partial", "planned"])
         .lte("date", today)
         .order("date", { ascending: false }),
     ]);
@@ -180,14 +186,20 @@ export async function getTrainingOverview(): Promise<Result<TrainingOverview>> {
     // first, so the first hit for a routine wins.
     const lastDone = new Map<string, string>();
     const doneToday = new Map<string, string>();
+    const scheduledToday = new Map<string, string>();
     for (const row of (doneBlocksResult.data ?? []) as {
       id: string;
       routine_id: string;
       date: string;
+      status: string;
     }[]) {
-      if (!lastDone.has(row.routine_id)) lastDone.set(row.routine_id, row.date);
-      if (row.date === today && !doneToday.has(row.routine_id)) {
-        doneToday.set(row.routine_id, row.id);
+      const isComplete = row.status === "done" || row.status === "partial";
+      if (isComplete && !lastDone.has(row.routine_id)) lastDone.set(row.routine_id, row.date);
+      if (row.date !== today) continue;
+      if (isComplete) {
+        if (!doneToday.has(row.routine_id)) doneToday.set(row.routine_id, row.id);
+      } else if (!scheduledToday.has(row.routine_id)) {
+        scheduledToday.set(row.routine_id, row.id);
       }
     }
 
@@ -212,6 +224,7 @@ export async function getTrainingOverview(): Promise<Result<TrainingOverview>> {
         daysSinceDone: doneDate ? daysBetweenISO(doneDate, today) : null,
         exerciseCount: row.routine_item?.[0]?.count ?? 0,
         completedTodayBlockId: doneToday.get(row.id) ?? null,
+        scheduledTodayBlockId: scheduledToday.get(row.id) ?? null,
       };
     });
 
@@ -252,6 +265,29 @@ export async function scheduleRoutineAction(
 export async function logRoutineNowAction(routineId: string) {
   const result = await withUser(async (supabase, userId) => {
     const today = new Date().toISOString().slice(0, 10);
+
+    // If this routine is already on today's plan, tick that block rather than
+    // creating a second one beside it.
+    const { data: existing } = await supabase
+      .from("block")
+      .select("id, planned_duration_min")
+      .eq("user_id", userId)
+      .eq("routine_id", routineId)
+      .eq("date", today)
+      .eq("status", "planned")
+      .limit(1)
+      .maybeSingle();
+
+    if (existing) {
+      const done = await service.recordBlockCompletion(supabase, userId, existing.id, {
+        status: "done",
+        actualDurationMin: existing.planned_duration_min,
+      });
+      return done.success
+        ? { success: true as const, data: { id: existing.id } }
+        : { success: false as const, error: done.error };
+    }
+
     const scheduled = await service.scheduleRoutine(supabase, userId, routineId, today, "am");
     if (!scheduled.success) return { success: false as const, error: scheduled.error };
 
@@ -271,8 +307,9 @@ export async function logRoutineNowAction(routineId: string) {
 }
 
 /**
- * Undo a routine logged today. Removes the block; the completion row goes with
- * it through the cascade, so nothing is left behind claiming the work was done.
+ * Remove a routine block from today, whether it was scheduled or logged. The
+ * completion row goes with it through the cascade, so nothing is left behind
+ * claiming the work was done.
  */
 export async function undoRoutineTodayAction(blockId: string) {
   const result = await withUser(async (supabase, userId) => {

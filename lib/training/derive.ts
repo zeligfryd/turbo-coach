@@ -23,6 +23,7 @@ import type {
   CoverageStatus,
   ModalityLoad,
   PlannedItem,
+  RoutineCoverage,
   WeekLoad,
 } from "./types";
 
@@ -241,4 +242,67 @@ export function rankByStaleness(coverage: AreaCoverage[]): AreaCoverage[] {
     if (b.ratio === null) return 1;
     return b.ratio - a.ratio;
   });
+}
+
+// ── Routine rotation (D8) ───────────────────────────────────────────
+
+export type RankedRoutine<T extends { coverageVector: RoutineCoverage }> = T & {
+  /** Areas this routine covers that are currently due or overdue. */
+  fixesAreas: FocusArea[];
+  /** Staleness of the worst area it addresses; higher means more urgent. */
+  urgency: number;
+};
+
+/**
+ * Order the routines by how much of the current backlog each one clears.
+ *
+ * This is the default path: rather than composing a session against a grid,
+ * the user answers one question with four possible answers. Scoring on the
+ * *worst* area a routine touches (not the sum) keeps the answer explainable —
+ * "Upper 8, because neck and shoulders is nine days overdue" — instead of
+ * producing a number nobody can argue with.
+ *
+ * An area that has never been covered is treated as maximally urgent, since
+ * there is no ratio to compare and it is the most actionable thing available.
+ */
+export function rankRoutines<T extends { coverageVector: RoutineCoverage }>(
+  routines: T[],
+  coverage: AreaCoverage[],
+): RankedRoutine<T>[] {
+  const byArea = new Map(coverage.map((c) => [c.area, c]));
+  const NEVER_URGENCY = 99;
+
+  return routines
+    .map((routine) => {
+      const areas = Object.keys(routine.coverageVector) as FocusArea[];
+      let urgency = 0;
+      const fixesAreas: FocusArea[] = [];
+
+      for (const area of areas) {
+        const state = byArea.get(area);
+        if (!state) continue;
+        const areaUrgency = state.ratio === null ? NEVER_URGENCY : state.ratio;
+        urgency = Math.max(urgency, areaUrgency);
+
+        const isBehind =
+          state.status === "due" || state.status === "overdue" || state.status === "never";
+        // An area that has only ever been stretched still needs loading, and
+        // this routine can supply it. Counted as something the routine fixes,
+        // but deliberately not as urgency — otherwise "stretched but never
+        // loaded" would need its own target interval, which is the two-axis
+        // complexity the six-area model exists to avoid.
+        const suppliesMissingLoad = state.stretchOnly && Boolean(routine.coverageVector[area]?.loaded);
+
+        if (isBehind || suppliesMissingLoad) fixesAreas.push(area);
+      }
+
+      return { ...routine, fixesAreas, urgency: Math.round(urgency * 100) / 100 };
+    })
+    .sort((a, b) => {
+      if (b.urgency !== a.urgency) return b.urgency - a.urgency;
+      // Ties are the normal case on a fresh account, where every area is
+      // equally "never covered". Break toward the routine that clears the most
+      // backlog, so the first suggestion is the one covering the most ground.
+      return b.fixesAreas.length - a.fixesAreas.length;
+    });
 }

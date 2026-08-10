@@ -8,6 +8,7 @@ import {
   daysBetween,
   estimateRpeFromIntensity,
   rankByStaleness,
+  rankRoutines,
   resolveGoals,
   sessionLoad,
   startOfWeek,
@@ -335,4 +336,135 @@ describe("rankByStaleness", () => {
   function ev2(area: CoverageEvent["area"], date: string): CoverageEvent {
     return { area, date, loaded: true };
   }
+});
+
+describe("rankRoutines", () => {
+  const routine = (name: string, areas: Record<string, boolean>) => ({
+    name,
+    coverageVector: Object.fromEntries(
+      Object.entries(areas).map(([area, loaded]) => [area, { loaded }]),
+    ),
+  });
+
+  const coverage = (overrides: Record<string, string>) =>
+    computeAreaCoverage(
+      Object.entries(overrides).map(([area, date]) => ({
+        area: area as CoverageEvent["area"],
+        date,
+        loaded: true,
+      })),
+      [],
+      TODAY,
+    );
+
+  it("puts the routine covering the most overdue area first", () => {
+    const cov = coverage({
+      hips_glutes: "2026-08-08", // 1 day / 4 → fresh
+      neck_shoulders: "2026-07-25", // 15 days / 6 → overdue
+      thoracic: "2026-08-08",
+      posterior_chain: "2026-08-08",
+      trunk: "2026-08-08",
+      extremities: "2026-08-08",
+    });
+    const ranked = rankRoutines(
+      [
+        routine("Hips & glutes 12", { hips_glutes: true }),
+        routine("Upper 8", { neck_shoulders: true, thoracic: true }),
+      ],
+      cov,
+    );
+    expect(ranked[0].name).toBe("Upper 8");
+    expect(ranked[0].fixesAreas).toContain("neck_shoulders");
+  });
+
+  it("treats a never-covered area as the most urgent thing available", () => {
+    const cov = coverage({
+      hips_glutes: "2026-08-01", // 8 days / 4 → 2.0, overdue
+      // trunk has no history at all
+    });
+    const ranked = rankRoutines(
+      [
+        routine("Hips & glutes 12", { hips_glutes: true }),
+        routine("Tendon & trunk 10", { trunk: true }),
+      ],
+      cov,
+    );
+    expect(ranked[0].name).toBe("Tendon & trunk 10");
+  });
+
+  it("does not list fresh areas as things it fixes", () => {
+    const cov = coverage({
+      hips_glutes: "2026-08-08",
+      thoracic: "2026-08-08",
+      posterior_chain: "2026-08-08",
+      trunk: "2026-08-08",
+      neck_shoulders: "2026-08-08",
+      extremities: "2026-08-08",
+    });
+    const ranked = rankRoutines([routine("Post-ride 10", { hips_glutes: true })], cov);
+    expect(ranked[0].fixesAreas).toEqual([]);
+  });
+
+  it("ignores areas the routine does not cover when scoring", () => {
+    const cov = coverage({
+      hips_glutes: "2026-08-08",
+      neck_shoulders: "2026-06-01", // wildly overdue, but untouched by this routine
+    });
+    const ranked = rankRoutines([routine("Hips & glutes 12", { hips_glutes: true })], cov);
+    expect(ranked[0].urgency).toBeLessThan(1);
+  });
+});
+
+describe("rankRoutines — tie-breaking and stretch-only", () => {
+  const routine = (name: string, areas: Record<string, boolean>) => ({
+    name,
+    coverageVector: Object.fromEntries(
+      Object.entries(areas).map(([area, loaded]) => [area, { loaded }]),
+    ),
+  });
+
+  it("on a fresh account, suggests the routine covering the most ground", () => {
+    // Every area is equally "never covered", so urgency ties across the board.
+    const cov = computeAreaCoverage([], [], TODAY);
+    const ranked = rankRoutines(
+      [
+        routine("Hips & glutes 12", { hips_glutes: true }),
+        routine("Post-ride 10", {
+          hips_glutes: false,
+          thoracic: false,
+          posterior_chain: false,
+          extremities: false,
+        }),
+      ],
+      cov,
+    );
+    expect(ranked[0].name).toBe("Post-ride 10");
+    expect(ranked[0].fixesAreas).toHaveLength(4);
+  });
+
+  it("counts an area that has only been stretched as something a loading routine fixes", () => {
+    const cov = computeAreaCoverage(
+      [{ area: "thoracic", date: "2026-08-08", loaded: false }],
+      [],
+      TODAY,
+    );
+    expect(cov.find((c) => c.area === "thoracic")!.status).toBe("fresh");
+
+    const [loading, stretching] = rankRoutines(
+      [routine("Loads it", { thoracic: true }), routine("Stretches it", { thoracic: false })],
+      cov,
+    );
+    expect(loading.fixesAreas).toContain("thoracic");
+    expect(stretching.fixesAreas).not.toContain("thoracic");
+  });
+
+  it("does not let stretch-only inflate urgency", () => {
+    const cov = computeAreaCoverage(
+      [{ area: "thoracic", date: "2026-08-08", loaded: false }],
+      [],
+      TODAY,
+    );
+    const [ranked] = rankRoutines([routine("Loads it", { thoracic: true })], cov);
+    expect(ranked.urgency).toBeLessThan(1); // fresh: 1 day against a 4-day target
+  });
 });

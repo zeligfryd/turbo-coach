@@ -212,6 +212,43 @@ export async function createBlockTemplate(
 }
 
 /**
+ * Schedule one of the named routines.
+ *
+ * The default path (D8): the user starts the stalest of four rather than
+ * composing a session. The block carries `routine_id`, so when it is ticked its
+ * stored coverage vector — which knows loaded from stretch per area — is what
+ * feeds coverage, rather than the coarse area tags a plain block would use.
+ */
+export async function scheduleRoutine(
+  supabase: SupabaseClient,
+  userId: string,
+  routineId: string,
+  date: string,
+  dayPart: z.infer<typeof DayPartSchema> = "am",
+): Promise<ServiceResult<BlockRow>> {
+  const { data: routine, error } = await supabase
+    .from("routine")
+    .select("id, name, est_duration_min, is_preset, user_id")
+    .eq("id", routineId)
+    .single();
+
+  if (error || !routine) return fail(error?.message ?? "Routine not found");
+  // RLS allows reading presets and public routines; only the owner or a preset
+  // may be scheduled.
+  if (!routine.is_preset && routine.user_id !== userId) return fail("Routine not found");
+
+  return scheduleBlock(supabase, userId, {
+    date,
+    dayPart,
+    modality: "prehab",
+    name: routine.name,
+    plannedDurationMin: routine.est_duration_min,
+    plannedRpe: 3,
+    routineId,
+  });
+}
+
+/**
  * Schedule a block from a saved template. This is the path that makes coverage
  * correct at zero marginal effort: the user saves their handful of standing
  * strength sessions once, and thereafter ticking one feeds area recency.

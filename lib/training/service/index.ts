@@ -11,6 +11,7 @@ export {
   rescheduleBlock,
   scheduleBlock,
   scheduleFromTemplate,
+  scheduleRoutine,
   updateBlock,
   BlockTemplateInput,
   ScheduleBlockInput,

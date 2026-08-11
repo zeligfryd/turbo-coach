@@ -12,7 +12,7 @@ export type SyncResult = {
 
 export type SyncMode = "full" | "incremental";
 
-function mapStravaActivityToRow(userId: string, activity: StravaActivitySummary) {
+export function mapStravaActivityToRow(userId: string, activity: StravaActivitySummary) {
   const startDate = activity.start_date_local;
   const activityDate = startDate.slice(0, 10);
 
@@ -47,7 +47,7 @@ function mapStravaActivityToRow(userId: string, activity: StravaActivitySummary)
 }
 
 /** Strava external ids whose metrics intervals.icu already owns. */
-async function findIcuOwnedActivityIds(
+export async function findIcuOwnedActivityIds(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<Set<string>> {
@@ -65,7 +65,7 @@ async function findIcuOwnedActivityIds(
  * Everything except the measurements — identity, naming and timing still come
  * from Strava, so a renamed ride still updates.
  */
-function stripMetrics(row: ReturnType<typeof mapStravaActivityToRow>) {
+export function stripMetrics(row: ReturnType<typeof mapStravaActivityToRow>) {
   const {
     icu_training_load: _load,
     icu_intensity: _intensity,

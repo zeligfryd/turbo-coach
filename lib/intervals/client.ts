@@ -115,9 +115,24 @@ export function createIcuClient(apiKey: string, athleteId: string) {
       throw new Error(`intervals.icu streams returned ${res.status}: ${body.slice(0, 200)}`);
     }
     const raw = await res.json();
-    // ICU may return streams as { watts: { data: [...] } } or { watts: [...] }
-    // Normalize to plain arrays
+
+    // What intervals.icu actually returns is an ARRAY of stream objects:
+    //   [{ type: "watts", data: [...] }, { type: "heartrate", data: [...] }]
+    // The keyed forms below are kept as a fallback, but the array is the real
+    // shape. Reading it with Object.entries produced streams keyed "0", "1",
+    // "2" — which every consumer here expects to be keyed by stream type, so
+    // charts silently rendered nothing.
     const result: IcuStreams = {};
+
+    if (Array.isArray(raw)) {
+      for (const stream of raw) {
+        const type = (stream as { type?: string })?.type;
+        const data = (stream as { data?: unknown })?.data;
+        if (type && Array.isArray(data)) result[type] = data;
+      }
+      return result;
+    }
+
     if (raw && typeof raw === "object") {
       for (const [key, value] of Object.entries(raw)) {
         if (Array.isArray(value)) {

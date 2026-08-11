@@ -64,7 +64,7 @@ export function BlockCard({
       ref={setNodeRef}
       style={{ borderLeftColor: color }}
       className={cn(
-        "group/block rounded-md border border-l-[3px] bg-background px-1.5 py-1 text-xs shadow-sm transition-shadow",
+        "group/block relative rounded-md border border-l-[3px] bg-background px-1.5 py-1 text-xs shadow-sm transition-shadow",
         "hover:ring-1 hover:ring-primary/40",
         isDragging && "opacity-30",
         isGhost && "border-dashed bg-transparent",
@@ -74,7 +74,7 @@ export function BlockCard({
       <div className="flex items-start gap-1.5">
         {!isGhost && (
           <div
-            className="flex cursor-grab items-center self-stretch text-muted-foreground/50 hover:text-muted-foreground active:cursor-grabbing touch-none"
+            className="-ml-0.5 flex cursor-grab items-center self-stretch text-muted-foreground/30 transition-colors hover:text-muted-foreground active:cursor-grabbing touch-none"
             {...listeners}
             {...attributes}
             aria-label={`Move ${item.name}`}
@@ -92,7 +92,7 @@ export function BlockCard({
             <Icon className="h-3 w-3 shrink-0" style={{ color }} aria-hidden="true" />
             <span
               className={cn(
-                "truncate text-[11px] font-bold leading-tight",
+                "text-[12px] font-semibold leading-snug line-clamp-2",
                 item.status === "done" && "line-through decoration-1"
               )}
             >
@@ -100,45 +100,51 @@ export function BlockCard({
             </span>
             {!isGhost && <StatusMark status={item.status} />}
           </div>
-          <div className="truncate text-[10px] text-muted-foreground">
+          <div className="text-[11px] tabular-nums text-muted-foreground">
             {MODALITY_LABELS[item.modality]}
             {meta && ` · ${meta}`}
           </div>
           {!compact && item.areaTags.length > 0 && (
-            <div className="mt-0.5 truncate text-[9px] uppercase tracking-wide text-muted-foreground/80">
+            <div className="mt-0.5 line-clamp-2 text-[10px] uppercase tracking-wide text-muted-foreground/80">
               {item.areaTags.map((area) => AREA_LABELS[area]).join(" · ")}
             </div>
           )}
         </button>
 
-        {!isGhost && handlers.onTick && (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              handlers.onTick?.(item);
-            }}
-            aria-label={item.status === "done" ? `Mark ${item.name} not done` : `Mark ${item.name} done`}
-            className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover/block:opacity-100 focus-visible:opacity-100"
-          >
-            <Check className="h-3 w-3" />
-          </button>
-        )}
-
-        {!isGhost && handlers.onRemove && (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              handlers.onRemove?.(item);
-            }}
-            aria-label={`Remove ${item.name}`}
-            className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-accent group-hover/block:opacity-100 focus-visible:opacity-100"
-          >
-            <X className="h-3 w-3" />
-          </button>
-        )}
       </div>
+
+      {!isGhost && (handlers.onTick || handlers.onRemove) && (
+        <div className="absolute right-0.5 top-0.5 flex gap-0.5 rounded bg-background/95 opacity-0 shadow-sm transition-opacity group-hover/block:opacity-100 focus-within:opacity-100">
+          {handlers.onTick && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                handlers.onTick?.(item);
+              }}
+              aria-label={
+                item.status === "done" ? `Mark ${item.name} not done` : `Mark ${item.name} done`
+              }
+              className="rounded p-1 text-muted-foreground hover:bg-accent"
+            >
+              <Check className="h-3 w-3" />
+            </button>
+          )}
+          {handlers.onRemove && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                handlers.onRemove?.(item);
+              }}
+              aria-label={`Remove ${item.name}`}
+              className="rounded p-1 text-muted-foreground hover:bg-accent"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+      )}
 
       {isGhost && (
         <div className="mt-1.5 flex items-center gap-1">

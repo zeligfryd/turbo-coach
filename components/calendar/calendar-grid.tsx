@@ -9,7 +9,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { CalendarDay, WorkoutDragOverlay, RaceDragOverlay } from "./calendar-day";
-import { CalendarWeekSummary } from "./calendar-week-summary";
+import { CalendarWeekSummaryRow } from "./calendar-week-summary";
 import { BlockDragOverlay } from "@/components/training/block-card";
 import type {
   ScheduledWorkout,
@@ -40,7 +40,7 @@ interface CalendarGridProps {
   onRescheduleBlock?: (blockId: string, newDate: string) => void;
 }
 
-const weekDayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun", "Week"];
+const weekDayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export function CalendarGrid({
   weeks,
@@ -112,7 +112,7 @@ export function CalendarGrid({
     >
       <section className="space-y-4">
         <div className="sticky top-0 z-10 bg-background pt-1 pb-2" data-calendar-sticky-header>
-          <div className="grid grid-cols-8 gap-3 text-xs uppercase tracking-wide text-muted-foreground">
+          <div className="grid grid-cols-7 gap-3 text-xs uppercase tracking-wide text-muted-foreground">
             {weekDayLabels.map((label) => (
               <div key={label} className="px-1">
                 {label}
@@ -134,11 +134,8 @@ export function CalendarGrid({
 
             const weekStartKey = formatDateKey(week[0]);
             return (
-              <div
-                key={`week-${weekIndex}`}
-                className="grid grid-cols-8 gap-3"
-                data-week-start={weekStartKey}
-              >
+              <div key={`week-${weekIndex}`} className="space-y-1.5" data-week-start={weekStartKey}>
+                <div className="grid grid-cols-7 gap-3">
                 {week.map((day) => {
                   const key = formatDateKey(day);
                   return (
@@ -150,7 +147,8 @@ export function CalendarGrid({
                     />
                   );
                 })}
-                <CalendarWeekSummary
+                </div>
+                <CalendarWeekSummaryRow
                   weekWorkouts={weekWorkouts}
                   weekActivities={weekActivities}
                   weekLoad={weekLoads[weekStartKey] ?? null}

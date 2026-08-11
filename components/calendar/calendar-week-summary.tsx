@@ -20,6 +20,91 @@ interface CalendarWeekSummaryProps {
   endOfWeekWellness?: CalendarWellness | null;
 }
 
+export function CalendarWeekSummaryRow({
+  weekWorkouts,
+  weekActivities = [],
+  weekLoad = null,
+  endOfWeekWellness,
+}: CalendarWeekSummaryProps) {
+  const planned = weekWorkouts.reduce(
+    (acc, item) => {
+      const metrics = getWorkoutMetrics(item.workout);
+      acc.totalSeconds += metrics.durationSeconds;
+      acc.totalTss += metrics.tss;
+      return acc;
+    },
+    { totalSeconds: 0, totalTss: 0 },
+  );
+  const actual = weekActivities.reduce(
+    (acc, a) => {
+      acc.totalSeconds += a.moving_time ?? 0;
+      acc.totalTss += a.icu_training_load ?? 0;
+      return acc;
+    },
+    { totalSeconds: 0, totalTss: 0 },
+  );
+  const hasActual = weekActivities.length > 0;
+  const loadRows = weekLoad ? weekLoad.byModality.filter((m) => m.load > 0) : [];
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md bg-muted/40 px-3 py-1.5 text-[11px]">
+      <span className="text-muted-foreground">Week</span>
+      <span>
+        <span className="text-muted-foreground">Planned </span>
+        <span className="font-medium tabular-nums">
+          {formatHoursFromSeconds(planned.totalSeconds)}
+        </span>
+        <span className="text-muted-foreground"> · TSS {planned.totalTss}</span>
+      </span>
+      {hasActual && (
+        <span className="text-green-600">
+          Actual{" "}
+          <span className="font-medium tabular-nums">
+            {formatHoursFromSeconds(actual.totalSeconds)}
+          </span>{" "}
+          · TSS {Math.round(actual.totalTss)}
+        </span>
+      )}
+      {weekLoad && weekLoad.totalLoad > 0 && (
+        <span className="flex items-center gap-1.5">
+          <Hint term="session_load" underline={false} className="text-muted-foreground">
+            Load
+          </Hint>
+          <span className="flex items-center gap-[2px]">
+            {loadRows.map((m) => (
+              <span
+                key={m.modality}
+                title={`${MODALITY_LABELS[m.modality]} ${m.load}`}
+                className="h-1.5 rounded-full"
+                style={{
+                  width: `${Math.max(5, (m.load / weekLoad.totalLoad) * 56)}px`,
+                  backgroundColor: modalityColor(m.modality),
+                }}
+              />
+            ))}
+          </span>
+          <span className="font-medium tabular-nums">
+            {weekLoad.totalLoad.toLocaleString("en-GB")}
+          </span>
+        </span>
+      )}
+      {endOfWeekWellness?.ctl != null && (
+        <span className="ml-auto flex items-center gap-3 tabular-nums">
+          <span className="text-blue-500">Fitness {Math.round(endOfWeekWellness.ctl)}</span>
+          {endOfWeekWellness.atl != null && (
+            <span className="text-purple-500">Fatigue {Math.round(endOfWeekWellness.atl)}</span>
+          )}
+          {endOfWeekWellness.tsb != null && (
+            <span className={formColor(endOfWeekWellness.tsb)}>
+              Form {Math.round(endOfWeekWellness.tsb)}
+            </span>
+          )}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function CalendarWeekSummary({ weekWorkouts, weekActivities = [], weekLoad = null, endOfWeekWellness }: CalendarWeekSummaryProps) {
   const planned = weekWorkouts.reduce(
     (acc, item) => {

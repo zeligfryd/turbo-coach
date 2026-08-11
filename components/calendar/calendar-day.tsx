@@ -8,6 +8,7 @@ import type { ScheduledWorkout, CalendarRaceEvent, DayContent, CalendarHandlers 
 import type { Workout } from "@/lib/workouts/types";
 import type { EventType } from "@/lib/race/types";
 import { BlockCard } from "@/components/training/block-card";
+import { modalityColor } from "@/lib/training/display";
 import { DAY_PARTS, DAY_PART_LABELS } from "@/lib/training/taxonomy";
 import {
   getCalendarDayLabelParts,
@@ -39,7 +40,8 @@ function DraggableWorkoutCard({
   return (
     <div
       ref={setNodeRef}
-      className={`rounded-md bg-background px-1.5 py-1 text-xs flex items-start justify-between gap-1.5 shadow-sm cursor-pointer hover:ring-1 hover:ring-primary/40 transition-shadow ${isDragging ? "opacity-30" : ""}`}
+      style={{ borderLeftColor: modalityColor("bike") }}
+      className={`rounded-md border border-border border-l-[3px] bg-background px-1.5 py-1 text-xs flex items-start justify-between gap-1 shadow-sm cursor-pointer hover:ring-1 hover:ring-primary/40 transition-shadow ${isDragging ? "opacity-30" : ""}`}
       onClick={() => onWorkoutClick?.(item.workout)}
     >
       <div
@@ -51,12 +53,14 @@ function DraggableWorkoutCard({
         <GripVertical className="h-3 w-3" />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[11px] font-bold leading-tight">{item.workout.name}</div>
-        <div className="text-[10px] text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis">
-          {formatHoursFromSeconds(metrics.durationSeconds)} • TSS {metrics.tss}
+        <div className="text-[12px] font-semibold leading-snug line-clamp-2">
+          {item.workout.name}
         </div>
-        <div className="mt-1">
-          <MiniIntensityChart intervals={flattenBuilderItems(item.workout.intervals)} height={12} />
+        <div className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
+          {formatHoursFromSeconds(metrics.durationSeconds)} · TSS {metrics.tss}
+        </div>
+        <div className="mt-1 opacity-70">
+          <MiniIntensityChart intervals={flattenBuilderItems(item.workout.intervals)} height={4} />
         </div>
       </div>
       {confirmingId === item.id ? (
@@ -108,11 +112,11 @@ function DraggableRaceCard({
           <GripVertical className="h-3 w-3" />
         </div>
         <Flag className="h-3 w-3 text-red-600 shrink-0" />
-        <span className="truncate text-[11px] font-bold leading-tight text-red-700 dark:text-red-400">
+        <span className="text-[12px] font-semibold leading-snug line-clamp-2 text-red-700 dark:text-red-400">
           {race.name}
         </span>
       </div>
-      <div className="text-[10px] text-muted-foreground mt-0.5 pl-4">
+      <div className="text-[11px] text-muted-foreground mt-0.5 pl-4">
         {EVENT_TYPE_LABELS[race.event_type as EventType] ?? race.event_type}
         {race.distance_km != null && ` · ${race.distance_km}km`}
       </div>
@@ -266,21 +270,21 @@ export function CalendarDay({ date, content, handlers }: CalendarDayProps) {
             >
               <div className="flex items-center gap-1 min-w-0">
                 <CheckCircle className="h-3 w-3 text-green-600 shrink-0" />
-                <span className="truncate text-[11px] font-bold leading-tight">
+                <span className="truncate text-[12px] font-semibold leading-snug">
                   {topLine || "—"}
                 </span>
               </div>
               {midParts.length > 0 && (
-                <div className="text-[10px] text-blue-600 mt-0.5">
-                  {midParts.join(" ")}
+                <div className="text-[11px] text-blue-600 mt-0.5 tabular-nums">
+                  {midParts.join(" · ")}
                 </div>
               )}
               {tss != null && (
-                <div className="text-[10px] text-muted-foreground mt-0.5">
+                <div className="text-[11px] text-muted-foreground mt-0.5 tabular-nums">
                   Load {tss}
                 </div>
               )}
-              <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
+              <div className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">
                 {activity.name ?? activity.type ?? "Activity"}
               </div>
             </div>

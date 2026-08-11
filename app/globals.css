@@ -96,3 +96,20 @@
     @apply bg-background text-foreground;
   }
 }
+
+/*
+ * Recharts gives its inner <g> layers tabindex="-1" for the accessibility
+ * layer. Clicking a chart focuses one of them, and because those layers span
+ * the whole plot the browser paints a focus ring right around the chart.
+ *
+ * They are only focusable programmatically, never by keyboard, so dropping the
+ * ring there costs nothing. The surface itself is the real tab stop
+ * (tabindex="0") and keeps its ring, so keyboard users still see where they are.
+ *
+ * Deliberately outside @layer base: Tailwind tree-shakes class selectors in a
+ * layer against the source files, and `recharts-wrapper` only ever exists at
+ * runtime, so inside the layer this rule is stripped from the build.
+ */
+.recharts-wrapper g:focus {
+  outline: none;
+}

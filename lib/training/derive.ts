@@ -24,6 +24,7 @@ import type {
   ModalityLoad,
   PlannedItem,
   RoutineCoverage,
+  SessionLoadRow,
   WeekLoad,
 } from "./types";
 
@@ -108,6 +109,7 @@ export function computeWeekLoad(inputs: LoadInput[], weekStartDate: string): Wee
 
   let bikeTss = 0;
   let estimatedLoad = 0;
+  const sessions: SessionLoadRow[] = [];
 
   for (const input of inputs) {
     const { item } = input;
@@ -127,7 +129,23 @@ export function computeWeekLoad(inputs: LoadInput[], weekStartDate: string): Wee
       bikeTss += item.plannedTss;
       entry.tss = (entry.tss ?? 0) + item.plannedTss;
     }
+
+    sessions.push({
+      id: item.id,
+      date: item.date,
+      name: item.name,
+      modality: item.modality,
+      minutes,
+      srpe,
+      load,
+      srpeEstimated: input.srpeEstimated === true,
+      tss: item.modality === "bike" ? item.plannedTss : null,
+    });
   }
+
+  // Chronological, so a week reads Monday first the way it is trained and the
+  // way the calendar shows it. Heaviest first within a day.
+  sessions.sort((a, b) => (a.date === b.date ? b.load - a.load : a.date.localeCompare(b.date)));
 
   const modalityLoads = MODALITIES.map((m) => byModality.get(m)!);
 
@@ -136,6 +154,7 @@ export function computeWeekLoad(inputs: LoadInput[], weekStartDate: string): Wee
     totalLoad: modalityLoads.reduce((sum, m) => sum + m.load, 0),
     totalMinutes: modalityLoads.reduce((sum, m) => sum + m.minutes, 0),
     byModality: modalityLoads,
+    sessions,
     bikeTss,
     estimatedLoad,
   };

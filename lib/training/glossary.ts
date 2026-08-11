@@ -28,7 +28,7 @@ export const GLOSSARY = {
   session_load: {
     term: "Session load",
     short: "How hard a session was, times how long it lasted — your RPE multiplied by its minutes.",
-    why: "It is the only number that can fairly add a gym session to a ride, so it is how total training load is counted here.",
+    why: "It is the only number that can fairly add a gym session to a ride, so it is how total training load is counted here. It is a different unit from TSS and runs several times larger: a 2h ride at RPE 4 is 488 load and 79 TSS. Compare it with itself week to week, never with TSS.",
   },
   srpe: {
     term: "Session RPE",

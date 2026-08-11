@@ -117,6 +117,72 @@ describe("computeWeekLoad", () => {
     expect(week.totalMinutes).toBe(67);
   });
 
+  it("shows the arithmetic behind each session", () => {
+    // The case that prompted this: one 119-minute gravel ride at IF 0.632
+    // reads as 488 load beside 79 TSS. Both numbers are right; the breakdown
+    // is what makes the gap explicable.
+    const srpe = estimateRpeFromIntensity(0.632);
+    expect(srpe).toBe(4.1);
+
+    const week = computeWeekLoad(
+      [
+        {
+          item: item({
+            modality: "bike",
+            name: "Saint-Bauzille-de-Putois Gravel",
+            plannedDurationMin: 119,
+            plannedTss: 79,
+          }),
+          actualDurationMin: 119,
+          srpe,
+          srpeEstimated: true,
+        },
+      ],
+      TODAY,
+    );
+
+    expect(week.totalLoad).toBe(488);
+    expect(week.sessions).toHaveLength(1);
+    const [session] = week.sessions;
+    expect(session.minutes * session.srpe!).toBeCloseTo(session.load, 0);
+    expect(session.srpeEstimated).toBe(true);
+    expect(session.tss).toBe(79);
+    // The two units stay separate: TSS never lands in load.
+    expect(week.bikeTss).toBe(79);
+  });
+
+  it("orders the breakdown Monday first, heaviest first within a day", () => {
+    const week = computeWeekLoad(
+      [
+        { item: item({ id: "b", date: "2026-08-06", plannedDurationMin: 10, plannedRpe: 3 }) },
+        { item: item({ id: "c", date: "2026-08-06", plannedDurationMin: 60, plannedRpe: 7 }) },
+        { item: item({ id: "a", date: "2026-08-04", plannedDurationMin: 10, plannedRpe: 3 }) },
+      ],
+      TODAY,
+    );
+    expect(week.sessions.map((s) => s.id)).toEqual(["a", "c", "b"]);
+  });
+
+  it("keeps a Sunday session inside the week that started the Monday before", () => {
+    // The week of Mon 3 Aug runs to Sun 9 Aug. A Sunday ride belongs to it, and
+    // reads last rather than first.
+    const week = computeWeekLoad(
+      [
+        { item: item({ id: "sun", date: "2026-08-09", plannedDurationMin: 60, plannedRpe: 5 }) },
+        { item: item({ id: "mon", date: "2026-08-03", plannedDurationMin: 30, plannedRpe: 4 }) },
+      ],
+      "2026-08-05",
+    );
+    expect(week.weekStart).toBe("2026-08-03");
+    expect(week.sessions.map((s) => s.id)).toEqual(["mon", "sun"]);
+  });
+
+  it("leaves the breakdown empty for a week with nothing completed", () => {
+    const week = computeWeekLoad([{ item: item({ status: "planned" }) }], TODAY);
+    expect(week.sessions).toEqual([]);
+    expect(week.totalLoad).toBe(0);
+  });
+
   it("prefers actual duration and sRPE over planned", () => {
     const week = computeWeekLoad(
       [{ item: item({ plannedDurationMin: 10, plannedRpe: 3 }), actualDurationMin: 20, srpe: 5 }],
@@ -194,6 +260,7 @@ describe("acuteChronicRatio", () => {
     totalLoad,
     totalMinutes: 0,
     byModality: [],
+    sessions: [],
     bikeTss: 0,
     estimatedLoad: 0,
   });

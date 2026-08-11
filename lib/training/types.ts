@@ -193,11 +193,36 @@ export type ModalityLoad = {
   tss: number | null;
 };
 
+/**
+ * One session's contribution to a week's load, with the arithmetic kept intact.
+ *
+ * `load` is always `round(minutes × srpe)`, so a reader can check the number
+ * rather than take it on trust. This matters more than usual here: sRPE load
+ * runs several times larger than the TSS shown for the same ride (a 2h ride at
+ * IF 0.63 is 79 TSS but ~488 load), and without the working shown the bigger
+ * number reads as a bug.
+ */
+export type SessionLoadRow = {
+  id: string;
+  date: string; // YYYY-MM-DD
+  name: string;
+  modality: Modality;
+  minutes: number;
+  srpe: number | null;
+  load: number;
+  /** sRPE inferred from intensity factor, not reported by the rider. */
+  srpeEstimated: boolean;
+  /** Bike only — shown beside the load so the two units stay distinguishable. */
+  tss: number | null;
+};
+
 export type WeekLoad = {
   weekStart: string; // Monday, YYYY-MM-DD
   totalLoad: number;
   totalMinutes: number;
   byModality: ModalityLoad[];
+  /** Every session that contributed, Monday first. Empty for a week off. */
+  sessions: SessionLoadRow[];
   /** Bike TSS, kept separate from session load on purpose (P4). */
   bikeTss: number;
   /**

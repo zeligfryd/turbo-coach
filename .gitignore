@@ -57,3 +57,6 @@ Thumbs.db
 the-cyclists-training-bible.txt
 training-bible-boxes.md
 training_and_racing_with_a_power_meter.txt
+
+# Local QA screenshots
+.qa-screens/

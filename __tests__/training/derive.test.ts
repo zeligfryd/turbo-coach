@@ -167,6 +167,20 @@ describe("computeWeekLoad", () => {
     expect(week.bikeTss).toBe(118);
   });
 
+  it("separates load resting on an inferred RPE from load that was reported", () => {
+    const week = computeWeekLoad(
+      [
+        // A ride whose RPE we inferred from intensity.
+        { item: item({ modality: "bike", plannedDurationMin: 60 }), srpe: 5, srpeEstimated: true },
+        // A session the rider actually rated.
+        { item: item({ modality: "prehab", plannedDurationMin: 10 }), srpe: 3 },
+      ],
+      TODAY,
+    );
+    expect(week.totalLoad).toBe(300 + 30);
+    expect(week.estimatedLoad).toBe(300);
+  });
+
   it("reports every modality even when unused", () => {
     const week = computeWeekLoad([], TODAY);
     expect(week.byModality).toHaveLength(5);
@@ -181,6 +195,7 @@ describe("acuteChronicRatio", () => {
     totalMinutes: 0,
     byModality: [],
     bikeTss: 0,
+    estimatedLoad: 0,
   });
 
   it("is null until four weeks exist", () => {

@@ -49,6 +49,7 @@ export function SessionLoadChart({ weeks }: { weeks: WeekLoad[] }) {
   const nonBike = total > 0
     ? ((total - (latest.byModality.find((m) => m.modality === "bike")?.load ?? 0)) / total) * 100
     : null;
+  const estimatedShare = total > 0 ? ((latest?.estimatedLoad ?? 0) / total) * 100 : 0;
 
   if (present.length === 0) {
     return (
@@ -69,6 +70,13 @@ export function SessionLoadChart({ weeks }: { weeks: WeekLoad[] }) {
         <p className="mt-0.5 text-xs text-muted-foreground">
           Every modality, weekly. sRPE × minutes — a different unit from bike TSS above.
         </p>
+        {estimatedShare > 0 && (
+          <p className="mt-1 text-xs">
+            <Hint term="rpe_estimated" className="text-muted-foreground">
+              {Math.round(estimatedShare)}% of this week is from an estimated RPE
+            </Hint>
+          </p>
+        )}
       </div>
 
       <div className="p-2 sm:p-4">

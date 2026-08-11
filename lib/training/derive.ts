@@ -87,6 +87,8 @@ type LoadInput = {
   /** Actual minutes and sRPE where completed; falls back to planned. */
   actualDurationMin?: number | null;
   srpe?: number | null;
+  /** The sRPE was inferred from intensity, not reported by the rider. */
+  srpeEstimated?: boolean;
 };
 
 /**
@@ -105,6 +107,7 @@ export function computeWeekLoad(inputs: LoadInput[], weekStartDate: string): Wee
   }
 
   let bikeTss = 0;
+  let estimatedLoad = 0;
 
   for (const input of inputs) {
     const { item } = input;
@@ -115,8 +118,10 @@ export function computeWeekLoad(inputs: LoadInput[], weekStartDate: string): Wee
     const srpe = input.srpe ?? item.plannedRpe ?? null;
     const entry = byModality.get(item.modality)!;
 
+    const load = sessionLoad(minutes, srpe);
     entry.minutes += minutes;
-    entry.load += sessionLoad(minutes, srpe);
+    entry.load += load;
+    if (input.srpeEstimated) estimatedLoad += load;
 
     if (item.modality === "bike" && item.plannedTss != null) {
       bikeTss += item.plannedTss;
@@ -132,6 +137,7 @@ export function computeWeekLoad(inputs: LoadInput[], weekStartDate: string): Wee
     totalMinutes: modalityLoads.reduce((sum, m) => sum + m.minutes, 0),
     byModality: modalityLoads,
     bikeTss,
+    estimatedLoad,
   };
 }
 

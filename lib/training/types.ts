@@ -200,4 +200,11 @@ export type WeekLoad = {
   byModality: ModalityLoad[];
   /** Bike TSS, kept separate from session load on purpose (P4). */
   bikeTss: number;
+  /**
+   * How much of totalLoad came from an inferred sRPE rather than a reported
+   * one. Shown alongside the total so an estimate is never read as a
+   * measurement — in practice this is most of the bike load, since RPE is
+   * rarely filled in.
+   */
+  estimatedLoad: number;
 };

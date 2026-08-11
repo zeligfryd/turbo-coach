@@ -94,6 +94,12 @@ function metricsFrom(activity: IcuActivitySummary) {
     elevation_gain: activity.total_elevation_gain ?? null,
     trimp: activity.trimp ?? null,
     device_name: activity.device_name ?? null,
+    // Only what the rider actually reported. `feel` is intervals.icu's 1–5
+    // "how did that go", so it is scaled to the 1–10 RPE this app uses.
+    // Estimated values are never written here: the estimate is derived at read
+    // time so it cannot go stale against the formula that produced it.
+    rpe: activity.rpe ?? (activity.feel != null ? activity.feel * 2 : null),
+    rpe_estimated: false,
     updated_at: new Date().toISOString(),
   };
 }

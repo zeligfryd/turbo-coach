@@ -205,7 +205,8 @@ export function StravaConnection({ initialConnection }: StravaConnectionProps) {
       <CardHeader>
         <CardTitle className="text-2xl">Strava</CardTitle>
         <CardDescription>
-          Connected as athlete {connection.strava_athlete_id}
+          Indoor rides and anything intervals.icu does not receive. Athlete{" "}
+          {connection.strava_athlete_id}.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -213,7 +214,7 @@ export function StravaConnection({ initialConnection }: StravaConnectionProps) {
           <div className="flex items-center gap-2 text-sm">
             <span className="inline-block h-2 w-2 rounded-full bg-[#FC4C02]" />
             <span className="text-muted-foreground">Connected</span>
-            <span className="text-muted-foreground ml-auto">
+            <span className="text-muted-foreground ml-auto" suppressHydrationWarning>
               Last synced: {formatLastSynced(connection.last_synced_at)}
             </span>
           </div>
@@ -226,11 +227,16 @@ export function StravaConnection({ initialConnection }: StravaConnectionProps) {
           {success && <p className="text-sm text-green-600">{success}</p>}
 
           <div className="flex gap-3">
-            <Button onClick={() => handleSync("incremental")} disabled={isSyncing || isLoading} className="flex-1">
-              {isSyncing ? "Syncing..." : "Sync Recent"}
+            <Button
+              variant="outline"
+              onClick={() => handleSync("incremental")}
+              disabled={isSyncing || isLoading}
+              className="flex-1"
+            >
+              {isSyncing ? "Syncing…" : "Sync recent"}
             </Button>
             <Button variant="outline" onClick={() => handleSync("full")} disabled={isSyncing || isLoading}>
-              Full Sync
+              Full sync
             </Button>
             <Button
               variant="outline"

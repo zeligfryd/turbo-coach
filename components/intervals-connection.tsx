@@ -105,7 +105,16 @@ export function IntervalsConnection({ initialConnection }: IntervalsConnectionPr
       }
 
       setSyncCount(data.daysSynced);
-      setSuccess(`Synced ${data.daysSynced} days of wellness data`);
+      const acts = data.activities as
+        | { enriched: number; inserted: number }
+        | null
+        | undefined;
+      const activityPart = acts
+        ? `${acts.inserted} new ${acts.inserted === 1 ? "activity" : "activities"}, ${acts.enriched} updated`
+        : null;
+      setSuccess(
+        [activityPart, `${data.daysSynced} days of wellness`].filter(Boolean).join(" · "),
+      );
       if (connection) {
         setConnection({
           ...connection,
@@ -182,7 +191,7 @@ export function IntervalsConnection({ initialConnection }: IntervalsConnectionPr
       <CardHeader>
         <CardTitle className="text-2xl">Intervals.icu</CardTitle>
         <CardDescription>
-          Connected as athlete {connection.athlete_id}
+          Activities and wellness. Athlete {connection.athlete_id}.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -190,7 +199,7 @@ export function IntervalsConnection({ initialConnection }: IntervalsConnectionPr
           <div className="flex items-center gap-2 text-sm">
             <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
             <span className="text-muted-foreground">Connected</span>
-            <span className="text-muted-foreground ml-auto">
+            <span className="text-muted-foreground ml-auto" suppressHydrationWarning>
               Last synced: {formatLastSynced(connection.last_synced_at)}
             </span>
           </div>
@@ -201,13 +210,11 @@ export function IntervalsConnection({ initialConnection }: IntervalsConnectionPr
 
           {error && <p className="text-sm text-red-500">{error}</p>}
           {success && <p className="text-sm text-green-600">{success}</p>}
-          {syncCount !== null && !error && (
-            <p className="text-sm text-muted-foreground">{syncCount} days of wellness synced</p>
-          )}
+
 
           <div className="flex gap-3">
             <Button onClick={handleSync} disabled={isSyncing || isLoading} className="flex-1">
-              {isSyncing ? "Syncing..." : "Sync Wellness"}
+              {isSyncing ? "Syncing…" : "Sync"}
             </Button>
             <Button
               variant="outline"

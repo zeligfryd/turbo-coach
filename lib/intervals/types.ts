@@ -23,6 +23,10 @@ export type IcuActivitySummary = {
   /** Heart-rate based load. Present on Garmin-sourced rides. */
   trimp?: number | null;
   device_name?: string | null;
+  /** Session RPE, 1–10, when the rider recorded one. */
+  rpe?: number | null;
+  /** intervals.icu's 1–5 "how did that feel", when the rider recorded one. */
+  feel?: number | null;
   /**
    * Which system fed the ride to intervals.icu — GARMIN_CONNECT, STRAVA, etc.
    * Strava-fed rows arrive as empty shells (no duration, distance, heart rate
@@ -99,8 +103,6 @@ export type IcuActivityDetail = IcuActivitySummary & {
   stream_types?: string[] | null;
   // Misc
   icu_weight_kg?: number | null;
-  feel?: number | null;
-  rpe?: number | null;
 };
 
 /** A detected interval within an activity. */

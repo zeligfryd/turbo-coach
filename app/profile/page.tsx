@@ -38,11 +38,11 @@ export default async function ProfilePage() {
         userId={data.user.id}
       />
       <CoachSettingsForm initialSettings={coachSettings} />
-      <StravaConnection
-        initialConnection={(stravaConnection as StravaConnectionRow) ?? null}
-      />
       <IntervalsConnection
         initialConnection={(icuConnection as IcuConnectionRow) ?? null}
+      />
+      <StravaConnection
+        initialConnection={(stravaConnection as StravaConnectionRow) ?? null}
       />
     </div>
   );

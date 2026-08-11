@@ -35,6 +35,12 @@ export type LoadInput = {
   item: PlannedItem;
   actualDurationMin?: number | null;
   srpe?: number | null;
+  /**
+   * True when the sRPE was inferred from intensity factor rather than reported
+   * by the rider. An inferred number must never pass for a reported one, so
+   * this travels with the load rather than being recomputed downstream.
+   */
+  srpeEstimated?: boolean;
 };
 
 export type TrainingWindow = {
@@ -251,11 +257,13 @@ export async function readTrainingWindow(
 
   for (const activity of activityRows) {
     const item = activityToItem(activity);
-    const srpe = activity.rpe ?? estimateRpeFromIntensity(activity.icu_intensity);
+    const reported = activity.rpe;
+    const srpe = reported ?? estimateRpeFromIntensity(activity.icu_intensity);
     loadInputs.push({
       item,
       actualDurationMin: item.plannedDurationMin,
       srpe,
+      srpeEstimated: reported == null && srpe != null,
     });
   }
 

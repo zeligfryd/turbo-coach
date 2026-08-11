@@ -86,6 +86,11 @@ export function CalendarWeekSummaryRow({
           <span className="font-medium tabular-nums">
             {weekLoad.totalLoad.toLocaleString("en-GB")}
           </span>
+          {weekLoad.estimatedLoad > 0 && (
+            <Hint term="rpe_estimated" underline={false} className="text-[10px] text-muted-foreground">
+              (est.)
+            </Hint>
+          )}
         </span>
       )}
       {endOfWeekWellness?.ctl != null && (

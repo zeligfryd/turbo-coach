@@ -355,10 +355,14 @@ describe("computeAreaCoverage", () => {
   });
 
   it("computes the ratio against the target", () => {
+    // Derived from the default rather than hard-coded, so tuning the shipped
+    // shape does not break a test that is about the arithmetic.
+    const target = DEFAULT_AREA_TARGET_DAYS.thoracic;
     const coverage = computeAreaCoverage([ev("thoracic", "2026-08-01")], [], TODAY);
     const thoracic = coverage.find((c) => c.area === "thoracic")!;
-    // 8 days since, default target 4 → 2.0×
-    expect(thoracic.ratio).toBe(2);
+    const daysSince = 8;
+    expect(thoracic.daysSince).toBe(daysSince);
+    expect(thoracic.ratio).toBeCloseTo(daysSince / target, 2);
     expect(thoracic.status).toBe("overdue");
   });
 

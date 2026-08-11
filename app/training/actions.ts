@@ -17,6 +17,7 @@ import {
   rankRoutines,
   startOfWeek,
 } from "@/lib/training/derive";
+import { weekProgress, weeklyEstimate, type WeekProgress } from "@/lib/training/cadence";
 import { readTrainingWindow } from "@/lib/training/read";
 import * as service from "@/lib/training/service";
 import type {
@@ -745,6 +746,12 @@ export type TodaySnapshot = {
   offBike30d: number;
   /** Planned sessions whose day has passed with nothing to show for them. */
   missed: number;
+  /**
+   * The week's shape: how many off-bike sessions it works out at, how many are
+   * done, and which areas are still owed. Null until there are routines to
+   * measure the shape against.
+   */
+  shape: WeekProgress | null;
 };
 
 /**
@@ -761,7 +768,8 @@ export async function getTodaySnapshot(): Promise<Result<TodaySnapshot>> {
     const weekEnd = addDaysISO(weekStart, 6);
     const monthAgo = addDaysISO(today, -30);
 
-    const [ridesResult, wellnessResult, blocksResult, plannedResult] = await Promise.all([
+    const [ridesResult, wellnessResult, blocksResult, plannedResult, overviewResult, weekBlocksResult] =
+      await Promise.all([
       supabase
         .from("activities")
         .select("activity_date, moving_time")
@@ -788,6 +796,14 @@ export async function getTodaySnapshot(): Promise<Result<TodaySnapshot>> {
         .eq("user_id", userId)
         .eq("status", "planned")
         .lt("scheduled_date", today),
+      getTrainingOverview(),
+      supabase
+        .from("block")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("status", "done")
+        .gte("date", weekStart)
+        .lte("date", weekEnd),
     ]);
 
     const rides = ridesResult.data ?? [];
@@ -807,6 +823,29 @@ export async function getTodaySnapshot(): Promise<Result<TodaySnapshot>> {
       };
     });
 
+    // The shape: what the targets work out at, against what is actually done
+    // and which areas are still behind. Areas carry the demand — a week of four
+    // sessions that all hit the same one is not a covered week.
+    let shape: WeekProgress | null = null;
+    if (overviewResult.success) {
+      const { coverage, routines } = overviewResult.data;
+      const targets = Object.fromEntries(
+        coverage.map((area) => [area.area, area.targetDays]),
+      ) as Partial<Record<FocusArea, number>>;
+      const estimate = weeklyEstimate(
+        targets,
+        routines.map((routine) => ({
+          areaCount: Object.keys(routine.coverageVector).length,
+          durationMin: routine.estDurationMin,
+        })),
+      );
+      const behind = coverage
+        .filter((area) => area.status !== "fresh")
+        .sort((a, b) => (b.ratio ?? Number.MAX_SAFE_INTEGER) - (a.ratio ?? Number.MAX_SAFE_INTEGER))
+        .map((area) => area.area);
+      shape = weekProgress(weekBlocksResult.data?.length ?? 0, estimate.sessions, behind);
+    }
+
     return {
       success: true as const,
       data: {
@@ -816,6 +855,7 @@ export async function getTodaySnapshot(): Promise<Result<TodaySnapshot>> {
         form: wellnessResult.data?.[0]?.tsb ?? null,
         offBike30d: blocksResult.data?.length ?? 0,
         missed: plannedResult.data?.length ?? 0,
+        shape,
       },
     };
   });

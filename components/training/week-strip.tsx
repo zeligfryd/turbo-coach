@@ -15,6 +15,7 @@
 import Link from "next/link";
 
 import { modalityColor } from "@/lib/training/display";
+import { AREA_LABELS } from "@/lib/training/taxonomy";
 
 import type { TodaySnapshot } from "@/app/training/actions";
 
@@ -38,7 +39,7 @@ function formWord(tsb: number): string {
 }
 
 export function WeekStrip({ snapshot }: { snapshot: TodaySnapshot }) {
-  const { week, weekMinutes, weekRides, form, offBike30d, missed } = snapshot;
+  const { week, weekMinutes, weekRides, form, offBike30d, missed, shape } = snapshot;
   const peak = Math.max(60, ...week.map((day) => day.minutes));
 
   return (
@@ -87,6 +88,48 @@ export function WeekStrip({ snapshot }: { snapshot: TodaySnapshot }) {
         })}
       </div>
 
+      {/* The week's shape, as pips rather than a percentage: three things to
+          do reads as three things, where "67%" reads as a score. */}
+      {shape && shape.expected > 0 && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border pt-3 text-xs">
+          <span className="flex items-center gap-2">
+            <span className="flex gap-1" aria-hidden="true">
+              {Array.from({ length: shape.expected }, (_, index) => (
+                <span
+                  key={index}
+                  className={
+                    index < shape.done
+                      ? "h-2 w-2 rounded-full bg-primary"
+                      : "h-2 w-2 rounded-full border border-border"
+                  }
+                />
+              ))}
+            </span>
+            {/* Doing more than the shape asks is a good week, not an error —
+                but "8 of 2" reads like one. Past the target the count stops
+                being a fraction and the extras are named separately. */}
+            <span className="text-muted-foreground">
+              <span className="font-semibold tabular-nums text-foreground">
+                {Math.min(shape.done, shape.expected)} of {shape.expected}
+              </span>{" "}
+              off the bike
+              {shape.done > shape.expected && (
+                <span className="tabular-nums"> · {shape.done - shape.expected} extra</span>
+              )}
+            </span>
+          </span>
+          {shape.owed.length > 0 && (
+            <span className="text-muted-foreground">
+              Still owed:{" "}
+              <span className="text-foreground">
+                {shape.owed.slice(0, 2).map((area) => AREA_LABELS[area].toLowerCase()).join(", ")}
+                {shape.owed.length > 2 && ` +${shape.owed.length - 2}`}
+              </span>
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border pt-3 text-xs text-muted-foreground">
         {form != null && (
           <span>
@@ -98,9 +141,12 @@ export function WeekStrip({ snapshot }: { snapshot: TodaySnapshot }) {
             · {formWord(form)}
           </span>
         )}
-        <span>
-          Off the bike <span className="font-semibold tabular-nums text-foreground">{offBike30d}</span> in 30 days
-        </span>
+        {!shape && (
+          <span>
+            Off the bike{" "}
+            <span className="font-semibold tabular-nums text-foreground">{offBike30d}</span> in 30 days
+          </span>
+        )}
         {/* Stated, not alarmed. A missed session is information, and the only
             action offered is to go and look. */}
         {missed > 0 && (

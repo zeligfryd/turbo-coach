@@ -15,7 +15,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
-import { Check, ChevronDown, Undo2 } from "lucide-react";
+import { Check, ChevronDown, CircleCheck, Undo2 } from "lucide-react";
 
 import {
   getTodaySnapshot,
@@ -70,6 +70,11 @@ export function TodayClient() {
 
   // The recommendation: the routine you last acted on if there is one, so the
   // card never moves under your hand; otherwise the stalest.
+  // Met is measured on areas, not on the session count: sessions are the means,
+  // the areas are what is actually being asked for. Suppressed while a routine
+  // is pinned from a fresh log, so the acknowledgement is not overwritten.
+  const shapeMet = snapshot?.shape?.isMet === true && !pinnedRoutineId;
+
   const routines = overview?.routines ?? [];
   const suggestion =
     (pinnedRoutineId ? routines.find((r) => r.id === pinnedRoutineId) : null) ?? routines[0] ?? null;
@@ -161,6 +166,30 @@ export function TodayClient() {
           onDismiss={() => setJustLogged(null)}
           disabled={pending}
         />
+      ) : shapeMet && suggestion ? (
+        /*
+          The week is covered. An app that always asks for one more thing is a
+          treadmill; being able to say "that is the week" is what makes the
+          shape worth having over a schedule. The extra session stays available
+          but stops being the thing the screen is pushing.
+        */
+        <section className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+          <p className="flex items-center gap-2 text-sm font-semibold">
+            <CircleCheck className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+            Week&rsquo;s shape is met
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Every area is within its interval. Nothing owed until Monday.
+          </p>
+          <button
+            type="button"
+            onClick={() => log(suggestion.id, suggestion.name)}
+            disabled={pending}
+            className="mt-3 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg border border-border bg-card text-sm font-medium text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          >
+            Do one anyway
+          </button>
+        </section>
       ) : suggestion ? (
         <section className="rounded-xl border border-border bg-card p-4">
           <div className="flex items-start justify-between gap-3">

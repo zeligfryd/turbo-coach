@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-import { CoverageView } from "@/components/training/coverage-view";
+import { WeekShape } from "@/components/training/week-shape";
 import { TemplateManager } from "@/components/training/template-manager";
 import {
   getTrainingOverview,
@@ -12,6 +12,7 @@ import {
   type TrainingOverview,
 } from "@/app/training/actions";
 import type { FocusArea } from "@/lib/training/taxonomy";
+import type { RoutineShape } from "@/lib/training/cadence";
 
 export function TrainingClient() {
   const [overview, setOverview] = useState<TrainingOverview | null>(null);
@@ -41,6 +42,13 @@ export function TrainingClient() {
     await resetAllAreaGoalsAction();
     await refresh();
   };
+
+  // How many sessions the shape comes to depends on how broad your routines
+  // are: the same demand takes fewer sessions when each covers four areas.
+  const routineShapes: RoutineShape[] = (overview?.routines ?? []).map((routine) => ({
+    areaCount: Object.keys(routine.coverageVector).length,
+    durationMin: routine.estDurationMin,
+  }));
 
   if (isLoading) {
     return <p className="text-sm text-muted-foreground">Loading…</p>;
@@ -88,15 +96,10 @@ export function TrainingClient() {
         </Link>
       </section>
 
-      <section className="space-y-3">
-        <div>
-          <h2 className="text-lg font-semibold">Coverage</h2>
-          <p className="text-sm text-muted-foreground">
-            Six areas, one target interval each.
-          </p>
-        </div>
-        <CoverageView
+      <section>
+        <WeekShape
           coverage={overview.coverage}
+          routines={routineShapes}
           onSetTarget={handleSetTarget}
           onResetAll={handleResetAll}
         />

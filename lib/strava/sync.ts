@@ -46,6 +46,43 @@ function mapStravaActivityToRow(userId: string, activity: StravaActivitySummary)
   };
 }
 
+/** Strava external ids whose metrics intervals.icu already owns. */
+async function findIcuOwnedActivityIds(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<Set<string>> {
+  const { data } = await supabase
+    .from("activities")
+    .select("external_id")
+    .eq("user_id", userId)
+    .eq("source", "strava")
+    .eq("metrics_source", "intervals.icu");
+
+  return new Set(((data ?? []) as { external_id: string }[]).map((row) => row.external_id));
+}
+
+/**
+ * Everything except the measurements — identity, naming and timing still come
+ * from Strava, so a renamed ride still updates.
+ */
+function stripMetrics(row: ReturnType<typeof mapStravaActivityToRow>) {
+  const {
+    icu_training_load: _load,
+    icu_intensity: _intensity,
+    icu_ftp: _ftp,
+    avg_power: _avgPower,
+    normalized_power: _np,
+    max_power: _maxPower,
+    avg_hr: _avgHr,
+    max_hr: _maxHr,
+    avg_cadence: _cadence,
+    calories: _calories,
+    elevation_gain: _elevation,
+    ...rest
+  } = row;
+  return rest;
+}
+
 /**
  * Sync Strava activities.
  *
@@ -99,11 +136,19 @@ export async function syncStravaActivities(
     let newActivitiesCount = 0;
 
     if (activities.length > 0) {
-      // Upsert activity summaries
+      // Rides intervals.icu has already supplied numbers for. Its load is a
+      // true TSS against a known FTP; Strava's is a heart-rate Relative Effort
+      // or a TSS we derived ourselves. Overwriting the former with either would
+      // silently downgrade the data on every sync.
+      const icuOwned = await findIcuOwnedActivityIds(supabase, userId);
+
       const chunkSize = 500;
       for (let i = 0; i < activities.length; i += chunkSize) {
         const chunk = activities.slice(i, i + chunkSize);
-        const rows = chunk.map((a) => mapStravaActivityToRow(userId, a));
+        const rows = chunk.map((a) => {
+          const row = mapStravaActivityToRow(userId, a);
+          return icuOwned.has(String(a.id)) ? stripMetrics(row) : row;
+        });
 
         const { error } = await supabase
           .from("activities")
@@ -114,8 +159,9 @@ export async function syncStravaActivities(
         }
       }
 
-      // Fetch streams and compute accurate metrics for all synced activities
-      await computeMetricsForActivities(supabase, userId, client, activities);
+      // Streams and computed metrics, for the rides intervals.icu has not covered.
+      const uncovered = activities.filter((a) => !icuOwned.has(String(a.id)));
+      await computeMetricsForActivities(supabase, userId, client, uncovered);
 
       // Count only rows that were actually inserted (created_at set on INSERT, not UPDATE).
       const { count } = await supabase

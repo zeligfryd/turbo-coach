@@ -10,6 +10,8 @@ type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 type ActivityRow = {
   external_id: string;
+  icu_activity_id?: string | null;
+  metrics_source?: string | null;
   source: string | null;
   user_id: string;
   activity_date: string | null;
@@ -51,7 +53,7 @@ export async function GET(
     // Look up the activity
     const { data: activity, error: actError } = await supabase
       .from("activities")
-      .select("external_id, source, user_id, activity_date, moving_time, distance, icu_ftp, avg_power, normalized_power, avg_hr, max_hr, avg_cadence, calories, icu_training_load, elevation_gain, max_power, name, type, start_date_local, icu_atl, icu_ctl")
+      .select("external_id, icu_activity_id, metrics_source, source, user_id, activity_date, moving_time, distance, icu_ftp, avg_power, normalized_power, avg_hr, max_hr, avg_cadence, calories, icu_training_load, elevation_gain, max_power, name, type, start_date_local, icu_atl, icu_ctl")
       .eq("id", id)
       .eq("user_id", user.id)
       .maybeSingle();
@@ -60,12 +62,17 @@ export async function GET(
       return NextResponse.json({ error: "Activity not found" }, { status: 404 });
     }
 
-    if (activity.source === "strava") {
-      return handleStravaActivity(supabase, user.id, id, activity as ActivityRow);
+    // Prefer intervals.icu whenever it holds this ride, whichever system
+    // originally created the row: it serves the streams without Strava's rate
+    // rules, and its figures are the ones stored against the row.
+    const row = activity as ActivityRow;
+    if (row.icu_activity_id) {
+      return handleIcuActivity(supabase, user.id, row);
     }
-
-    // ICU-sourced activity — use ICU API directly
-    return handleIcuActivity(supabase, user.id, activity as ActivityRow);
+    if (row.source === "strava") {
+      return handleStravaActivity(supabase, user.id, id, row);
+    }
+    return handleIcuActivity(supabase, user.id, row);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error";
     console.error("[ActivityDetail] Error:", message);
@@ -266,7 +273,7 @@ async function handleIcuActivity(
   }
 
   const client = createIcuClient(connection.api_key, connection.athlete_id);
-  const externalId = activity.external_id;
+  const externalId = activity.icu_activity_id ?? activity.external_id;
 
   const [detailResult, streamsResult, powerCurveResult] = await Promise.allSettled([
     client.fetchActivityDetail(externalId),

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { syncStravaActivities } from "@/lib/strava/sync";
 import { syncWellness } from "@/lib/intervals/wellness-sync";
+import { syncIcuActivities } from "@/lib/intervals/activity-sync";
 import { triggerPostRideAnalysis } from "@/lib/ai/post-ride";
 import { recomputeFitness } from "@/lib/fitness/compute";
 import type { StravaConnectionRow } from "@/lib/strava/types";
@@ -11,6 +12,31 @@ import type { IcuConnectionRow } from "@/lib/intervals/types";
  * Unified incremental sync: syncs both Strava activities and ICU wellness in parallel.
  * Always uses incremental mode for Strava (since last sync + compute metrics).
  */
+/**
+ * How far back to ask intervals.icu for activities.
+ *
+ * The first run has to reach back far enough to pick up everything Garmin has
+ * ever sent, since none of it has been ingested. After that a rolling window is
+ * enough, and still catches a ride that was renamed or had its FTP corrected
+ * after the fact.
+ */
+async function icuActivityWindow(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+): Promise<{ oldest: string; newest: string }> {
+  const { count } = await supabase
+    .from("activities")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("metrics_source", "intervals.icu");
+
+  const daysBack = (count ?? 0) > 0 ? 60 : 800;
+  const oldest = new Date(Date.now() - daysBack * 86_400_000).toISOString().slice(0, 10);
+  // Tomorrow, so a ride uploaded today is never cut off by a timezone edge.
+  const newest = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+  return { oldest, newest };
+}
+
 export async function POST() {
   try {
     const supabase = await createClient();
@@ -29,7 +55,12 @@ export async function POST() {
       supabase.from("icu_connections").select("sync_status, api_key, athlete_id").eq("user_id", user.id).maybeSingle(),
     ]);
 
-    const results: { strava?: { activitiesSynced: number }; icu?: { daysSynced: number }; errors: string[] } = {
+    const results: {
+      strava?: { activitiesSynced: number };
+      icu?: { daysSynced: number };
+      icuActivities?: { enriched: number; inserted: number; skippedEmpty: number };
+      errors: string[];
+    } = {
       errors: [],
     };
 
@@ -90,6 +121,28 @@ export async function POST() {
 
     await Promise.all(tasks);
 
+    // intervals.icu activities run *after* Strava, not alongside it. Both write
+    // the same rows, and intervals.icu is the better source for anything Garmin
+    // recorded — running it last means it wins within a single sync as well as
+    // across runs.
+    if (icuConn) {
+      const conn = icuConn as IcuConnectionRow;
+      const icuResult = await syncIcuActivities(supabase, user.id, {
+        ...(await icuActivityWindow(supabase, user.id)),
+        apiKey: conn.api_key,
+        athleteId: conn.athlete_id,
+      });
+      if (icuResult.success) {
+        results.icuActivities = {
+          enriched: icuResult.enriched,
+          inserted: icuResult.inserted,
+          skippedEmpty: icuResult.skippedEmpty,
+        };
+      } else {
+        results.errors.push(`ICU activities: ${icuResult.error}`);
+      }
+    }
+
     // Fire-and-forget post-ride analysis and fitness recomputation
     triggerPostRideAnalysis(supabase, user.id).catch(console.warn);
     recomputeFitness(supabase, user.id).catch(console.warn);
@@ -98,6 +151,7 @@ export async function POST() {
       success: results.errors.length === 0,
       strava: results.strava ?? null,
       icu: results.icu ?? null,
+      icuActivities: results.icuActivities ?? null,
       errors: results.errors.length > 0 ? results.errors : undefined,
     });
   } catch (err) {

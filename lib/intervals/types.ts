@@ -20,6 +20,20 @@ export type IcuActivitySummary = {
   total_elevation_gain?: number | null;
   icu_atl?: number | null;
   icu_ctl?: number | null;
+  /** Heart-rate based load. Present on Garmin-sourced rides. */
+  trimp?: number | null;
+  device_name?: string | null;
+  /**
+   * Which system fed the ride to intervals.icu — GARMIN_CONNECT, STRAVA, etc.
+   * Strava-fed rows arrive as empty shells (no duration, distance, heart rate
+   * or load), so this is worth checking before trusting anything else on them.
+   */
+  source?: string | null;
+  /**
+   * NOTE: a percentage (45.9 … 97.0), not the conventional 0–1 intensity
+   * factor. Convert before storing or comparing.
+   */
+  icu_efficiency_factor?: number | null;
 };
 
 /** Shape of a wellness day from the intervals.icu API. */

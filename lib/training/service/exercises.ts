@@ -124,7 +124,7 @@ export async function duplicateExercise(
     .from("exercise")
     .insert({
       user_id: userId,
-      name: source.name,
+      name: `${source.name} (copy)`,
       regions: source.regions,
       stimulus: source.stimulus,
       default_dose: source.default_dose,

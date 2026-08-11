@@ -549,6 +549,28 @@ export async function restoreExerciseAction(exerciseId: string) {
   return result;
 }
 
+export type RoutineOption = { id: string; name: string; estDurationMin: number | null };
+
+/** Just enough to populate a picker. */
+export async function getRoutineOptions(): Promise<Result<RoutineOption[]>> {
+  return withUser(async (supabase) => {
+    const { data, error } = await supabase
+      .from("routine")
+      .select("id, name, est_duration_min")
+      .is("archived_at", null)
+      .order("est_duration_min");
+    if (error) return { success: false, error: error.message };
+    return {
+      success: true,
+      data: (data ?? []).map((row) => ({
+        id: row.id as string,
+        name: row.name as string,
+        estDurationMin: row.est_duration_min as number | null,
+      })),
+    };
+  });
+}
+
 export async function getBlockTemplates(): Promise<Result<BlockTemplateRow[]>> {
   return withUser(async (supabase, userId) => {
     const { data, error } = await supabase

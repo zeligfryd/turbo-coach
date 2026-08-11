@@ -47,6 +47,7 @@ export type ExerciseDraft = {
   equipment: Equipment[];
   difficulty: number | null;
   cues: string | null;
+  description: string | null;
   notes: string | null;
 };
 
@@ -59,6 +60,7 @@ export type EditableExercise = {
   equipment: string[];
   difficulty: number | null;
   cues: string | null;
+  description: string | null;
   notes: string | null;
 };
 
@@ -98,6 +100,7 @@ export function ExerciseEditor({
   const [equipment, setEquipment] = useState<Equipment[]>([]);
   const [difficulty, setDifficulty] = useState<number | null>(1);
   const [cues, setCues] = useState("");
+  const [description, setDescription] = useState("");
   const [notes, setNotes] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,6 +121,7 @@ export function ExerciseEditor({
       setEquipment(exercise.equipment as Equipment[]);
       setDifficulty(exercise.difficulty);
       setCues(exercise.cues ?? "");
+      setDescription(exercise.description ?? "");
       setNotes(exercise.notes ?? "");
     } else {
       setName("");
@@ -130,6 +134,7 @@ export function ExerciseEditor({
       setEquipment([]);
       setDifficulty(1);
       setCues("");
+      setDescription("");
       setNotes("");
     }
   }, [open, exercise]);
@@ -158,6 +163,7 @@ export function ExerciseEditor({
       equipment,
       difficulty,
       cues: cues.trim() || null,
+      description: description.trim() || null,
       notes: notes.trim() || null,
     });
     setIsSaving(false);
@@ -371,6 +377,18 @@ export function ExerciseEditor({
               value={cues}
               onChange={(event) => setCues(event.target.value)}
               placeholder="Stack the hips, lead with the heel."
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="exercise-description">How to perform it</Label>
+            <textarea
+              id="exercise-description"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              rows={5}
+              placeholder="Setup, the movement, and the mistake that makes it useless."
+              className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
           </div>
 

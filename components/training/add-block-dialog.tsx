@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { Bookmark } from "lucide-react";
+import { Bookmark, ListChecks } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -50,6 +50,12 @@ export type NewBlockDraft = {
   areaTags: FocusArea[];
   /** Also store this as a saved session for next time. */
   saveAsTemplate?: boolean;
+  /**
+   * Set when the session is one of your routines. The block is then created
+   * through scheduleRoutine, so ticking it feeds coverage from the routine's
+   * own vector rather than from coarse area tags.
+   */
+  routineId?: string | null;
 };
 
 /** Sensible starting points so the common case is two clicks. */
@@ -64,12 +70,14 @@ export function AddBlockDialog({
   open,
   dateLabel,
   templates = [],
+  routines = [],
   onClose,
   onSubmit,
 }: {
   open: boolean;
   dateLabel: string | null;
   templates?: BlockTemplateRow[];
+  routines?: { id: string; name: string; estDurationMin: number | null }[];
   onClose: () => void;
   onSubmit: (draft: NewBlockDraft) => Promise<void> | void;
 }) {
@@ -80,6 +88,7 @@ export function AddBlockDialog({
   const [rpe, setRpe] = useState(String(MODALITY_DEFAULTS.prehab.rpe));
   const [areaTags, setAreaTags] = useState<FocusArea[]>([]);
   const [saveAsTemplate, setSaveAsTemplate] = useState(false);
+  const [routineId, setRoutineId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   // Reset to defaults each time the dialog opens, so a previous session's
@@ -94,11 +103,24 @@ export function AddBlockDialog({
     setRpe(String(defaults.rpe));
     setAreaTags([]);
     setSaveAsTemplate(false);
+    setRoutineId(null);
     setIsSaving(false);
   }, [open]);
 
+  /** Picking a routine fills the form and marks the block as routine-backed. */
+  function applyRoutine(routine: { id: string; name: string; estDurationMin: number | null }) {
+    setRoutineId(routine.id);
+    setModality("prehab");
+    setName(routine.name);
+    setDuration(routine.estDurationMin ? String(routine.estDurationMin) : "");
+    setRpe("3");
+    setAreaTags([]);
+    setSaveAsTemplate(false);
+  }
+
   /** Fill the form from a saved session — the two-tap path for a repeat. */
   function applyTemplate(template: BlockTemplateRow) {
+    setRoutineId(null);
     setModality(template.modality);
     setName(template.name);
     setDuration(template.duration_min ? String(template.duration_min) : "");
@@ -135,6 +157,7 @@ export function AddBlockDialog({
       plannedRpe: rpe ? Number(rpe) : null,
       areaTags,
       saveAsTemplate,
+      routineId,
     });
     setIsSaving(false);
   }
@@ -151,6 +174,41 @@ export function AddBlockDialog({
         </DialogHeader>
 
         <div className="grid gap-4 py-1">
+          {routines.length > 0 && (
+            <div className="grid gap-2">
+              <Label>Routines</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {routines.map((routine) => {
+                  const isActive = routineId === routine.id;
+                  return (
+                    <button
+                      key={routine.id}
+                      type="button"
+                      aria-pressed={isActive}
+                      onClick={() => (isActive ? setRoutineId(null) : applyRoutine(routine))}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        isActive
+                          ? "border-foreground bg-accent font-medium"
+                          : "border-border hover:bg-accent"
+                      )}
+                    >
+                      <ListChecks
+                        className="h-3.5 w-3.5"
+                        style={{ color: modalityColor("prehab") }}
+                      />
+                      {routine.name}
+                      <span className="text-muted-foreground">
+                        {formatMinutes(routine.estDurationMin)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {templates.length > 0 && (
             <div className="grid gap-2">
               <Label>Saved sessions</Label>
@@ -179,7 +237,7 @@ export function AddBlockDialog({
             </div>
           )}
 
-          <div className="grid gap-2">
+          <div className={cn("grid gap-2", routineId && "opacity-50")}>
             <Label>Kind</Label>
             <div className="flex flex-wrap gap-1.5">
               {BLOCK_MODALITIES.map((option) => {
@@ -190,6 +248,7 @@ export function AddBlockDialog({
                     key={option}
                     type="button"
                     aria-pressed={isActive}
+                    disabled={routineId !== null}
                     onClick={() => pickModality(option)}
                     className={cn(
                       "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",

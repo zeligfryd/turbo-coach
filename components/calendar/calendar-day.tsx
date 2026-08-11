@@ -157,6 +157,7 @@ interface CalendarDayProps {
 
 export function CalendarDay({ date, content, handlers }: CalendarDayProps) {
   const { workouts, activities, races, blocks } = content;
+  const isToday = formatDateKey(date) === formatDateKey(new Date());
   const { onAdd, onRemove, onWorkoutClick, onActivityClick, onRaceClick, onAddRace } = handlers;
   const dateKey = formatDateKey(date);
   const { monthPrefix, dayOfMonth } = getCalendarDayLabelParts(date);
@@ -179,11 +180,13 @@ export function CalendarDay({ date, content, handlers }: CalendarDayProps) {
   return (
     <div
       ref={setDropRef}
-      className={`group relative rounded-lg bg-card shadow-sm px-2 py-2 min-h-[120px] flex flex-col gap-2 text-foreground transition-colors ${isOver ? "ring-2 ring-primary/50 bg-primary/5" : ""}`}
+      className={`group relative rounded-lg shadow-sm px-2 py-2 min-h-[120px] flex flex-col gap-2 text-foreground transition-colors ${
+        isToday ? "bg-accent/60 ring-1 ring-border" : "bg-card"
+      } ${isOver ? "ring-2 ring-primary/50 bg-primary/5" : ""}`}
       data-day-date={dateKey}
     >
       <div className="flex items-start justify-between">
-        <span className="text-sm text-muted-foreground">
+        <span className={`text-sm ${isToday ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
           {monthPrefix ? (
             <>
               <span className="font-bold text-foreground">{monthPrefix}</span>{" "}

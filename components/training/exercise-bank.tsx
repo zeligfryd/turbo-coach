@@ -12,6 +12,8 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { Archive, ChevronDown, Copy, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 
+import { ConfirmAction } from "@/components/training/confirm-action";
+
 import { ExerciseEditor, type EditableExercise, type ExerciseDraft } from "@/components/training/exercise-editor";
 import { InfoPanel } from "@/components/training/hint";
 import { Button } from "@/components/ui/button";
@@ -209,6 +211,7 @@ export function ExerciseBank() {
                         equipment: exercise.equipment,
                         difficulty: exercise.difficulty,
                         cues: exercise.cues,
+                        description: exercise.description,
                         notes: exercise.notes,
                       });
                       setIsEditorOpen(true);
@@ -222,41 +225,69 @@ export function ExerciseBank() {
                   size="sm"
                   aria-label={`Duplicate ${exercise.name}`}
                   disabled={isPending}
-                  onClick={() => run(() => duplicateExerciseAction(exercise.id))}
+                  onClick={async () => {
+                    const result = await duplicateExerciseAction(exercise.id);
+                    if (!result.success) {
+                      setError(result.error);
+                      return;
+                    }
+                    // Straight into the editor: the reason to duplicate is to
+                    // change something, so landing on a read-only list would
+                    // just add a step.
+                    const copy = result.data;
+                    setEditing({
+                      id: copy.id,
+                      name: copy.name,
+                      regions: copy.regions,
+                      stimulus: copy.stimulus,
+                      defaultDose: copy.default_dose,
+                      equipment: copy.equipment,
+                      difficulty: copy.difficulty,
+                      cues: copy.cues,
+                      description: copy.description,
+                      notes: copy.notes,
+                    });
+                    setIsEditorOpen(true);
+                    await refresh();
+                  }}
                 >
                   <Copy className="h-3.5 w-3.5" />
                 </Button>
                 {exercise.isOwn && isArchived && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    aria-label={`Delete ${exercise.name}`}
+                  <ConfirmAction
+                    label={`Delete ${exercise.name}`}
+                    title={`Delete ${exercise.name}?`}
+                    description="This cannot be undone. It is only possible because no routine uses this exercise."
+                    confirmLabel="Delete"
+                    destructive
                     disabled={isPending}
-                    onClick={() => run(() => deleteExerciseAction(exercise.id))}
+                    onConfirm={() => run(() => deleteExerciseAction(exercise.id))}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  </ConfirmAction>
                 )}
-                {exercise.isOwn && (
+                {exercise.isOwn && isArchived && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    aria-label={isArchived ? `Restore ${exercise.name}` : `Archive ${exercise.name}`}
+                    aria-label={`Restore ${exercise.name}`}
                     disabled={isPending}
-                    onClick={() =>
-                      run(() =>
-                        isArchived
-                          ? restoreExerciseAction(exercise.id)
-                          : archiveExerciseAction(exercise.id),
-                      )
-                    }
+                    onClick={() => run(() => restoreExerciseAction(exercise.id))}
                   >
-                    {isArchived ? (
-                      <RotateCcw className="h-3.5 w-3.5" />
-                    ) : (
-                      <Archive className="h-3.5 w-3.5" />
-                    )}
+                    <RotateCcw className="h-3.5 w-3.5" />
                   </Button>
+                )}
+                {exercise.isOwn && !isArchived && (
+                  <ConfirmAction
+                    label={`Archive ${exercise.name}`}
+                    title={`Archive ${exercise.name}?`}
+                    description="It disappears from the bank and the composer. Routines that already use it keep working, and you can restore it later."
+                    confirmLabel="Archive"
+                    disabled={isPending}
+                    onConfirm={() => run(() => archiveExerciseAction(exercise.id))}
+                  >
+                    <Archive className="h-3.5 w-3.5" />
+                  </ConfirmAction>
                 )}
               </div>
             </div>

@@ -24,13 +24,16 @@ export function CalendarAgendaDay({ date, content, handlers }: CalendarAgendaDay
   const { workouts, activities, races, blocks } = content;
   const { onAdd, onRemove, onWorkoutClick, onActivityClick, onRaceClick, onAddRace } = handlers;
   const dateKey = formatDateKey(date);
+  const isToday = dateKey === formatDateKey(new Date());
   const weekday = date.toLocaleString("en-US", { weekday: "short" });
   const { monthPrefix, dayOfMonth } = getCalendarDayLabelParts(date);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   return (
     <div
-      className="rounded-lg bg-card shadow-sm px-2.5 py-2 flex items-start gap-2 text-foreground"
+      className={`rounded-lg shadow-sm px-2.5 py-2 flex items-start gap-2 text-foreground ${
+        isToday ? "bg-accent/60 ring-1 ring-border" : "bg-card"
+      }`}
       data-day-date={dateKey}
     >
       <div className="min-w-[72px]">

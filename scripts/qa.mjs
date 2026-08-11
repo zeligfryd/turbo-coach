@@ -326,6 +326,7 @@ group("C. Routine composer");
     assert(has(await page.locator("body").innerText(), "QA edited routine"), "edit did not save");
 
     await page.getByRole("button", { name: /Archive QA edited routine/i }).click();
+    await page.getByRole("button", { name: /^Archive$/ }).click();
     await page.waitForTimeout(2500);
     assert(
       !has(await page.locator("body").innerText(), "QA edited routine"),
@@ -333,8 +334,20 @@ group("C. Routine composer");
     );
   });
 
-  await check("routine can be archived", async () => {
+  await check("archiving a routine asks first", async () => {
     await page.getByRole("button", { name: /Archive QA routine/i }).click();
+    await page.waitForTimeout(500);
+    assert(
+      has(await page.locator("body").innerText(), "Archive QA routine?"),
+      "no confirmation before archiving",
+    );
+    // Cancelling must leave it alone.
+    await page.getByRole("button", { name: /^Cancel$/ }).click();
+    await page.waitForTimeout(1200);
+    assert(has(await page.locator("body").innerText(), "QA routine"), "cancel still archived it");
+
+    await page.getByRole("button", { name: /Archive QA routine/i }).click();
+    await page.getByRole("button", { name: /^Archive$/ }).click();
     await page.waitForTimeout(2500);
     assert(
       !(await page.locator("body").innerText()).includes("QA routine"),
@@ -390,16 +403,23 @@ group("D. Exercise bank");
     const before = await page.locator("main ul li").count();
     await seeded.getByRole("button", { name: /^Duplicate /i }).click();
     await page.waitForTimeout(2500);
+
+    // Duplicating drops you straight into the editor on the new copy.
+    const nameField = page.locator("#exercise-name");
+    assert(await nameField.isVisible(), "duplicate did not open the editor");
+    assert(
+      (await nameField.inputValue()) === `${name} (copy)`,
+      `copy not named "(copy)": got "${await nameField.inputValue()}"`,
+    );
+    await page.getByRole("button", { name: /^Cancel$/ }).click();
+    await page.waitForTimeout(2000);
     assert(
       (await page.locator("main ul li").count()) === before + 1,
       "duplicate did not add a row",
     );
 
-    // The copy is editable where the original is not.
-    const copy = page
-      .locator(`main ul li[data-exercise-name="${name}"]`)
-      .filter({ hasNot: page.locator("text=/seeded/i") })
-      .first();
+    const copyName = `${name} (copy)`;
+    const copy = page.locator(`main ul li[data-exercise-name="${copyName}"]`).first();
     assert(
       (await copy.getByRole("button", { name: /^Edit /i }).count()) === 1,
       "the copy is not editable",
@@ -408,17 +428,19 @@ group("D. Exercise bank");
     // Archive then delete: an unreferenced copy must be removable outright,
     // or a mistaken duplicate would linger forever.
     await copy.getByRole("button", { name: /^Archive /i }).click();
+    await page.getByRole("button", { name: /^Archive$/ }).click();
     await page.waitForTimeout(2000);
     await page.getByRole("button", { name: /Show archived/i }).click();
     await page.waitForTimeout(2000);
     const archived = page
-      .locator(`main ul li[data-exercise-name="${name}"]`)
+      .locator(`main ul li[data-exercise-name="${copyName}"]`)
       .filter({ hasText: /archived/i })
       .first();
     await archived.getByRole("button", { name: /^Delete /i }).click();
+    await page.getByRole("button", { name: /^Delete$/ }).click();
     await page.waitForTimeout(2500);
     assert(
-      (await page.locator(`main ul li[data-exercise-name="${name}"]`).count()) === 1,
+      (await page.locator(`main ul li[data-exercise-name="${copyName}"]`).count()) === 0,
       "the archived copy was not deleted",
     );
     await page.getByRole("button", { name: /Hide archived/i }).click();
@@ -441,6 +463,7 @@ group("D. Exercise bank");
 
   await check("archive hides it, and it comes back under 'show archived'", async () => {
     await page.getByRole("button", { name: /Archive QA exercise/i }).click();
+    await page.getByRole("button", { name: /^Archive$/ }).click();
     await page.waitForTimeout(2500);
     assert(
       !has(await page.locator("body").innerText(), "QA exercise"),
@@ -458,6 +481,7 @@ group("D. Exercise bank");
       .first()
       .getByRole("button", { name: /^Delete /i })
       .click();
+    await page.getByRole("button", { name: /^Delete$/ }).click();
     await page.waitForTimeout(2500);
     assert(
       !has(await page.locator("body").innerText(), "QA exercise"),
@@ -498,6 +522,28 @@ group("E. Calendar");
     const body = await page.locator("body").innerText();
     assert(has(body, "QA session"), "session not on the calendar");
     assert(/PM/.test(body), "day-part label missing");
+  });
+
+  await check("a routine can be scheduled straight from the calendar", async () => {
+    await page
+      .getByRole("button", { name: /Add strength, mobility, yoga or prehab session/i })
+      .nth(1)
+      .click();
+    await page.waitForTimeout(700);
+    const routineChip = page.getByRole("button", { name: /^Upper 8/ }).first();
+    assert(await routineChip.isVisible(), "routines are not offered in the add-session dialog");
+    await routineChip.click();
+    await page.waitForTimeout(400);
+    assert(
+      (await page.locator("#block-name").inputValue()) === "Upper 8",
+      "picking a routine did not fill the form",
+    );
+    await page.getByRole("button", { name: /Add session/i }).click();
+    await page.waitForTimeout(3000);
+    assert(has(await page.locator("body").innerText(), "Upper 8"), "routine not on the calendar");
+
+    await page.getByRole("button", { name: /Remove Upper 8/i }).first().click();
+    await page.waitForTimeout(2500);
   });
 
   await check("a modality chip hides its own sessions", async () => {

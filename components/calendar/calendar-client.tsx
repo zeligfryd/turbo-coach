@@ -23,11 +23,12 @@ import type { Workout } from "@/lib/workouts/types";
 import type { BlockTemplateRow, PlannedItem, WeekLoad } from "@/lib/training/types";
 import { MODALITIES, type Modality } from "@/lib/training/taxonomy";
 import { ModalityFilter } from "@/components/training/modality-filter";
-import { InfoPanel } from "@/components/training/hint";
 import { AddBlockDialog, type NewBlockDraft } from "@/components/training/add-block-dialog";
 import {
   createBlockTemplateAction,
   getBlockTemplates,
+  getRoutineOptions,
+  scheduleRoutineAction,
   getTrainingWindow,
   scheduleBlockAction,
   rescheduleBlockAction,
@@ -76,6 +77,9 @@ export function CalendarClient() {
   const [activeModalities, setActiveModalities] = useState<Set<Modality>>(() => new Set(MODALITIES));
   const [blockFormDate, setBlockFormDate] = useState<string | null>(null);
   const [blockTemplates, setBlockTemplates] = useState<BlockTemplateRow[]>([]);
+  const [routineOptions, setRoutineOptions] = useState<
+    { id: string; name: string; estDurationMin: number | null }[]
+  >([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
@@ -189,6 +193,9 @@ export function CalendarClient() {
     getUserFtp().then(setUserFtp);
     getBlockTemplates().then((result) => {
       if (result.success) setBlockTemplates(result.data);
+    });
+    getRoutineOptions().then((result) => {
+      if (result.success) setRoutineOptions(result.data);
     });
   }, []);
 
@@ -434,7 +441,17 @@ export function CalendarClient() {
 
   const handleCreateBlock = async (draft: NewBlockDraft) => {
     if (!blockFormDate) return;
-    const { saveAsTemplate, ...block } = draft;
+    const { saveAsTemplate, routineId, ...block } = draft;
+
+    // A routine-backed block goes through scheduleRoutine so that ticking it
+    // feeds coverage from the routine's stored vector rather than area tags.
+    if (routineId) {
+      await scheduleRoutineAction(routineId, blockFormDate, block.dayPart);
+      setBlockFormDate(null);
+      fetchScheduled();
+      return;
+    }
+
     await scheduleBlockAction({ ...block, date: blockFormDate });
     if (saveAsTemplate) {
       await createBlockTemplateAction({
@@ -571,15 +588,6 @@ export function CalendarClient() {
         </div>
       </div>
 
-      <InfoPanel id="calendar-modalities" title="Your whole training week, not just the riding">
-        <p>
-          Strength, mobility, yoga and prehab sit alongside your rides. Use the chips to show or
-          hide a kind of training; sessions group into morning, midday and evening rather than
-          clock times.
-        </p>
-        <p>Rides are still created and edited in the cycling flow.</p>
-      </InfoPanel>
-
       <ModalityFilter
         active={activeModalities}
         counts={modalityCounts}
@@ -629,6 +637,7 @@ export function CalendarClient() {
         open={blockFormDate !== null}
         dateLabel={blockFormDate}
         templates={blockTemplates}
+        routines={routineOptions}
         onClose={() => setBlockFormDate(null)}
         onSubmit={handleCreateBlock}
       />

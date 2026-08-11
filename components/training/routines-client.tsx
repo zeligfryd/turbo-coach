@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Archive, ChevronDown, Copy, Pencil, Plus } from "lucide-react";
 
+import { ConfirmAction } from "@/components/training/confirm-action";
+
 import { RoutineComposer, type ComposerSeed } from "@/components/training/routine-composer";
 import { RoutineDetail } from "@/components/training/routine-detail";
 import { InfoPanel } from "@/components/training/hint";
@@ -192,17 +194,18 @@ export function RoutinesClient() {
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        aria-label={`Archive ${routine.name}`}
-                        onClick={async () => {
+                      <ConfirmAction
+                        label={`Archive ${routine.name}`}
+                        title={`Archive ${routine.name}?`}
+                        description="It disappears from the rotation and from anywhere it can be scheduled. Sessions you have already logged from it keep their history."
+                        confirmLabel="Archive"
+                        onConfirm={async () => {
                           await archiveRoutineAction(routine.id);
                           await refresh();
                         }}
                       >
                         <Archive className="h-3.5 w-3.5" />
-                      </Button>
+                      </ConfirmAction>
                     </>
                   )}
                 </div>

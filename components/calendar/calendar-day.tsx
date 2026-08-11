@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Plus, X, CheckCircle, Trash2, Flag, GripVertical, Dumbbell } from "lucide-react";
+import { X, CheckCircle, Trash2, Flag, GripVertical } from "lucide-react";
+import { AddToDayMenu } from "./add-to-day-menu";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { MiniIntensityChart } from "@/components/workouts/mini-intensity-chart";
 import { flattenBuilderItems } from "@/lib/workouts/utils";
@@ -181,11 +182,21 @@ export function CalendarDay({ date, content, handlers }: CalendarDayProps) {
 
   const showPartLabels = parts.length > 1;
 
+  const isEmpty =
+    workouts.length === 0 && activities.length === 0 && races.length === 0 && blocks.length === 0;
+
   return (
     <div
       ref={setDropRef}
-      className={`group relative rounded-lg shadow-sm px-2 py-2 min-h-[120px] flex flex-col gap-2 text-foreground transition-colors ${
-        isToday ? "bg-accent/60 ring-1 ring-border" : "bg-card"
+      // An empty day loses its card: no fill, no shadow, only a hairline to
+      // hold the grid. Ink is spent in proportion to content, so a quiet month
+      // reads as quiet instead of as fifty identical cards.
+      className={`group relative rounded-lg px-2 py-2 min-h-[120px] flex flex-col gap-2 text-foreground transition-colors ${
+        isToday
+          ? "bg-accent/60 ring-1 ring-border shadow-sm"
+          : isEmpty
+            ? "border border-border/40"
+            : "bg-card shadow-sm"
       } ${isOver ? "ring-2 ring-primary/50 bg-primary/5" : ""}`}
       data-day-date={dateKey}
     >
@@ -200,31 +211,22 @@ export function CalendarDay({ date, content, handlers }: CalendarDayProps) {
             dayOfMonth
           )}
         </span>
-        <div className="flex items-center gap-0.5">
-          <button
-            onClick={() => onAddRace?.(dateKey)}
-            className="opacity-0 group-hover:opacity-70 hover:!opacity-100 transition-opacity p-1 rounded-md hover:bg-red-500/10"
-            aria-label="Add race"
-            title="Add race event"
-          >
-            <Flag className="h-3.5 w-3.5 text-red-500" />
-          </button>
-          <button
-            onClick={() => onAdd(dateKey)}
-            className="opacity-50 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-accent"
-            aria-label="Add workout"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => handlers.onAddBlock?.(dateKey)}
-            className="opacity-50 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-accent"
-            aria-label="Add strength, mobility, yoga or prehab session"
-            title="Add a non-riding session"
-          >
-            <Dumbbell className="h-3.5 w-3.5" />
-          </button>
-        </div>
+        {/*
+          One control instead of three. The old header put a race flag, a plus
+          and a dumbbell on every cell — 21 buttons a week, most of them on days
+          with nothing in them, and all of them below a comfortable tap size.
+          The menu keeps every one of those actions, and only appears once the
+          day is hovered or focused.
+        */}
+        {!isEmpty && (
+          <AddToDayMenu
+            dateKey={dateKey}
+            onAdd={onAdd}
+            onAddRace={onAddRace}
+            onAddBlock={handlers.onAddBlock}
+            className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
+          />
+        )}
       </div>
 
       <div className="flex flex-col gap-2">
@@ -295,8 +297,20 @@ export function CalendarDay({ date, content, handlers }: CalendarDayProps) {
           <DraggableRaceCard key={race.id} race={race} onRaceClick={onRaceClick} />
         ))}
 
-        {workouts.length === 0 && activities.length === 0 && races.length === 0 && blocks.length === 0 && (
-          <div className="text-xs text-muted-foreground">Nothing scheduled</div>
+        {/*
+          An empty day says nothing and becomes the button. Fifty "Nothing
+          scheduled" labels were fifty things to read past, and on a phone the
+          only way to add to a day was a 24px icon. Now the whole cell is the
+          tap target, and it is silent until you touch it.
+        */}
+        {isEmpty && (
+          <AddToDayMenu
+            dateKey={dateKey}
+            onAdd={onAdd}
+            onAddRace={onAddRace}
+            onAddBlock={handlers.onAddBlock}
+            variant="fill"
+          />
         )}
       </div>
     </div>

@@ -20,7 +20,7 @@ export default async function RideLayout({ children }: { children: React.ReactNo
             <h1 className="text-lg font-semibold">Ride</h1>
           </div>
           <Button asChild variant="outline" size="sm">
-            <Link href="/dashboard">Back to Dashboard</Link>
+            <Link href="/today">Back to Today</Link>
           </Button>
         </div>
       </header>

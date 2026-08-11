@@ -10,7 +10,7 @@ export default async function Home() {
 
   // Redirect authenticated users to dashboard
   if (data?.user) {
-    redirect("/dashboard");
+    redirect("/today");
   }
 
   return (

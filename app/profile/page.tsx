@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { ProfileForm } from "@/components/profile-form";
 import { CoachSettingsForm } from "@/components/coach-settings-form";
 import { StravaConnection } from "@/components/strava-connection";
@@ -44,6 +46,17 @@ export default async function ProfilePage() {
       <StravaConnection
         initialConnection={(stravaConnection as StravaConnectionRow) ?? null}
       />
+
+      {/* The off-bike library left the sidebar; this is how you reach it. */}
+      <Link
+        href="/training"
+        className="block rounded-lg border border-border bg-card p-4 transition-colors hover:bg-accent"
+      >
+        <span className="block text-sm font-semibold">Off-bike library</span>
+        <span className="mt-0.5 block text-xs text-muted-foreground">
+          Routines, exercises, target intervals and templates.
+        </span>
+      </Link>
     </div>
   );
 }

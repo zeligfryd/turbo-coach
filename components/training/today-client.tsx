@@ -1,56 +1,64 @@
 "use client";
 
 /**
- * /today — the only mobile-first surface (D6).
+ * The home screen: what to do today, and one button to record it.
  *
- * Planning is a desktop task; logging is not. This moved forward from v3
- * because everything downstream depends on things actually being ticked, and
- * they will not be ticked from a laptop.
+ * This replaces two screens. /dashboard showed six coverage areas all reading
+ * "never" — greeting you with six failures before you had agreed to any of it —
+ * and /today offered four "Did it" buttons of equal weight, so the first thing
+ * asked of you was a choice between things you had no reason to rank.
  *
- * Deliberately thin: what is due, one tap to log it, an optional sRPE, and the
- * stalest routine at the top so the common case needs no decision at all.
+ * The shape now: one headline that names the day, one recommendation with one
+ * full-width action, and a week you can read at a glance. Alternatives exist
+ * behind a single line. Nothing here needs setting up, and nothing is coloured
+ * as a problem unless it genuinely is one.
  */
 
-import { useCallback, useEffect, useState, useTransition } from "react";
-import { Check, CircleDotDashed, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { Check, ChevronDown, Undo2 } from "lucide-react";
 
-import { Hint } from "@/components/training/hint";
-import { RoutineRotation } from "@/components/training/routine-rotation";
 import {
-  clearCompletionAction,
+  getTodaySnapshot,
   getTrainingOverview,
   getTrainingWindow,
   logRoutineNowAction,
   recordCompletionAction,
   undoRoutineTodayAction,
+  type TodaySnapshot,
   type TrainingOverview,
 } from "@/app/training/actions";
 import { MODALITY_ICONS, formatMinutes, modalityColor } from "@/lib/training/display";
-import { MODALITY_LABELS, DAY_PART_LABELS } from "@/lib/training/taxonomy";
-import type { BlockStatus } from "@/lib/training/taxonomy";
 import type { PlannedItem } from "@/lib/training/types";
 import { cn } from "@/lib/utils";
 
-const STATUS_ACTIONS = [
-  { status: "done" as const, label: "Done", Icon: Check },
-  { status: "partial" as const, label: "Partial", Icon: CircleDotDashed },
-  { status: "skipped" as const, label: "Skip", Icon: X },
-];
+import { RpePrompt } from "./rpe-prompt";
+import { WeekStrip } from "./week-strip";
 
 export function TodayClient() {
   const today = new Date().toISOString().slice(0, 10);
   const [items, setItems] = useState<PlannedItem[]>([]);
   const [overview, setOverview] = useState<TrainingOverview | null>(null);
+  const [snapshot, setSnapshot] = useState<TodaySnapshot | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [, startTransition] = useTransition();
+  const [showAlternatives, setShowAlternatives] = useState(false);
+  const [justLogged, setJustLogged] = useState<{ blockId: string; name: string } | null>(null);
+  // Logging a routine drops it down the staleness ranking, so the recommended
+  // card would quietly become a *different* routine the moment you acted on
+  // it — the card you just used slides away and something else takes its
+  // place, with nothing to say your tap worked. Pinning holds the card still
+  // for the rest of the visit.
+  const [pinnedRoutineId, setPinnedRoutineId] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
   const refresh = useCallback(async () => {
-    const [windowResult, overviewResult] = await Promise.all([
+    const [windowResult, overviewResult, snapshotResult] = await Promise.all([
       getTrainingWindow(today, today),
       getTrainingOverview(),
+      getTodaySnapshot(),
     ]);
     if (windowResult.success) setItems(windowResult.data.items);
     if (overviewResult.success) setOverview(overviewResult.data);
+    if (snapshotResult.success) setSnapshot(snapshotResult.data);
     setIsLoading(false);
   }, [today]);
 
@@ -58,38 +66,46 @@ export function TodayClient() {
     refresh();
   }, [refresh]);
 
-  const setStatus = (item: PlannedItem, status: BlockStatus) => {
+  const rides = useMemo(() => items.filter((item) => !item.editableHere), [items]);
+
+  // The recommendation: the routine you last acted on if there is one, so the
+  // card never moves under your hand; otherwise the stalest.
+  const routines = overview?.routines ?? [];
+  const suggestion =
+    (pinnedRoutineId ? routines.find((r) => r.id === pinnedRoutineId) : null) ?? routines[0] ?? null;
+  const alternatives = routines.filter((r) => r.id !== suggestion?.id);
+
+  const log = (routineId: string, name: string) => {
     startTransition(async () => {
-      // Tapping the current status again clears it — the undo path matters on a
-      // phone, where a mis-tap is routine.
-      if (item.status === status) await clearCompletionAction(item.id);
-      else await recordCompletionAction(item.id, { status: status as "done" | "partial" | "skipped" });
+      const result = await logRoutineNowAction(routineId);
+      if (result.success) setJustLogged({ blockId: result.data.id, name });
+      setPinnedRoutineId(routineId);
+      setShowAlternatives(false);
       await refresh();
     });
   };
 
-  const setRpe = (item: PlannedItem, srpe: number) => {
+  const undo = () => {
+    if (!justLogged) return;
+    const { blockId } = justLogged;
     startTransition(async () => {
-      await recordCompletionAction(item.id, {
-        status: item.status === "partial" ? "partial" : "done",
-        actualDurationMin: item.plannedDurationMin,
-        srpe,
-      });
+      await undoRoutineTodayAction(blockId);
+      setJustLogged(null);
       await refresh();
     });
   };
 
-  const handleLogNow = async (routineId: string) => {
-    await logRoutineNowAction(routineId);
-    await refresh();
+  const setRpe = (blockId: string, srpe: number) => {
+    startTransition(async () => {
+      await recordCompletionAction(blockId, { status: "done", srpe });
+      setJustLogged(null);
+      await refresh();
+    });
   };
 
-  const handleUndo = async (blockId: string) => {
-    await undoRoutineTodayAction(blockId);
-    await refresh();
-  };
-
-  if (isLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (isLoading) {
+    return <div className="h-32 animate-pulse rounded-lg bg-muted/40" aria-label="Loading" />;
+  }
 
   const dateLabel = new Date().toLocaleDateString("en-GB", {
     weekday: "long",
@@ -97,158 +113,141 @@ export function TodayClient() {
     month: "long",
   });
 
-  // Rides are shown for context but logged through the cycling flow.
-  const loggable = items.filter((item) => item.editableHere);
-  const rides = items.filter((item) => !item.editableHere);
+  // The headline names the day rather than repeating "Today", which the date
+  // above already says.
+  const headline =
+    rides.length === 0 ? "Rest day" : rides.length === 1 ? rides[0].name : `${rides.length} rides`;
+
+  const subhead =
+    rides.length > 0
+      ? [formatMinutes(rides[0].plannedDurationMin), rides[0].plannedTss ? `TSS ${rides[0].plannedTss}` : null]
+          .filter(Boolean)
+          .join(" · ")
+      : "Nothing on the bike today.";
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-2xl space-y-7">
       <header>
-        <p className="text-xs uppercase tracking-wide text-muted-foreground">{dateLabel}</p>
-        <h1 className="text-2xl font-bold tracking-tight">Today</h1>
+        <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground">{dateLabel}</p>
+        <h1 className="mt-1 text-2xl font-bold tracking-tight">{headline}</h1>
+        <p className="mt-0.5 text-sm text-muted-foreground">{subhead}</p>
       </header>
 
-      {overview && overview.routines.length > 0 && (
-        <section className="space-y-2.5">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Suggested
-          </h2>
-          <RoutineRotation
-            routines={overview.routines}
-            coverage={overview.coverage}
-            onLogNow={handleLogNow}
-            onUndo={handleUndo}
-          />
-        </section>
-      )}
-
-      <section className="space-y-2.5">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Due today · {loggable.length}
-        </h2>
-
-        {loggable.length === 0 && (
-          <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-            Nothing scheduled off the bike today.
-          </p>
-        )}
-
-        {loggable.map((item) => {
-          const Icon = MODALITY_ICONS[item.modality];
-          const color = modalityColor(item.modality);
-          const showRpe = item.status === "done" || item.status === "partial";
-
+      {/* Rides are context, not a task: they are recorded by the sync, and
+          reconciliation settles the plan against them without being asked. */}
+      {rides.length > 1 &&
+        rides.map((ride) => {
+          const Icon = MODALITY_ICONS.bike;
           return (
             <div
-              key={item.id}
-              className="overflow-hidden rounded-lg border border-border bg-card"
-              style={{ borderLeftColor: color, borderLeftWidth: 3 }}
+              key={ride.id}
+              className="flex items-center gap-2.5 rounded-lg border border-border bg-card px-4 py-3"
             >
-              <div className="flex items-start gap-2.5 px-3.5 py-3">
-                <Icon className="mt-0.5 h-4 w-4 shrink-0" style={{ color }} aria-hidden="true" />
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold leading-tight">{item.name}</p>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground">
-                    {MODALITY_LABELS[item.modality]} · {formatMinutes(item.plannedDurationMin)} ·{" "}
-                    <Hint term="day_part" underline={false}>
-                      {DAY_PART_LABELS[item.dayPart]}
-                    </Hint>
-                  </p>
-                </div>
+              <Icon className="h-4 w-4 shrink-0" style={{ color: modalityColor("bike") }} aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold leading-tight">{ride.name}</p>
+                <p className="text-xs text-muted-foreground">{formatMinutes(ride.plannedDurationMin)}</p>
               </div>
-
-              <div className="grid grid-cols-3 border-t border-border">
-                {STATUS_ACTIONS.map(({ status, label, Icon: ActionIcon }) => {
-                  const isActive = item.status === status;
-                  return (
-                    <button
-                      key={status}
-                      type="button"
-                      aria-pressed={isActive}
-                      onClick={() => setStatus(item, status)}
-                      className={cn(
-                        "flex items-center justify-center gap-1.5 border-r border-border py-3 text-xs font-medium last:border-r-0 transition-colors",
-                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-                        isActive ? "text-foreground" : "text-muted-foreground"
-                      )}
-                      style={
-                        isActive
-                          ? {
-                              backgroundColor:
-                                status === "skipped"
-                                  ? "hsl(var(--secondary))"
-                                  : `color-mix(in srgb, ${color} 12%, transparent)`,
-                            }
-                          : undefined
-                      }
-                    >
-                      <ActionIcon className="h-3.5 w-3.5" aria-hidden="true" />
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {showRpe && (
-                <div className="space-y-2 border-t border-border px-3.5 py-3">
-                  <div className="flex items-center justify-between">
-                    <Hint term="srpe" className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
-                      Session RPE
-                    </Hint>
-                    <span className="text-[10px] text-muted-foreground">optional</span>
-                  </div>
-                  <div className="grid grid-cols-10 gap-1">
-                    {Array.from({ length: 10 }, (_, index) => index + 1).map((value) => (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => setRpe(item, value)}
-                        aria-label={`RPE ${value}`}
-                        className="aspect-square rounded border border-border text-[10px] tabular-nums text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        {value}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           );
         })}
-      </section>
 
-      {rides.length > 0 && (
-        <section className="space-y-2.5">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            On the bike
-          </h2>
-          {rides.map((ride) => {
-            const Icon = MODALITY_ICONS.bike;
-            return (
-              <div
-                key={ride.id}
-                className="flex items-center gap-2.5 rounded-lg border border-border bg-card px-3.5 py-3"
+      {/* One recommendation, one action. */}
+      {justLogged ? (
+        <RpePrompt
+          name={justLogged.name}
+          onRpe={(value) => setRpe(justLogged.blockId, value)}
+          onUndo={undo}
+          onDismiss={() => setJustLogged(null)}
+          disabled={pending}
+        />
+      ) : suggestion ? (
+        <section className="rounded-xl border border-border bg-card p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-base font-semibold leading-tight">{suggestion.name}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {formatMinutes(suggestion.estDurationMin)} · {suggestion.exerciseCount} exercises
+              </p>
+            </div>
+            {suggestion.completedTodayBlockId ? (
+              <span className="shrink-0 text-xs font-medium text-muted-foreground">Done today</span>
+            ) : (
+              <span className="shrink-0 text-xs text-muted-foreground">suggested</span>
+            )}
+          </div>
+
+          {suggestion.completedTodayBlockId ? (
+            <button
+              type="button"
+              onClick={() => {
+                const blockId = suggestion.completedTodayBlockId!;
+                startTransition(async () => {
+                  await undoRoutineTodayAction(blockId);
+                  await refresh();
+                });
+              }}
+              disabled={pending}
+              className="mt-3 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg border border-border text-sm font-medium text-muted-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+            >
+              <Undo2 className="h-4 w-4" aria-hidden="true" />
+              Undo
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => log(suggestion.id, suggestion.name)}
+              disabled={pending}
+              className="mt-3 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-primary text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
+            >
+              <Check className="h-4 w-4" aria-hidden="true" />
+              Log it
+            </button>
+          )}
+
+          {alternatives.length > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowAlternatives((open) => !open)}
+                aria-expanded={showAlternatives}
+                className="mt-2 flex min-h-[36px] w-full items-center justify-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <Icon
-                  className="h-4 w-4 shrink-0"
-                  style={{ color: modalityColor("bike") }}
+                Something else
+                <ChevronDown
+                  className={cn("h-3.5 w-3.5 transition-transform", showAlternatives && "rotate-180")}
                   aria-hidden="true"
                 />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold leading-tight">{ride.name}</p>
-                  <p className="text-[11px] text-muted-foreground">
-                    {formatMinutes(ride.plannedDurationMin)}
-                    {ride.plannedTss ? ` · TSS ${ride.plannedTss}` : ""}
-                  </p>
-                </div>
-                <Hint term="bike_anchor" underline={false} className="text-[10px] text-muted-foreground">
-                  ride
-                </Hint>
-              </div>
-            );
-          })}
+              </button>
+
+              {showAlternatives && (
+                <ul className="mt-1 space-y-1 border-t border-border pt-2">
+                  {alternatives.map((routine) => (
+                    <li key={routine.id}>
+                      <button
+                        type="button"
+                        onClick={() => log(routine.id, routine.name)}
+                        disabled={pending}
+                        className="flex min-h-[44px] w-full items-center justify-between gap-3 rounded-lg px-2 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium">{routine.name}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {formatMinutes(routine.estDurationMin)} · {routine.exerciseCount} exercises
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-xs text-muted-foreground">Log</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
         </section>
-      )}
+      ) : null}
+
+      {snapshot && <WeekStrip snapshot={snapshot} />}
     </div>
   );
 }

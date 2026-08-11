@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { syncWellness } from "@/lib/intervals/wellness-sync";
+import { reconcilePlannedWorkouts } from "@/lib/training/service/reconcile";
 import { syncIcuActivities } from "@/lib/intervals/activity-sync";
 import { triggerPostRideAnalysis } from "@/lib/ai/post-ride";
 import { recomputePowerCurve } from "@/lib/power/aggregate";
@@ -88,6 +89,13 @@ export async function POST() {
       );
     }
 
+    // Settle the plan against the rides that just landed, before anything
+    // reads the calendar again.
+    const reconciled = await reconcilePlannedWorkouts(supabase, user.id).catch((err) => {
+      console.warn("reconcile failed", err);
+      return { reconciled: 0 };
+    });
+
     // Fire-and-forget post-ride analysis, power curve, and fitness recomputation
     triggerPostRideAnalysis(supabase, user.id).catch(console.warn);
     recomputePowerCurve(supabase, user.id).catch(console.warn);
@@ -102,6 +110,7 @@ export async function POST() {
         skippedEmpty: activityResult.skippedEmpty,
         error: activityResult.error ?? null,
       },
+      reconciled: reconciled.reconciled,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unexpected error";

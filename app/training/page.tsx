@@ -1,12 +1,21 @@
 import { TrainingClient } from "@/components/training/training-client";
 
+/**
+ * The off-bike library and its settings.
+ *
+ * Deliberately out of the main navigation: routines, exercises, target
+ * intervals and templates are things you configure occasionally, not things
+ * you visit daily. What used to open here — a three-step setup wizard standing
+ * between you and the feature — is gone; nothing needs configuring before the
+ * app is useful.
+ */
 export default function TrainingPage() {
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Training</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Off-bike library</h1>
         <p className="text-sm text-muted-foreground">
-          Everything off the bike — what has gone stale, and what to do about it.
+          Routines, exercises and how often each area should come round.
         </p>
       </div>
       <TrainingClient />

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { syncStravaActivities } from "@/lib/strava/sync";
 import { syncWellness } from "@/lib/intervals/wellness-sync";
 import { syncIcuActivities } from "@/lib/intervals/activity-sync";
+import { reconcilePlannedWorkouts } from "@/lib/training/service/reconcile";
 import { triggerPostRideAnalysis } from "@/lib/ai/post-ride";
 import { recomputeFitness } from "@/lib/fitness/compute";
 import type { StravaConnectionRow } from "@/lib/strava/types";
@@ -143,6 +144,15 @@ export async function POST() {
       }
     }
 
+    // A ride that has landed is the evidence a planned session happened, so
+    // settle the plan against it before anything reads the calendar again.
+    // Awaited rather than fired off, so the page that triggered the sync sees
+    // a reconciled state rather than yesterday's backlog.
+    const reconciled = await reconcilePlannedWorkouts(supabase, user.id).catch((err) => {
+      console.warn("reconcile failed", err);
+      return { reconciled: 0 };
+    });
+
     // Fire-and-forget post-ride analysis and fitness recomputation
     triggerPostRideAnalysis(supabase, user.id).catch(console.warn);
     recomputeFitness(supabase, user.id).catch(console.warn);
@@ -152,6 +162,7 @@ export async function POST() {
       strava: results.strava ?? null,
       icu: results.icu ?? null,
       icuActivities: results.icuActivities ?? null,
+      reconciled: reconciled.reconciled,
       errors: results.errors.length > 0 ? results.errors : undefined,
     });
   } catch (err) {

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Plus, X, CheckCircle, Trash2, Flag, Dumbbell } from "lucide-react";
+import { X, CheckCircle, Trash2, Flag } from "lucide-react";
+import { AddToDayMenu } from "./add-to-day-menu";
 import { MiniIntensityChart } from "@/components/workouts/mini-intensity-chart";
 import { flattenBuilderItems } from "@/lib/workouts/utils";
 import { EVENT_TYPE_LABELS } from "@/lib/race/types";
@@ -29,10 +30,19 @@ export function CalendarAgendaDay({ date, content, handlers }: CalendarAgendaDay
   const { monthPrefix, dayOfMonth } = getCalendarDayLabelParts(date);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
+  const isEmpty =
+    workouts.length === 0 && activities.length === 0 && races.length === 0 && blocks.length === 0;
+
   return (
     <div
-      className={`rounded-lg shadow-sm px-2.5 py-2 flex items-start gap-2 text-foreground ${
-        isToday ? "bg-accent/60 ring-1 ring-border" : "bg-card"
+      // A day with nothing in it keeps its place in the scroll but drops its
+      // card, so scrolling a quiet month is not fifty identical panels.
+      className={`rounded-lg px-2.5 py-2 flex items-start gap-2 text-foreground ${
+        isToday
+          ? "bg-accent/60 ring-1 ring-border shadow-sm"
+          : isEmpty
+            ? "border border-border/40"
+            : "bg-card shadow-sm"
       }`}
       data-day-date={dateKey}
     >
@@ -50,29 +60,19 @@ export function CalendarAgendaDay({ date, content, handlers }: CalendarAgendaDay
       </div>
 
       <div className="flex-1 flex flex-col gap-2">
-        <div className="flex justify-end gap-0.5">
-          <button
-            onClick={() => onAddRace?.(dateKey)}
-            className="p-1 rounded-md hover:bg-red-500/10"
-            aria-label="Add race"
-            title="Add race event"
-          >
-            <Flag className="h-3.5 w-3.5 text-red-500" />
-          </button>
-          <button
-            onClick={() => onAdd(dateKey)}
-            className="p-1 rounded-md hover:bg-accent"
-            aria-label="Add workout"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => handlers.onAddBlock?.(dateKey)}
-            className="p-1 rounded-md hover:bg-accent"
-            aria-label="Add strength, mobility, yoga or prehab session"
-          >
-            <Dumbbell className="h-3.5 w-3.5" />
-          </button>
+        {/*
+          Three 24px icons became one 44px menu. This is the phone layout, where
+          those were the smallest targets in the app and sat on every day
+          whether or not it held anything.
+        */}
+        <div className="flex justify-end">
+          <AddToDayMenu
+            dateKey={dateKey}
+            onAdd={onAdd}
+            onAddRace={onAddRace}
+            onAddBlock={handlers.onAddBlock}
+            className="h-11 w-11"
+          />
         </div>
 
         <div className="flex flex-col gap-2">
@@ -194,7 +194,7 @@ export function CalendarAgendaDay({ date, content, handlers }: CalendarAgendaDay
           ))}
 
           {workouts.length === 0 && activities.length === 0 && races.length === 0 && blocks.length === 0 && (
-            <div className="text-xs text-muted-foreground">Nothing scheduled</div>
+            <div className="h-1" aria-hidden="true" />
           )}
         </div>
       </div>

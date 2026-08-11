@@ -26,7 +26,19 @@ export function ModalityFilter({
   /** Show only this subset — used where bike is irrelevant. */
   onlyModality?: readonly Modality[];
 }) {
-  const shown = onlyModality ?? MODALITIES;
+  const candidates = onlyModality ?? MODALITIES;
+
+  // A filter for something you have none of is a control that cannot do
+  // anything. Four of the five chips read "0" and filtered nothing, which made
+  // the row look like a set of failures rather than a tool. A modality earns
+  // its chip by having something in the window — but a chip you have switched
+  // off always stays, or turning one off would make it vanish.
+  const shown = candidates.filter(
+    (modality) => counts?.[modality] === undefined || counts[modality]! > 0 || !active.has(modality),
+  );
+
+  // Filtering is only meaningful across two or more things.
+  if (shown.length < 2) return null;
 
   return (
     <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter by modality">

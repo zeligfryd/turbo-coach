@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
-import { Menu, Home, Bike, User, Calendar, Activity, Bot, BarChart3, TrendingUp, ListChecks, CheckSquare, ShieldPlus } from "lucide-react";
+import { Menu, Home, Bike, User, Calendar, Activity, Bot, BarChart3, TrendingUp, ListChecks } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getCoachUnreadCount } from "@/app/coach/actions";
 
@@ -53,18 +53,21 @@ export function Sidebar() {
     }
   };
 
+  // Two entries came out. "Home" was a second, emptier copy of Today and now
+  // redirects to it. "Training" was the off-bike library and its settings —
+  // configuration you visit occasionally, so it lives under Profile rather
+  // than costing a permanent slot. Fitness is called Trends because that is
+  // what it holds now: the PMC and the session-load breakdown together.
   const navItems = [
-    { href: "/dashboard", label: "Home", icon: Home, badge: 0 },
-    { href: "/today", label: "Today", icon: CheckSquare, badge: 0 },
+    { href: "/today", label: "Today", icon: Home, badge: 0 },
     { href: "/ride", label: "Ride", icon: Activity, badge: 0 },
     { href: "/calendar", label: "Calendar", icon: Calendar, badge: 0 },
-    { href: "/training", label: "Training", icon: ShieldPlus, badge: 0 },
     { href: "/plans", label: "Plans", icon: ListChecks, badge: 0 },
-    { href: "/fitness", label: "Fitness", icon: TrendingUp, badge: 0 },
+    { href: "/fitness", label: "Trends", icon: TrendingUp, badge: 0 },
     { href: "/performance", label: "Performance", icon: BarChart3, badge: 0 },
     { href: "/coach", label: "Coach", icon: Bot, badge: coachUnread },
-    { href: "/profile", label: "Profile", icon: User, badge: 0 },
     { href: "/workouts", label: "Workouts", icon: Bike, badge: 0 },
+    { href: "/profile", label: "Profile", icon: User, badge: 0 },
   ];
 
   return (

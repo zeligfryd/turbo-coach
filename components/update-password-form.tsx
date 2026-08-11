@@ -25,7 +25,7 @@ export function UpdatePasswordForm({ className, ...props }: React.ComponentProps
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
       // Redirect to dashboard after password update
-      router.push("/dashboard");
+      router.push("/today");
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred");
     } finally {

@@ -724,3 +724,99 @@ export async function resetAllAreaGoalsAction() {
   if (result.success) revalidateTraining();
   return result;
 }
+
+// ── Today snapshot ──────────────────────────────────────────────────
+
+export type WeekDay = {
+  date: string;
+  /** Riding minutes recorded that day. */
+  minutes: number;
+  isToday: boolean;
+  isFuture: boolean;
+};
+
+export type TodaySnapshot = {
+  week: WeekDay[];
+  weekMinutes: number;
+  weekRides: number;
+  /** Training stress balance, from the most recent wellness day. */
+  form: number | null;
+  /** Off-bike sessions logged in the last 30 days. */
+  offBike30d: number;
+  /** Planned sessions whose day has passed with nothing to show for them. */
+  missed: number;
+};
+
+/**
+ * Everything the home screen needs about where you stand, in one call.
+ *
+ * Deliberately small: a week of riding minutes, one number for form, and two
+ * counts. The old home screen showed six coverage areas all reading "never",
+ * which greeted you with six failures before you had agreed to any of it.
+ */
+export async function getTodaySnapshot(): Promise<Result<TodaySnapshot>> {
+  return withUser(async (supabase, userId) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const weekStart = startOfWeek(today);
+    const weekEnd = addDaysISO(weekStart, 6);
+    const monthAgo = addDaysISO(today, -30);
+
+    const [ridesResult, wellnessResult, blocksResult, plannedResult] = await Promise.all([
+      supabase
+        .from("activities")
+        .select("activity_date, moving_time")
+        .eq("user_id", userId)
+        .gte("activity_date", weekStart)
+        .lte("activity_date", weekEnd),
+      supabase
+        .from("wellness")
+        .select("tsb")
+        .eq("user_id", userId)
+        .not("tsb", "is", null)
+        .lte("date", today)
+        .order("date", { ascending: false })
+        .limit(1),
+      supabase
+        .from("block")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("status", "done")
+        .gte("date", monthAgo),
+      supabase
+        .from("scheduled_workouts")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("status", "planned")
+        .lt("scheduled_date", today),
+    ]);
+
+    const rides = ridesResult.data ?? [];
+    const minutesByDate = new Map<string, number>();
+    for (const ride of rides) {
+      const mins = Math.round((ride.moving_time ?? 0) / 60);
+      minutesByDate.set(ride.activity_date, (minutesByDate.get(ride.activity_date) ?? 0) + mins);
+    }
+
+    const week: WeekDay[] = Array.from({ length: 7 }, (_, index) => {
+      const date = addDaysISO(weekStart, index);
+      return {
+        date,
+        minutes: minutesByDate.get(date) ?? 0,
+        isToday: date === today,
+        isFuture: date > today,
+      };
+    });
+
+    return {
+      success: true as const,
+      data: {
+        week,
+        weekMinutes: week.reduce((sum, day) => sum + day.minutes, 0),
+        weekRides: rides.length,
+        form: wellnessResult.data?.[0]?.tsb ?? null,
+        offBike30d: blocksResult.data?.length ?? 0,
+        missed: plannedResult.data?.length ?? 0,
+      },
+    };
+  });
+}

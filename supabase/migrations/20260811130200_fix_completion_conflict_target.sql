@@ -1,6 +1,6 @@
 -- Make completion's unique indexes usable as ON CONFLICT targets.
 --
--- 20260809120000 created these as partial indexes (`where ... is not null`).
+-- create_multi_modality created these as partial indexes (`where ... is not null`).
 -- Postgres will not infer a partial unique index as an ON CONFLICT target
 -- unless the statement repeats its predicate, and PostgREST's upsert cannot
 -- express one — so `recordBlockCompletion` failed outright with

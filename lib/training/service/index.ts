@@ -38,8 +38,10 @@ export {
   createRoutine,
   deleteExercise,
   duplicateExercise,
+  duplicateRoutine,
   restoreExercise,
   updateExercise,
+  updateRoutine,
   ExerciseInput,
   RoutineInput,
 } from "./exercises";

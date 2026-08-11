@@ -324,7 +324,7 @@ export async function getRoutineDetail(routineId: string) {
   return withUser(async (supabase) => {
     const { data, error } = await supabase
       .from("routine_item")
-      .select("position, dose, exercise:exercise(id, name, regions, stimulus, cues, equipment, default_dose)")
+      .select("position, dose, exercise:exercise(id, name, regions, stimulus, cues, description, equipment, default_dose)")
       .eq("routine_id", routineId)
       .order("position");
     if (error) return { success: false, error: error.message };
@@ -342,6 +342,7 @@ export type BankExercise = {
   equipment: string[];
   difficulty: number | null;
   cues: string | null;
+  description: string | null;
   notes: string | null;
   isPreset: boolean;
   isOwn: boolean;
@@ -393,6 +394,7 @@ export async function getExerciseBank(
       equipment: string[];
       difficulty: number | null;
       cues: string | null;
+      description: string | null;
       notes: string | null;
       is_preset: boolean;
       archived_at: string | null;
@@ -413,6 +415,7 @@ export async function getExerciseBank(
         equipment: row.equipment ?? [],
         difficulty: row.difficulty,
         cues: row.cues,
+        description: row.description,
         notes: row.notes,
         isPreset: row.is_preset,
         isOwn: row.user_id === userId,
@@ -439,6 +442,24 @@ export async function getExerciseBank(
 export async function createRoutineAction(input: service.RoutineInput) {
   const result = await withUser(async (supabase, userId) => {
     const res = await service.createRoutine(supabase, userId, input);
+    return res.success ? { success: true as const, data: res.data } : { success: false as const, error: res.error };
+  });
+  if (result.success) revalidateTraining();
+  return result;
+}
+
+export async function updateRoutineAction(routineId: string, input: service.RoutineInput) {
+  const result = await withUser(async (supabase, userId) => {
+    const res = await service.updateRoutine(supabase, userId, routineId, input);
+    return res.success ? { success: true as const, data: res.data } : { success: false as const, error: res.error };
+  });
+  if (result.success) revalidateTraining();
+  return result;
+}
+
+export async function duplicateRoutineAction(routineId: string) {
+  const result = await withUser(async (supabase, userId) => {
+    const res = await service.duplicateRoutine(supabase, userId, routineId);
     return res.success ? { success: true as const, data: res.data } : { success: false as const, error: res.error };
   });
   if (result.success) revalidateTraining();

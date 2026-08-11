@@ -285,6 +285,54 @@ group("C. Routine composer");
     assert((await page.locator("body").innerText()).includes("QA routine"), "routine not listed");
   });
 
+  await check("a routine expands to show its exercises and descriptions", async () => {
+    await page.goto(`${BASE}/training/routines`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(1500);
+    const before = (await page.locator("body").innerText()).length;
+    await page.getByRole("button", { name: /^Expand Upper 8/i }).click();
+    await page.waitForTimeout(1800);
+    const text = await page.locator("body").innerText();
+    assert(text.length > before, "expanding showed nothing");
+    assert(has(text, "Chin tuck"), "routine contents not listed");
+    assert(has(text, "Areas covered"), "areas covered not shown");
+
+    // And an exercise inside it opens to its description.
+    await page.getByRole("button", { name: /Chin tuck/i }).first().click();
+    await page.waitForTimeout(800);
+    assert(
+      has(await page.locator("body").innerText(), "double chin"),
+      "exercise description not shown",
+    );
+    await page.getByRole("button", { name: /^Collapse Upper 8/i }).click();
+    await page.waitForTimeout(800);
+  });
+
+  await check("a seeded routine can be duplicated, edited and archived", async () => {
+    await page.getByRole("button", { name: /Duplicate Upper 8/i }).click();
+    await page.waitForTimeout(3000);
+    assert(has(await page.locator("body").innerText(), "Upper 8 (copy)"), "copy not listed");
+
+    await page.getByRole("button", { name: /Edit Upper 8 \(copy\)/i }).click();
+    await page.locator("main ul li button[aria-pressed]").first().waitFor({ timeout: 15000 });
+    const nameField = page.locator("#routine-name");
+    assert((await nameField.inputValue()) === "Upper 8 (copy)", "composer did not open pre-filled");
+    assert(
+      /5 exercises/i.test(await page.locator("body").innerText()),
+      "composer did not seed the existing exercises",
+    );
+    await nameField.fill("QA edited routine");
+    await page.getByRole("button", { name: /Save changes/i }).click();
+    await page.waitForTimeout(3000);
+    assert(has(await page.locator("body").innerText(), "QA edited routine"), "edit did not save");
+
+    await page.getByRole("button", { name: /Archive QA edited routine/i }).click();
+    await page.waitForTimeout(2500);
+    assert(
+      !has(await page.locator("body").innerText(), "QA edited routine"),
+      "edited routine survived archiving",
+    );
+  });
+
   await check("routine can be archived", async () => {
     await page.getByRole("button", { name: /Archive QA routine/i }).click();
     await page.waitForTimeout(2500);
@@ -303,6 +351,18 @@ group("D. Exercise bank");
   const page = await openPage();
   await page.goto(`${BASE}/training/exercises`, { waitUntil: "networkidle" });
   await page.locator("main ul li").first().waitFor({ timeout: 15000 });
+
+  await check("an exercise expands to show how to perform it", async () => {
+    await page.fill('input[placeholder="Search exercises"]', "Copenhagen");
+    await page.waitForTimeout(700);
+    await page.getByRole("button", { name: /^Expand Copenhagen adduction/i }).click();
+    await page.waitForTimeout(700);
+    const text = await page.locator("body").innerText();
+    assert(has(text, "bench"), "description not shown on expand");
+    assert(text.length > 400, "expanded content looks empty");
+    await page.fill('input[placeholder="Search exercises"]', "");
+    await page.waitForTimeout(500);
+  });
 
   await check("search narrows the list", async () => {
     const before = await page.locator("main ul li").count();
@@ -325,7 +385,8 @@ group("D. Exercise bank");
 
   await check("a preset can be duplicated into an editable copy, and removed again", async () => {
     const seeded = page.locator("main ul li").filter({ hasText: /seeded/i }).first();
-    const name = (await seeded.locator("span").first().innerText()).trim();
+    const name = (await seeded.getAttribute("data-exercise-name")) ?? "";
+    assert(name.length > 0, "could not read the exercise name");
     const before = await page.locator("main ul li").count();
     await seeded.getByRole("button", { name: /^Duplicate /i }).click();
     await page.waitForTimeout(2500);
@@ -336,8 +397,7 @@ group("D. Exercise bank");
 
     // The copy is editable where the original is not.
     const copy = page
-      .locator("main ul li")
-      .filter({ hasText: name })
+      .locator(`main ul li[data-exercise-name="${name}"]`)
       .filter({ hasNot: page.locator("text=/seeded/i") })
       .first();
     assert(
@@ -352,14 +412,13 @@ group("D. Exercise bank");
     await page.getByRole("button", { name: /Show archived/i }).click();
     await page.waitForTimeout(2000);
     const archived = page
-      .locator("main ul li")
-      .filter({ hasText: name })
+      .locator(`main ul li[data-exercise-name="${name}"]`)
       .filter({ hasText: /archived/i })
       .first();
     await archived.getByRole("button", { name: /^Delete /i }).click();
     await page.waitForTimeout(2500);
     assert(
-      (await page.locator("main ul li").filter({ hasText: /archived/i }).count()) === 0,
+      (await page.locator(`main ul li[data-exercise-name="${name}"]`).count()) === 1,
       "the archived copy was not deleted",
     );
     await page.getByRole("button", { name: /Hide archived/i }).click();
@@ -395,8 +454,7 @@ group("D. Exercise bank");
     );
 
     await page
-      .locator("main ul li")
-      .filter({ hasText: "QA exercise" })
+      .locator('main ul li[data-exercise-name="QA exercise"]')
       .first()
       .getByRole("button", { name: /^Delete /i })
       .click();
@@ -443,13 +501,14 @@ group("E. Calendar");
   });
 
   await check("a modality chip hides its own sessions", async () => {
-    await page.getByRole("button", { name: /^Prehab/ }).click();
+    const chips = page.locator('[role="group"][aria-label="Filter by modality"]');
+    await chips.getByRole("button", { name: /^Prehab/ }).click();
     await page.waitForTimeout(900);
     assert(
       !has(await page.locator("body").innerText(), "QA session"),
       "session still visible with its modality filtered out",
     );
-    await page.getByRole("button", { name: /^Prehab/ }).click();
+    await chips.getByRole("button", { name: /^Prehab/ }).click();
     await page.waitForTimeout(900);
   });
 

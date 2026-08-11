@@ -42,21 +42,31 @@ function estimateMinutes(exercise: BankExercise): number {
   return Math.max(1, Math.round((seconds / 60 + 0.3) * 2) / 2);
 }
 
+export type ComposerSeed = {
+  id: string;
+  name: string;
+  estDurationMin: number | null;
+  exerciseIds: string[];
+};
+
 export function RoutineComposer({
   exercises,
   coverage,
+  seed,
   onSave,
   onCancel,
 }: {
   exercises: BankExercise[];
   coverage: AreaCoverage[];
+  /** Provided when editing an existing routine; absent when composing a new one. */
+  seed?: ComposerSeed;
   onSave: (input: { name: string; estDurationMin: number; items: { exerciseId: string }[] }) => Promise<void>;
   onCancel: () => void;
 }) {
-  const [name, setName] = useState("");
-  const [targetMinutes, setTargetMinutes] = useState(12);
+  const [name, setName] = useState(seed?.name ?? "");
+  const [targetMinutes, setTargetMinutes] = useState(seed?.estDurationMin ?? 12);
   const [focusAreas, setFocusAreas] = useState<Set<FocusArea>>(new Set());
-  const [picked, setPicked] = useState<string[]>([]);
+  const [picked, setPicked] = useState<string[]>(seed?.exerciseIds ?? []);
   const [isPending, startTransition] = useTransition();
 
   const byId = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises]);
@@ -323,7 +333,7 @@ export function RoutineComposer({
               })
             }
           >
-            Save routine
+            {seed ? "Save changes" : "Save routine"}
           </Button>
           <Button variant="outline" onClick={onCancel} disabled={isPending}>
             Cancel

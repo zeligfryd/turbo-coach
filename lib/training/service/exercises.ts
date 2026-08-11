@@ -39,6 +39,7 @@ export const ExerciseInput = z.object({
   equipment: z.array(EquipmentSchema).default([]),
   difficulty: z.number().int().min(1).max(3).nullable().optional(),
   cues: z.string().max(500).nullable().optional(),
+  description: z.string().max(4000).nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
   scope: ExerciseScopeSchema.default("prehab"),
 });
@@ -54,6 +55,7 @@ function toRow(userId: string, value: z.output<typeof ExerciseInput>) {
     equipment: value.equipment,
     difficulty: value.difficulty ?? null,
     cues: value.cues?.trim() || null,
+    description: value.description?.trim() || null,
     notes: value.notes?.trim() || null,
     scope: value.scope,
     is_preset: false,
@@ -129,6 +131,7 @@ export async function duplicateExercise(
       equipment: source.equipment,
       difficulty: source.difficulty,
       cues: source.cues,
+      description: source.description,
       notes: source.notes,
       media_url: source.media_url,
       scope: source.scope,
@@ -223,6 +226,31 @@ export const RoutineInput = z.object({
 export type RoutineInput = z.input<typeof RoutineInput>;
 
 /**
+ * Look the exercises up and derive the routine's coverage vector from them.
+ * Shared by create and update so the two can never disagree about what a
+ * routine covers.
+ */
+async function deriveCoverage(
+  supabase: SupabaseClient,
+  exerciseIds: string[],
+): Promise<ServiceResult<ReturnType<typeof routineCoverageFromExercises>>> {
+  const { data: exercises, error } = await supabase
+    .from("exercise")
+    .select("id, regions, stimulus")
+    .in("id", exerciseIds);
+
+  if (error) return fail(error.message);
+  const found = (exercises ?? []) as { id: string; regions: BodyRegion[]; stimulus: StimulusType }[];
+  if (found.length !== new Set(exerciseIds).size) {
+    return fail("One or more exercises could not be found");
+  }
+
+  // Preserve the caller's ordering; the lookup comes back arbitrary.
+  const byId = new Map(found.map((e) => [e.id, e]));
+  return ok(routineCoverageFromExercises(exerciseIds.map((id) => byId.get(id)!)));
+}
+
+/**
  * Save a routine and its ordered items.
  *
  * The coverage vector is derived here, once, from the exercises actually in the
@@ -237,22 +265,9 @@ export async function createRoutine(
   if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid routine");
   const value = parsed.data;
 
-  const exerciseIds = value.items.map((item) => item.exerciseId);
-  const { data: exercises, error: lookupError } = await supabase
-    .from("exercise")
-    .select("id, regions, stimulus")
-    .in("id", exerciseIds);
-
-  if (lookupError) return fail(lookupError.message);
-  const found = (exercises ?? []) as { id: string; regions: BodyRegion[]; stimulus: StimulusType }[];
-  if (found.length !== new Set(exerciseIds).size) {
-    return fail("One or more exercises could not be found");
-  }
-
-  // Preserve the user's ordering; the lookup came back in arbitrary order.
-  const byId = new Map(found.map((e) => [e.id, e]));
-  const ordered = exerciseIds.map((id) => byId.get(id)!);
-  const coverageVector = routineCoverageFromExercises(ordered);
+  const coverage = await deriveCoverage(supabase, value.items.map((item) => item.exerciseId));
+  if (!coverage.success) return fail(coverage.error);
+  const coverageVector = coverage.data;
 
   const { data: routine, error } = await supabase
     .from("routine")
@@ -283,6 +298,117 @@ export async function createRoutine(
     // schedule like a real one while doing nothing.
     await supabase.from("routine").delete().eq("id", routine.id).eq("user_id", userId);
     return fail(itemsError.message);
+  }
+
+  return ok(routine as RoutineRow);
+}
+
+/**
+ * Replace a routine's name and contents.
+ *
+ * Items are rewritten wholesale rather than diffed: a routine is a short
+ * ordered list, and reconciling positions in place is more code than it saves.
+ * The coverage vector is re-derived from whatever the routine now contains, so
+ * it can never drift from the exercises actually in it.
+ */
+export async function updateRoutine(
+  supabase: SupabaseClient,
+  userId: string,
+  routineId: string,
+  input: RoutineInput,
+): Promise<ServiceResult<RoutineRow>> {
+  const parsed = RoutineInput.safeParse(input);
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid routine");
+  const value = parsed.data;
+
+  const coverage = await deriveCoverage(supabase, value.items.map((item) => item.exerciseId));
+  if (!coverage.success) return fail(coverage.error);
+
+  const { data: routine, error } = await supabase
+    .from("routine")
+    .update({
+      name: value.name.trim(),
+      est_duration_min: value.estDurationMin ?? null,
+      coverage_vector: coverage.data,
+    })
+    .eq("id", routineId)
+    .eq("user_id", userId)
+    .eq("is_preset", false)
+    .select("*")
+    .single();
+
+  if (error || !routine) return fail(error?.message ?? "Routine not found, or not yours to edit");
+
+  const { error: clearError } = await supabase
+    .from("routine_item")
+    .delete()
+    .eq("routine_id", routineId);
+  if (clearError) return fail(clearError.message);
+
+  const { error: itemsError } = await supabase.from("routine_item").insert(
+    value.items.map((item, index) => ({
+      routine_id: routineId,
+      position: index,
+      exercise_id: item.exerciseId,
+      dose: item.dose ?? null,
+    })),
+  );
+  if (itemsError) return fail(itemsError.message);
+
+  return ok(routine as RoutineRow);
+}
+
+/** Copy a routine — the way a seeded one becomes editable. */
+export async function duplicateRoutine(
+  supabase: SupabaseClient,
+  userId: string,
+  routineId: string,
+): Promise<ServiceResult<RoutineRow>> {
+  const { data: source, error } = await supabase
+    .from("routine")
+    .select("*, routine_item(position, exercise_id, dose)")
+    .eq("id", routineId)
+    .single();
+
+  if (error || !source) return fail(error?.message ?? "Routine not found");
+
+  const { data: routine, error: insertError } = await supabase
+    .from("routine")
+    .insert({
+      user_id: userId,
+      name: `${source.name} (copy)`,
+      est_duration_min: source.est_duration_min,
+      coverage_vector: source.coverage_vector,
+      is_preset: false,
+      is_public: false,
+      derived_from: source.id,
+    })
+    .select("*")
+    .single();
+
+  if (insertError || !routine) return fail(insertError?.message ?? "Could not copy the routine");
+
+  const items = (source.routine_item ?? []) as {
+    position: number;
+    exercise_id: string;
+    dose: unknown;
+  }[];
+  if (items.length > 0) {
+    const { error: itemsError } = await supabase.from("routine_item").insert(
+      items
+        .slice()
+        .sort((a, b) => a.position - b.position)
+        .map((item, index) => ({
+          routine_id: routine.id,
+          position: index,
+          exercise_id: item.exercise_id,
+          dose: item.dose,
+        })),
+    );
+    if (itemsError) {
+      await supabase.from("routine").delete().eq("id", routine.id).eq("user_id", userId);
+      return fail(itemsError.message);
+    }
   }
 
   return ok(routine as RoutineRow);

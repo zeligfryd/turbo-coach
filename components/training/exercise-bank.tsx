@@ -10,7 +10,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
-import { Archive, Copy, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { Archive, ChevronDown, Copy, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 
 import { ExerciseEditor, type EditableExercise, type ExerciseDraft } from "@/components/training/exercise-editor";
 import { InfoPanel } from "@/components/training/hint";
@@ -36,6 +36,7 @@ export function ExerciseBank() {
   const [areaFilter, setAreaFilter] = useState<Set<FocusArea>>(new Set());
   const [showArchived, setShowArchived] = useState(false);
   const [editing, setEditing] = useState<EditableExercise | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -149,16 +150,26 @@ export function ExerciseBank() {
           const dose = (exercise.defaultDose as { display?: string } | null)?.display;
           const isArchived = exercise.archivedAt !== null;
           return (
-            <li
-              key={exercise.id}
-              className={cn("flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5", isArchived && "opacity-60")}
-            >
+            <li key={exercise.id} data-exercise-name={exercise.name} className={cn(isArchived && "opacity-60")}>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5">
               <span
                 className="h-2 w-2 shrink-0 rounded-full"
                 style={{ backgroundColor: coverageColor(exercise.areaStatus) }}
                 title={AREA_LABELS[exercise.area]}
                 aria-hidden="true"
               />
+              <button
+                type="button"
+                aria-expanded={expanded === exercise.id}
+                aria-label={`${expanded === exercise.id ? "Collapse" : "Expand"} ${exercise.name}`}
+                onClick={() => setExpanded(expanded === exercise.id ? null : exercise.id)}
+                className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <ChevronDown
+                  className={cn("h-3.5 w-3.5 transition-transform", expanded === exercise.id && "rotate-180")}
+                  aria-hidden="true"
+                />
+              </button>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium">{exercise.name}</span>
@@ -248,6 +259,26 @@ export function ExerciseBank() {
                   </Button>
                 )}
               </div>
+            </div>
+            {expanded === exercise.id && (
+              <div className="space-y-2 border-t border-border bg-muted/30 px-4 py-3 pl-12">
+                {exercise.cues && <p className="text-xs font-medium">{exercise.cues}</p>}
+                {exercise.description ? (
+                  exercise.description.split("\n").map((paragraph, i) => (
+                    <p key={i} className="text-xs leading-relaxed text-muted-foreground">
+                      {paragraph}
+                    </p>
+                  ))
+                ) : (
+                  <p className="text-xs text-muted-foreground">No description yet.</p>
+                )}
+                {exercise.notes && (
+                  <p className="text-[11px] italic leading-relaxed text-muted-foreground">
+                    {exercise.notes}
+                  </p>
+                )}
+              </div>
+            )}
             </li>
           );
         })}

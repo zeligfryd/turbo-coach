@@ -60,6 +60,8 @@ export type ExerciseRow = {
   equipment: Equipment[];
   difficulty: number | null;
   cues: string | null;
+  /** Fuller "how to perform" text, shown when a card is expanded. */
+  description: string | null;
   notes: string | null;
   media_url: string | null;
   scope: ExerciseScope;

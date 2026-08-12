@@ -13,9 +13,9 @@ export default function TrainingPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Off-bike library</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Library</h1>
         <p className="text-sm text-muted-foreground">
-          Routines, exercises and how often each area should come round.
+          Typical weeks, routines, exercises, and how often each area should come round.
         </p>
       </div>
       <TrainingClient />

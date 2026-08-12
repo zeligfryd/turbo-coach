@@ -52,9 +52,9 @@ export default async function ProfilePage() {
         href="/training"
         className="block rounded-lg border border-border bg-card p-4 transition-colors hover:bg-accent"
       >
-        <span className="block text-sm font-semibold">Off-bike library</span>
+        <span className="block text-sm font-semibold">Library</span>
         <span className="mt-0.5 block text-xs text-muted-foreground">
-          Routines, exercises, target intervals and templates.
+          Typical weeks, routines, exercises and target intervals.
         </span>
       </Link>
     </div>

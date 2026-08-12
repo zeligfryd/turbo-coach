@@ -10,6 +10,7 @@
  * cancel — what you get is blocks, which behave like any others.
  */
 
+import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { CalendarPlus } from "lucide-react";
 
@@ -104,9 +105,17 @@ export function ApplyWeekDialog({
         </DialogHeader>
 
         {templates.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No typical weeks yet. Build one under Profile → Off-bike library.
-          </p>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              No typical weeks yet — build one and it will show up here.
+            </p>
+            <Link
+              href="/training"
+              className="flex min-h-[44px] w-full items-center justify-center rounded-lg bg-primary text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+            >
+              Build a week
+            </Link>
+          </div>
         ) : (
           <div className="space-y-4">
             <ul className="space-y-1.5">
@@ -171,6 +180,13 @@ export function ApplyWeekDialog({
             >
               {pending ? "Adding…" : "Add to calendar"}
             </button>
+
+            <Link
+              href="/training"
+              className="block text-center text-xs text-muted-foreground underline-offset-4 hover:underline"
+            >
+              Edit typical weeks
+            </Link>
           </div>
         )}
       </DialogContent>

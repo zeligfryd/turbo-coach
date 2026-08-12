@@ -71,6 +71,10 @@ export function TrainingClient() {
         </p>
       )}
 
+      <section>
+        <WeekTemplateEditor />
+      </section>
+
       {/*
         "What to do next" moved to the home screen, where it is one card with
         one button. This page is now only the parts you come to deliberately:
@@ -104,10 +108,6 @@ export function TrainingClient() {
           onSetTarget={handleSetTarget}
           onResetAll={handleResetAll}
         />
-      </section>
-
-      <section>
-        <WeekTemplateEditor />
       </section>
 
       <section>

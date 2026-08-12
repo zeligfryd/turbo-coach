@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
-import { Menu, Home, Bike, User, Calendar, Activity, Bot, BarChart3, TrendingUp, ListChecks } from "lucide-react";
+import { Menu, Home, Bike, User, Calendar, Activity, Bot, BarChart3, TrendingUp, ListChecks, Library } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getCoachUnreadCount } from "@/app/coach/actions";
 
@@ -67,6 +67,10 @@ export function Sidebar() {
     { href: "/performance", label: "Performance", icon: BarChart3, badge: 0 },
     { href: "/coach", label: "Coach", icon: Bot, badge: coachUnread },
     { href: "/workouts", label: "Workouts", icon: Bike, badge: 0 },
+    // Back in the navigation. It came out when it was a near-empty page that
+    // opened on a setup wizard; it now holds routines, exercises, typical
+    // weeks and the targets, and nothing pointed at it clearly enough to find.
+    { href: "/training", label: "Library", icon: Library, badge: 0 },
     { href: "/profile", label: "Profile", icon: User, badge: 0 },
   ];
 

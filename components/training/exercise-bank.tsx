@@ -29,7 +29,7 @@ import {
   type BankExercise,
 } from "@/app/training/actions";
 import { AREA_LABELS, FOCUS_AREAS, REGION_LABELS, STIMULUS_LABELS, type FocusArea } from "@/lib/training/taxonomy";
-import { coverageColor } from "@/lib/training/display";
+import {  } from "@/lib/training/display";
 import { cn } from "@/lib/utils";
 
 export function ExerciseBank() {
@@ -154,9 +154,11 @@ export function ExerciseBank() {
           return (
             <li key={exercise.id} data-exercise-name={exercise.name} className={cn(isArchived && "opacity-60")}>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5">
+              {/* The area it serves. It used to be coloured by how stale that
+                  area was, which made a library you are browsing look like a
+                  scorecard. */}
               <span
-                className="h-2 w-2 shrink-0 rounded-full"
-                style={{ backgroundColor: coverageColor(exercise.areaStatus) }}
+                className="h-2 w-2 shrink-0 rounded-full bg-muted-foreground/40"
                 title={AREA_LABELS[exercise.area]}
                 aria-hidden="true"
               />

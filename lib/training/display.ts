@@ -8,7 +8,6 @@
 import { Activity, Bike, Dumbbell, Flower2, ShieldPlus, type LucideIcon } from "lucide-react";
 
 import { AREA_LABELS, MODALITY_LABELS, type FocusArea, type Modality } from "./taxonomy";
-import type { CoverageStatus } from "./types";
 
 export const MODALITY_ICONS: Record<Modality, LucideIcon> = {
   bike: Bike,
@@ -22,19 +21,6 @@ export const MODALITY_ICONS: Record<Modality, LucideIcon> = {
 export function modalityColor(modality: Modality): string {
   return `hsl(var(--modality-${modality}))`;
 }
-
-export function coverageColor(status: CoverageStatus): string {
-  const token =
-    status === "fresh" ? "fresh" : status === "due" ? "due" : status === "overdue" ? "overdue" : "never";
-  return `hsl(var(--coverage-${token}))`;
-}
-
-export const COVERAGE_STATUS_LABELS: Record<CoverageStatus, string> = {
-  fresh: "Fresh",
-  due: "Due soon",
-  overdue: "Overdue",
-  never: "Not yet tracked",
-};
 
 export { AREA_LABELS, MODALITY_LABELS, type FocusArea, type Modality };
 

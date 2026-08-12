@@ -12,16 +12,12 @@
  * the two counts worth knowing.
  */
 
-import { useState } from "react";
-import { ChevronDown } from "lucide-react";
 import Link from "next/link";
 
 import { modalityColor } from "@/lib/training/display";
 import { dayBars, ridingPeak } from "@/lib/training/week-bars";
-import { AREA_LABELS } from "@/lib/training/taxonomy";
 
-import type { TodaySnapshot, TrainingOverview } from "@/app/training/actions";
-import type { AreaCoverage } from "@/lib/training/types";
+import type { TodaySnapshot } from "@/app/training/actions";
 
 const DAY_INITIALS = ["M", "T", "W", "T", "F", "S", "S"];
 
@@ -42,25 +38,8 @@ function formWord(tsb: number): string {
   return "very fresh";
 }
 
-function sinceLabel(area: AreaCoverage): string {
-  if (area.daysSince == null) return "not yet covered";
-  if (area.daysSince === 0) return "covered today";
-  if (area.daysSince === 1) return "1 day ago";
-  return `${area.daysSince} days ago`;
-}
-
-export function WeekStrip({
-  snapshot,
-  coverage = [],
-  routines = [],
-}: {
-  snapshot: TodaySnapshot;
-  /** For explaining what is owed, in place. */
-  coverage?: AreaCoverage[];
-  routines?: TrainingOverview["routines"];
-}) {
-  const [showOwed, setShowOwed] = useState(false);
-  const { week, weekMinutes, weekRides, form, offBike30d, missed, shape } = snapshot;
+export function WeekStrip({ snapshot }: { snapshot: TodaySnapshot }) {
+  const { week, weekMinutes, weekRides, form, offBike30d, missed, offBikeWeek } = snapshot;
   const offBikeMinutes = week.reduce((sum, day) => sum + day.offBikeMinutes, 0);
   const peak = ridingPeak(week);
 
@@ -149,97 +128,41 @@ export function WeekStrip({
         </div>
       </div>
 
-      {/* The week's shape, as pips rather than a percentage: three things to
-          do reads as three things, where "67%" reads as a score. */}
-      {shape && shape.expected > 0 && (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border pt-3 text-xs">
-          <span className="flex items-center gap-2">
+      {/* Only shown when you have actually scheduled something. Reporting
+          progress against a target nobody set is what made the old line noise. */}
+      {offBikeWeek && (
+        <div className="mt-3 flex items-center gap-2 border-t border-border pt-3 text-xs">
+          {/* A pip per session while they still fit. Beyond that they were
+              being capped at seven while the text said nine, which is a chart
+              that disagrees with its own label — a bar scales instead. */}
+          {offBikeWeek.scheduled <= 7 ? (
             <span className="flex gap-1" aria-hidden="true">
-              {Array.from({ length: shape.expected }, (_, index) => (
+              {Array.from({ length: offBikeWeek.scheduled }, (_, index) => (
                 <span
                   key={index}
                   className={
-                    index < shape.done
+                    index < offBikeWeek.done
                       ? "h-2 w-2 rounded-full bg-primary"
                       : "h-2 w-2 rounded-full border border-border"
                   }
                 />
               ))}
             </span>
-            {/* Doing more than the shape asks is a good week, not an error —
-                but "8 of 2" reads like one. Past the target the count stops
-                being a fraction and the extras are named separately. */}
-            <span className="text-muted-foreground">
-              <span className="font-semibold tabular-nums text-foreground">
-                {Math.min(shape.done, shape.expected)} of {shape.expected}
-              </span>{" "}
-              off the bike
-              {shape.done > shape.expected && (
-                <span className="tabular-nums"> · {shape.done - shape.expected} extra</span>
-              )}
-            </span>
-          </span>
-          {shape.owed.length > 0 && (
-            // "Still owed: posterior chain, trunk +3" was a dead end — it named
-            // things without saying why they were owed or what to do about
-            // them. Opens in place rather than sending you to another screen.
-            <button
-              type="button"
-              onClick={() => setShowOwed((open) => !open)}
-              aria-expanded={showOwed}
-              className="flex min-h-[28px] items-center gap-1 rounded text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              Still owed:{" "}
-              <span className="text-foreground">
-                {shape.owed.slice(0, 2).map((area) => AREA_LABELS[area].toLowerCase()).join(", ")}
-                {shape.owed.length > 2 && ` +${shape.owed.length - 2}`}
-              </span>
-              <ChevronDown
-                className={showOwed ? "h-3.5 w-3.5 rotate-180 transition-transform" : "h-3.5 w-3.5 transition-transform"}
-                aria-hidden="true"
+          ) : (
+            <span className="h-1.5 w-16 overflow-hidden rounded-full bg-secondary" aria-hidden="true">
+              <span
+                className="block h-full rounded-full bg-primary"
+                style={{ width: `${Math.min(100, (offBikeWeek.done / offBikeWeek.scheduled) * 100)}%` }}
               />
-            </button>
+            </span>
           )}
+          <span className="text-muted-foreground">
+            <span className="font-semibold tabular-nums text-foreground">
+              {offBikeWeek.done} of {offBikeWeek.scheduled}
+            </span>{" "}
+            off the bike
+          </span>
         </div>
-      )}
-
-      {shape && showOwed && shape.owed.length > 0 && (
-        <ul className="mt-2 space-y-1.5 border-t border-border pt-2.5">
-          {shape.owed.map((area) => {
-            const state = coverage.find((c) => c.area === area);
-            // The highest-ranked routine that covers this area is the answer to
-            // "so what should I do about it".
-            const fix = routines.find((routine) => area in routine.coverageVector);
-            return (
-              // Two lines rather than one. On a 390px screen the area name,
-              // its state and the routine could not share a line without
-              // breaking mid-phrase ("wanted every / 7d"), which reads as
-              // broken rather than as dense.
-              <li key={area} className="text-xs">
-                <span className="flex items-baseline justify-between gap-3">
-                  <span className="min-w-0 truncate font-medium text-foreground">
-                    {AREA_LABELS[area]}
-                  </span>
-                  {fix && (
-                    <span className="shrink-0 whitespace-nowrap text-muted-foreground">
-                      {fix.name}
-                    </span>
-                  )}
-                </span>
-                {state && (
-                  <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                    {sinceLabel(state)} · every {state.targetDays}d
-                  </span>
-                )}
-              </li>
-            );
-          })}
-          <li className="pt-0.5 text-xs">
-            <Link href="/training" className="text-muted-foreground underline-offset-4 hover:underline">
-              Change how often
-            </Link>
-          </li>
-        </ul>
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border pt-3 text-xs text-muted-foreground">
@@ -251,12 +174,6 @@ export function WeekStrip({
               {Math.round(form)}
             </span>{" "}
             · {formWord(form)}
-          </span>
-        )}
-        {!shape && (
-          <span>
-            Off the bike{" "}
-            <span className="font-semibold tabular-nums text-foreground">{offBike30d}</span> in 30 days
           </span>
         )}
         {/* Stated, not alarmed. A missed session is information, and the only

@@ -22,12 +22,10 @@ import {
 } from "@/app/training/actions";
 import { AREA_LABELS, type FocusArea } from "@/lib/training/taxonomy";
 import { formatMinutes } from "@/lib/training/display";
-import type { AreaCoverage } from "@/lib/training/types";
 import { cn } from "@/lib/utils";
 
 export function RoutinesClient() {
   const [exercises, setExercises] = useState<BankExercise[]>([]);
-  const [coverage, setCoverage] = useState<AreaCoverage[]>([]);
   const [overview, setOverview] = useState<TrainingOverview | null>(null);
   const [composing, setComposing] = useState<{ seed?: ComposerSeed } | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -38,7 +36,6 @@ export function RoutinesClient() {
     const [bank, over] = await Promise.all([getExerciseBank(), getTrainingOverview()]);
     if (bank.success) {
       setExercises(bank.data.exercises);
-      setCoverage(bank.data.coverage);
     } else {
       setError(bank.error);
     }
@@ -88,7 +85,6 @@ export function RoutinesClient() {
         <RoutineComposer
           onBankChanged={refresh}
           exercises={exercises}
-          coverage={coverage}
           seed={composing.seed}
           onCancel={() => setComposing(null)}
           onSave={async (input) => {

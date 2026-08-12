@@ -12,18 +12,14 @@ import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
 import {
-  computeAreaCoverage,
   computeWeekLoad,
   rankRoutines,
   startOfWeek,
 } from "@/lib/training/derive";
-import { weekProgress, weeklyEstimate, type WeekProgress } from "@/lib/training/cadence";
 import { readTrainingWindow } from "@/lib/training/read";
 import * as service from "@/lib/training/service";
 import type {
-  AreaCoverage,
   BlockTemplateRow,
-  CoverageGoalRow,
   PlannedItem,
   RoutineCoverage,
   WeekLoad,
@@ -68,7 +64,6 @@ function revalidateTraining() {
 export type TrainingWindowPayload = {
   items: PlannedItem[];
   weeks: WeekLoad[];
-  coverage: AreaCoverage[];
 };
 
 /**
@@ -82,19 +77,9 @@ export async function getTrainingWindow(
   endDate: string,
 ): Promise<Result<TrainingWindowPayload>> {
   return withUser(async (supabase, userId) => {
-    const coverageLookbackStart = addDaysISO(startDate, -120);
-
-    const [window, coverageWindow, goalsResult] = await Promise.all([
-      readTrainingWindow(supabase, userId, startDate, endDate),
-      readTrainingWindow(supabase, userId, coverageLookbackStart, endDate),
-      supabase.from("coverage_goal").select("area, target_days, is_default").eq("user_id", userId),
-    ]);
-
-    const today = new Date().toISOString().slice(0, 10);
-    const goals = (goalsResult.data ?? []) as Pick<
-      CoverageGoalRow,
-      "area" | "target_days" | "is_default"
-    >[];
+    // The 120-day lookback existed only to age body areas. Without that, the
+    // window is just the window.
+    const window = await readTrainingWindow(supabase, userId, startDate, endDate);
 
     const weeks: WeekLoad[] = [];
     let cursor = startOfWeek(startDate);
@@ -105,11 +90,7 @@ export async function getTrainingWindow(
 
     return {
       success: true,
-      data: {
-        items: window.items,
-        weeks,
-        coverage: computeAreaCoverage(coverageWindow.coverageEvents, goals, today),
-      },
+      data: { items: window.items, weeks },
     };
   });
 }
@@ -146,22 +127,20 @@ export type RoutineSummary = {
 };
 
 export type TrainingOverview = {
-  coverage: AreaCoverage[];
-  routines: (RoutineSummary & { fixesAreas: string[]; urgency: number })[];
+  routines: RoutineSummary[];
 };
 
 /**
- * The coverage view and /today both need the same thing: where you stand, and
- * which routine addresses it. Derived once, here.
+ * Your routines, least recently done first — which is the whole of "what
+ * should I do next" now that areas are a property of a routine rather than a
+ * target to hit.
  */
 export async function getTrainingOverview(): Promise<Result<TrainingOverview>> {
   return withUser(async (supabase, userId) => {
     const today = new Date().toISOString().slice(0, 10);
     const lookbackStart = addDaysISO(today, -120);
 
-    const [window, goalsResult, routinesResult, doneBlocksResult] = await Promise.all([
-      readTrainingWindow(supabase, userId, lookbackStart, today),
-      supabase.from("coverage_goal").select("area, target_days, is_default").eq("user_id", userId),
+    const [routinesResult, doneBlocksResult] = await Promise.all([
       supabase
         .from("routine")
         .select("id, name, est_duration_min, is_preset, coverage_vector, routine_item(count)")
@@ -176,12 +155,6 @@ export async function getTrainingOverview(): Promise<Result<TrainingOverview>> {
         .lte("date", today)
         .order("date", { ascending: false }),
     ]);
-
-    const goals = (goalsResult.data ?? []) as Pick<
-      CoverageGoalRow,
-      "area" | "target_days" | "is_default"
-    >[];
-    const coverage = computeAreaCoverage(window.coverageEvents, goals, today);
 
     // Most recent completion per routine. The query is already sorted newest
     // first, so the first hit for a routine wins.
@@ -231,7 +204,7 @@ export async function getTrainingOverview(): Promise<Result<TrainingOverview>> {
 
     return {
       success: true,
-      data: { coverage, routines: rankRoutines(summaries, coverage) },
+      data: { routines: rankRoutines(summaries) },
     };
   });
 }
@@ -349,8 +322,6 @@ export type BankExercise = {
   isOwn: boolean;
   archivedAt: string | null;
   /** Staleness of the area this exercise serves — drives the ranking. */
-  areaStatus: AreaCoverage["status"];
-  areaRatio: number | null;
   loaded: boolean;
 };
 
@@ -363,27 +334,15 @@ export type BankExercise = {
  */
 export async function getExerciseBank(
   options: { includeArchived?: boolean } = {},
-): Promise<Result<{ exercises: BankExercise[]; coverage: AreaCoverage[] }>> {
+): Promise<Result<{ exercises: BankExercise[] }>> {
   return withUser(async (supabase, userId) => {
     const today = new Date().toISOString().slice(0, 10);
 
     let query = supabase.from("exercise").select("*").order("name");
     if (!options.includeArchived) query = query.is("archived_at", null);
 
-    const [exercisesResult, window, goalsResult] = await Promise.all([
-      query,
-      readTrainingWindow(supabase, userId, addDaysISO(today, -120), today),
-      supabase.from("coverage_goal").select("area, target_days, is_default").eq("user_id", userId),
-    ]);
-
+    const exercisesResult = await query;
     if (exercisesResult.error) return { success: false, error: exercisesResult.error.message };
-
-    const goals = (goalsResult.data ?? []) as Pick<
-      CoverageGoalRow,
-      "area" | "target_days" | "is_default"
-    >[];
-    const coverage = computeAreaCoverage(window.coverageEvents, goals, today);
-    const byArea = new Map(coverage.map((c) => [c.area, c]));
 
     type Row = {
       id: string;
@@ -405,7 +364,6 @@ export async function getExerciseBank(
       // An exercise can name several regions; it is ranked by the area it
       // serves first, which is the one its primary region belongs to.
       const area = areaOfRegion(row.regions[0]);
-      const state = byArea.get(area);
       return {
         id: row.id,
         name: row.name,
@@ -421,22 +379,15 @@ export async function getExerciseBank(
         isPreset: row.is_preset,
         isOwn: row.user_id === userId,
         archivedAt: row.archived_at,
-        areaStatus: state?.status ?? "never",
-        areaRatio: state?.ratio ?? null,
         loaded: isLoaded(row.stimulus),
       };
     });
 
-    // Stalest area first; a never-covered area outranks any ratio.
-    exercises.sort((a, b) => {
-      const rank = (x: BankExercise) => (x.areaRatio === null ? Number.POSITIVE_INFINITY : x.areaRatio);
-      const diff = rank(b) - rank(a);
-      if (diff !== 0 && Number.isFinite(diff)) return diff;
-      if (rank(a) !== rank(b)) return rank(b) === Number.POSITIVE_INFINITY ? 1 : -1;
-      return a.name.localeCompare(b.name);
-    });
+    // Alphabetical. Ordering by how stale an area was made the list reshuffle
+    // between visits, which is hostile in a picker you are scanning by name.
+    exercises.sort((a, b) => a.name.localeCompare(b.name));
 
-    return { success: true, data: { exercises, coverage } };
+    return { success: true, data: { exercises } };
   });
 }
 
@@ -706,32 +657,8 @@ export async function scheduleFromTemplateAction(
   return result;
 }
 
-export async function setAreaGoalAction(area: FocusArea, targetDays: number) {
-  const result = await withUser(async (supabase, userId) => {
-    const res = await service.setAreaGoal(supabase, userId, area, targetDays);
-    return res.success ? { success: true as const, data: res.data } : { success: false as const, error: res.error };
-  });
-  if (result.success) revalidateTraining();
-  return result;
-}
 
-export async function resetAreaGoalAction(area: FocusArea) {
-  const result = await withUser(async (supabase, userId) => {
-    const res = await service.resetAreaGoal(supabase, userId, area);
-    return res.success ? { success: true as const, data: res.data } : { success: false as const, error: res.error };
-  });
-  if (result.success) revalidateTraining();
-  return result;
-}
 
-export async function resetAllAreaGoalsAction() {
-  const result = await withUser(async (supabase, userId) => {
-    const res = await service.resetAllAreaGoals(supabase, userId);
-    return res.success ? { success: true as const, data: res.data } : { success: false as const, error: res.error };
-  });
-  if (result.success) revalidateTraining();
-  return result;
-}
 
 // ── Today snapshot ──────────────────────────────────────────────────
 
@@ -756,11 +683,11 @@ export type TodaySnapshot = {
   /** Planned sessions whose day has passed with nothing to show for them. */
   missed: number;
   /**
-   * The week's shape: how many off-bike sessions it works out at, how many are
-   * done, and which areas are still owed. Null until there are routines to
-   * measure the shape against.
+   * Off-bike sessions this week: how many are on the calendar and how many are
+   * done. Null when nothing is scheduled — an expectation you never set is not
+   * worth reporting against.
    */
-  shape: WeekProgress | null;
+  offBikeWeek: { done: number; scheduled: number } | null;
 };
 
 /**
@@ -808,9 +735,8 @@ export async function getTodaySnapshot(): Promise<Result<TodaySnapshot>> {
       getTrainingOverview(),
       supabase
         .from("block")
-        .select("id, date, planned_duration_min, completion(actual_duration_min)")
+        .select("id, date, status, planned_duration_min, completion(actual_duration_min)")
         .eq("user_id", userId)
-        .eq("status", "done")
         .gte("date", weekStart)
         .lte("date", weekEnd),
     ]);
@@ -828,9 +754,12 @@ export async function getTodaySnapshot(): Promise<Result<TodaySnapshot>> {
     const offBikeByDate = new Map<string, number>();
     for (const block of (weekBlocksResult.data ?? []) as {
       date: string;
+      status: string;
       planned_duration_min: number | null;
       completion: { actual_duration_min: number | null }[] | null;
     }[]) {
+      // Minutes are what happened, so a session merely scheduled adds none.
+      if (block.status !== "done" && block.status !== "partial") continue;
       const actual = block.completion?.[0]?.actual_duration_min;
       const mins = actual ?? block.planned_duration_min ?? 0;
       offBikeByDate.set(block.date, (offBikeByDate.get(block.date) ?? 0) + mins);
@@ -847,28 +776,17 @@ export async function getTodaySnapshot(): Promise<Result<TodaySnapshot>> {
       };
     });
 
-    // The shape: what the targets work out at, against what is actually done
-    // and which areas are still behind. Areas carry the demand — a week of four
-    // sessions that all hit the same one is not a covered week.
-    let shape: WeekProgress | null = null;
-    if (overviewResult.success) {
-      const { coverage, routines } = overviewResult.data;
-      const targets = Object.fromEntries(
-        coverage.map((area) => [area.area, area.targetDays]),
-      ) as Partial<Record<FocusArea, number>>;
-      const estimate = weeklyEstimate(
-        targets,
-        routines.map((routine) => ({
-          areaCount: Object.keys(routine.coverageVector).length,
-          durationMin: routine.estDurationMin,
-        })),
-      );
-      const behind = coverage
-        .filter((area) => area.status !== "fresh")
-        .sort((a, b) => (b.ratio ?? Number.MAX_SAFE_INTEGER) - (a.ratio ?? Number.MAX_SAFE_INTEGER))
-        .map((area) => area.area);
-      shape = weekProgress(weekBlocksResult.data?.length ?? 0, estimate.sessions, behind);
-    }
+    // The week's target is what you put on the calendar, not what a formula
+    // works out from six intervals nobody chose. Scheduling four sessions makes
+    // "2 of 4" a fact; scheduling none means there is nothing to report.
+    const weekBlocks = (weekBlocksResult.data ?? []) as { status: string }[];
+    const offBikeWeek =
+      weekBlocks.length > 0
+        ? {
+            done: weekBlocks.filter((b) => b.status === "done" || b.status === "partial").length,
+            scheduled: weekBlocks.length,
+          }
+        : null;
 
     return {
       success: true as const,
@@ -879,7 +797,7 @@ export async function getTodaySnapshot(): Promise<Result<TodaySnapshot>> {
         form: wellnessResult.data?.[0]?.tsb ?? null,
         offBike30d: blocksResult.data?.length ?? 0,
         missed: plannedResult.data?.length ?? 0,
-        shape,
+        offBikeWeek,
       },
     };
   });

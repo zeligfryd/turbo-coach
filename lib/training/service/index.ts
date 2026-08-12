@@ -25,9 +25,6 @@ export {
   clearBlockCompletion,
   recordBlockCompletion,
   recordRideCompletion,
-  resetAllAreaGoals,
-  resetAreaGoal,
-  setAreaGoal,
   RecordCompletionInput,
 } from "./completion";
 

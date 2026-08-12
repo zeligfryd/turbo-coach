@@ -1,19 +1,15 @@
 import { describe, it, expect } from "vitest";
 import {
+  rankRoutines,
   acuteChronicRatio,
   addDays,
-  computeAreaCoverage,
   computeWeekLoad,
-  coverageStatus,
   daysBetween,
   estimateRpeFromIntensity,
-  rankByStaleness,
-  rankRoutines,
-  resolveGoals,
   sessionLoad,
   startOfWeek,
 } from "@/lib/training/derive";
-import { DEFAULT_AREA_TARGET_DAYS, FOCUS_AREAS } from "@/lib/training/taxonomy";
+import { FOCUS_AREAS } from "@/lib/training/taxonomy";
 import type { CoverageEvent, PlannedItem } from "@/lib/training/types";
 
 const TODAY = "2026-08-09"; // a Sunday
@@ -290,267 +286,37 @@ describe("acuteChronicRatio", () => {
   });
 });
 
-describe("coverageStatus", () => {
-  it("bands the ratio", () => {
-    expect(coverageStatus(0.2)).toBe("fresh");
-    expect(coverageStatus(0.59)).toBe("fresh");
-    expect(coverageStatus(0.6)).toBe("due");
-    expect(coverageStatus(1)).toBe("due");
-    expect(coverageStatus(1.01)).toBe("overdue");
-  });
 
-  it("distinguishes never-covered from overdue", () => {
-    expect(coverageStatus(null)).toBe("never");
-  });
-});
 
-describe("resolveGoals", () => {
-  it("falls back to the cyclist defaults", () => {
-    const resolved = resolveGoals([]);
-    expect(Object.keys(resolved)).toHaveLength(6);
-    expect(resolved.thoracic.targetDays).toBe(DEFAULT_AREA_TARGET_DAYS.thoracic);
-    expect(resolved.thoracic.isDefault).toBe(true);
-  });
 
-  it("honours a user override", () => {
-    const resolved = resolveGoals([{ area: "thoracic", target_days: 2, is_default: false }]);
-    expect(resolved.thoracic).toEqual({ targetDays: 2, isDefault: false });
-  });
 
-  it("ignores rows still marked as defaults", () => {
-    const resolved = resolveGoals([{ area: "thoracic", target_days: 99, is_default: true }]);
-    expect(resolved.thoracic.targetDays).toBe(DEFAULT_AREA_TARGET_DAYS.thoracic);
-  });
 
-  it("is satisfiable with margin — the whole point of the six-area model", () => {
-    // Σ(1/target) is the required stimuli per day. The spec's 24-cell profile
-    // demanded ≈4.1/day (≈29/week); four rotating routines cannot deliver that.
-    const perDay = FOCUS_AREAS.reduce((sum, a) => sum + 1 / DEFAULT_AREA_TARGET_DAYS[a], 0);
-    expect(perDay * 7).toBeLessThan(12);
-  });
-});
-
-describe("computeAreaCoverage", () => {
-  const ev = (area: CoverageEvent["area"], date: string, loaded = true): CoverageEvent => ({
-    area,
-    date,
-    loaded,
-  });
-
-  it("returns all six areas regardless of history", () => {
-    const coverage = computeAreaCoverage([], [], TODAY);
-    expect(coverage).toHaveLength(6);
-    expect(coverage.every((c) => c.status === "never")).toBe(true);
-  });
-
-  it("measures from the most recent event", () => {
-    const coverage = computeAreaCoverage(
-      [ev("thoracic", "2026-08-01"), ev("thoracic", "2026-08-07")],
-      [],
-      TODAY,
-    );
-    const thoracic = coverage.find((c) => c.area === "thoracic")!;
-    expect(thoracic.lastCoveredDate).toBe("2026-08-07");
-    expect(thoracic.daysSince).toBe(2);
-  });
-
-  it("computes the ratio against the target", () => {
-    // Derived from the default rather than hard-coded, so tuning the shipped
-    // shape does not break a test that is about the arithmetic.
-    const target = DEFAULT_AREA_TARGET_DAYS.thoracic;
-    const coverage = computeAreaCoverage([ev("thoracic", "2026-08-01")], [], TODAY);
-    const thoracic = coverage.find((c) => c.area === "thoracic")!;
-    const daysSince = 8;
-    expect(thoracic.daysSince).toBe(daysSince);
-    expect(thoracic.ratio).toBeCloseTo(daysSince / target, 2);
-    expect(thoracic.status).toBe("overdue");
-  });
-
-  it("marks an area stretched but never loaded", () => {
-    const coverage = computeAreaCoverage(
-      [ev("thoracic", "2026-08-07", false), ev("thoracic", "2026-08-08", false)],
-      [],
-      TODAY,
-    );
-    expect(coverage.find((c) => c.area === "thoracic")!.stretchOnly).toBe(true);
-  });
-
-  it("clears the stretch-only mark once anything loaded lands", () => {
-    const coverage = computeAreaCoverage(
-      [ev("thoracic", "2026-08-01", true), ev("thoracic", "2026-08-08", false)],
-      [],
-      TODAY,
-    );
-    // The most recent event was a stretch, but the area HAS been loaded.
-    expect(coverage.find((c) => c.area === "thoracic")!.stretchOnly).toBe(false);
-  });
-
-  it("ignores events in the future so planned work cannot mark an area fresh", () => {
-    const coverage = computeAreaCoverage([ev("thoracic", "2026-08-20")], [], TODAY);
-    expect(coverage.find((c) => c.area === "thoracic")!.status).toBe("never");
-  });
-
-  it("respects a user override of the target", () => {
-    const coverage = computeAreaCoverage(
-      [ev("thoracic", "2026-08-07")],
-      [{ area: "thoracic", target_days: 14, is_default: false }],
-      TODAY,
-    );
-    const thoracic = coverage.find((c) => c.area === "thoracic")!;
-    expect(thoracic.status).toBe("fresh"); // 2 / 14
-    expect(thoracic.isDefault).toBe(false);
-  });
-});
-
-describe("rankByStaleness", () => {
-  it("puts never-covered areas first, then the most overdue", () => {
-    const coverage = computeAreaCoverage(
-      [
-        ev2("hips_glutes", "2026-08-08"), // 1 day, target 4 → 0.25
-        ev2("thoracic", "2026-08-01"), // 8 days, target 4 → 2.0
-      ],
-      [],
-      TODAY,
-    );
-    const ranked = rankByStaleness(coverage);
-    expect(ranked[0].ratio).toBeNull(); // an untouched area is most actionable
-    const withHistory = ranked.filter((c) => c.ratio !== null);
-    expect(withHistory[0].area).toBe("thoracic");
-    expect(withHistory[withHistory.length - 1].area).toBe("hips_glutes");
-  });
-
-  function ev2(area: CoverageEvent["area"], date: string): CoverageEvent {
-    return { area, date, loaded: true };
-  }
-});
 
 describe("rankRoutines", () => {
-  const routine = (name: string, areas: Record<string, boolean>) => ({
-    name,
-    coverageVector: Object.fromEntries(
-      Object.entries(areas).map(([area, loaded]) => [area, { loaded }]),
-    ),
+  const r = (name: string, daysSinceDone: number | null) => ({ name, daysSinceDone });
+
+  it("puts the least recently done first", () => {
+    const ranked = rankRoutines([r("fresh", 1), r("stale", 9), r("middling", 4)]);
+    expect(ranked.map((x) => x.name)).toEqual(["stale", "middling", "fresh"]);
   });
 
-  const coverage = (overrides: Record<string, string>) =>
-    computeAreaCoverage(
-      Object.entries(overrides).map(([area, date]) => ({
-        area: area as CoverageEvent["area"],
-        date,
-        loaded: true,
-      })),
-      [],
-      TODAY,
-    );
-
-  it("puts the routine covering the most overdue area first", () => {
-    const cov = coverage({
-      hips_glutes: "2026-08-08", // 1 day / 4 → fresh
-      neck_shoulders: "2026-07-25", // 15 days / 6 → overdue
-      thoracic: "2026-08-08",
-      posterior_chain: "2026-08-08",
-      trunk: "2026-08-08",
-      extremities: "2026-08-08",
-    });
-    const ranked = rankRoutines(
-      [
-        routine("Hips & glutes 12", { hips_glutes: true }),
-        routine("Upper 8", { neck_shoulders: true, thoracic: true }),
-      ],
-      cov,
-    );
-    expect(ranked[0].name).toBe("Upper 8");
-    expect(ranked[0].fixesAreas).toContain("neck_shoulders");
+  it("puts one you have never done above everything", () => {
+    // A routine you have just added is the most likely thing you meant to do.
+    const ranked = rankRoutines([r("done today", 0), r("never", null), r("old", 30)]);
+    expect(ranked[0].name).toBe("never");
   });
 
-  it("treats a never-covered area as the most urgent thing available", () => {
-    const cov = coverage({
-      hips_glutes: "2026-08-01", // 8 days / 4 → 2.0, overdue
-      // trunk has no history at all
-    });
-    const ranked = rankRoutines(
-      [
-        routine("Hips & glutes 12", { hips_glutes: true }),
-        routine("Tendon & trunk 10", { trunk: true }),
-      ],
-      cov,
-    );
-    expect(ranked[0].name).toBe("Tendon & trunk 10");
+  it("keeps every routine — this ranks, it does not filter", () => {
+    const ranked = rankRoutines([r("a", 1), r("b", null), r("c", 12)]);
+    expect(ranked).toHaveLength(3);
   });
 
-  it("does not list fresh areas as things it fixes", () => {
-    const cov = coverage({
-      hips_glutes: "2026-08-08",
-      thoracic: "2026-08-08",
-      posterior_chain: "2026-08-08",
-      trunk: "2026-08-08",
-      neck_shoulders: "2026-08-08",
-      extremities: "2026-08-08",
-    });
-    const ranked = rankRoutines([routine("Post-ride 10", { hips_glutes: true })], cov);
-    expect(ranked[0].fixesAreas).toEqual([]);
+  it("carries the rest of the routine through untouched", () => {
+    const ranked = rankRoutines([{ name: "x", daysSinceDone: 3, exerciseCount: 5 }]);
+    expect(ranked[0].exerciseCount).toBe(5);
   });
 
-  it("ignores areas the routine does not cover when scoring", () => {
-    const cov = coverage({
-      hips_glutes: "2026-08-08",
-      neck_shoulders: "2026-06-01", // wildly overdue, but untouched by this routine
-    });
-    const ranked = rankRoutines([routine("Hips & glutes 12", { hips_glutes: true })], cov);
-    expect(ranked[0].urgency).toBeLessThan(1);
-  });
-});
-
-describe("rankRoutines — tie-breaking and stretch-only", () => {
-  const routine = (name: string, areas: Record<string, boolean>) => ({
-    name,
-    coverageVector: Object.fromEntries(
-      Object.entries(areas).map(([area, loaded]) => [area, { loaded }]),
-    ),
-  });
-
-  it("on a fresh account, suggests the routine covering the most ground", () => {
-    // Every area is equally "never covered", so urgency ties across the board.
-    const cov = computeAreaCoverage([], [], TODAY);
-    const ranked = rankRoutines(
-      [
-        routine("Hips & glutes 12", { hips_glutes: true }),
-        routine("Post-ride 10", {
-          hips_glutes: false,
-          thoracic: false,
-          posterior_chain: false,
-          extremities: false,
-        }),
-      ],
-      cov,
-    );
-    expect(ranked[0].name).toBe("Post-ride 10");
-    expect(ranked[0].fixesAreas).toHaveLength(4);
-  });
-
-  it("counts an area that has only been stretched as something a loading routine fixes", () => {
-    const cov = computeAreaCoverage(
-      [{ area: "thoracic", date: "2026-08-08", loaded: false }],
-      [],
-      TODAY,
-    );
-    expect(cov.find((c) => c.area === "thoracic")!.status).toBe("fresh");
-
-    const [loading, stretching] = rankRoutines(
-      [routine("Loads it", { thoracic: true }), routine("Stretches it", { thoracic: false })],
-      cov,
-    );
-    expect(loading.fixesAreas).toContain("thoracic");
-    expect(stretching.fixesAreas).not.toContain("thoracic");
-  });
-
-  it("does not let stretch-only inflate urgency", () => {
-    const cov = computeAreaCoverage(
-      [{ area: "thoracic", date: "2026-08-08", loaded: false }],
-      [],
-      TODAY,
-    );
-    const [ranked] = rankRoutines([routine("Loads it", { thoracic: true })], cov);
-    expect(ranked.urgency).toBeLessThan(1); // fresh: 1 day against a 4-day target
+  it("handles an empty library", () => {
+    expect(rankRoutines([])).toEqual([]);
   });
 });

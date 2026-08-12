@@ -65,36 +65,10 @@ export const GLOSSARY = {
     term: "Focus area",
     short: "One of six parts of the body tracked separately for prehab.",
   },
-  staleness: {
-    term: "Time since last",
-    short: "How long since anything covered this area, against how often you want to cover it.",
-  },
-  target_interval: {
-    term: "Target interval",
-    short: "How many days you want to go, at most, between sessions covering this area.",
-    why: "Defaults are applied until you change one.",
-  },
   stretch_only: {
     term: "Stretch only",
     short: "This area has been stretched, but nothing has actually loaded it.",
     why: "A calf stretch and a heavy-slow calf raise both touch the calf, but only one loads the tendon.",
-  },
-  coverage_fresh: {
-    term: "Fresh",
-    short: "Covered recently — well inside its target interval.",
-  },
-  coverage_due: {
-    term: "Due soon",
-    short: "Approaching its target interval. Worth picking up in the next session or two.",
-  },
-  coverage_overdue: {
-    term: "Overdue",
-    short: "Past its target interval.",
-    why: "One or two overdue areas is normal in a heavy week. All six is a sign the targets need adjusting, not that you have failed.",
-  },
-  coverage_never: {
-    term: "Not yet tracked",
-    short: "Nothing has covered this area since you started tracking.",
   },
 
   // ── Scheduling ────────────────────────────────────────────────────

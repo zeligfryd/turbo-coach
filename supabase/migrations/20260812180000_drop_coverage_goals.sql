@@ -1,0 +1,17 @@
+-- Retire the per-area target intervals.
+--
+-- Six body areas, each with an interval you were meant to choose, drove which
+-- routine came up next and produced a "still owed" line on the home screen.
+-- Nobody ever chose the intervals — the table held zero rows in practice — so
+-- the app was measuring against numbers it had picked for itself, and then
+-- explaining its suggestions in terms of them ("posterior chain is at 1.4× its
+-- interval"), which is a sentence about a model rather than about training.
+--
+-- Rotation now works on the routines themselves: least recently done first.
+-- That keeps what mattered — you do not repeat one routine while another goes
+-- untouched — and says so without a vocabulary.
+--
+-- Areas survive as description, not prescription: routine.coverage_vector and
+-- block.area_tags both stay, so a routine still tells you what it covers while
+-- you build it, and a completed session still records what it worked.
+drop table if exists public.coverage_goal;

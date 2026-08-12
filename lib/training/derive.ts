@@ -9,7 +9,6 @@
  */
 
 import {
-  DEFAULT_AREA_TARGET_DAYS,
   FOCUS_AREAS,
   MODALITIES,
   isCompleted,
@@ -17,10 +16,6 @@ import {
   type Modality,
 } from "./taxonomy";
 import type {
-  AreaCoverage,
-  CoverageEvent,
-  CoverageGoalRow,
-  CoverageStatus,
   ModalityLoad,
   PlannedItem,
   RoutineCoverage,
@@ -173,161 +168,33 @@ export function acuteChronicRatio(weeks: WeekLoad[]): number | null {
   return Math.round((acute / chronic) * 100) / 100;
 }
 
-// ── Coverage ────────────────────────────────────────────────────────
+// ── Choosing what to do next ────────────────────────────────────────
+
+export type RankedRoutine<T> = T & { daysSinceDone: number | null };
 
 /**
- * Status thresholds. `never` is distinct from `overdue`: an area with no
- * history has nothing to be late for, and should not be shown as a failure.
- */
-export function coverageStatus(ratio: number | null): CoverageStatus {
-  if (ratio === null) return "never";
-  if (ratio < 0.6) return "fresh";
-  if (ratio <= 1) return "due";
-  return "overdue";
-}
-
-/**
- * Resolve the six targets, falling back to the cyclist defaults for any area
- * the user has not overridden. Always returns all six areas.
- */
-export function resolveGoals(
-  goals: Pick<CoverageGoalRow, "area" | "target_days" | "is_default">[],
-): Record<FocusArea, { targetDays: number; isDefault: boolean }> {
-  const resolved = {} as Record<FocusArea, { targetDays: number; isDefault: boolean }>;
-  for (const area of FOCUS_AREAS) {
-    const override = goals.find((g) => g.area === area && !g.is_default);
-    resolved[area] = override
-      ? { targetDays: override.target_days, isDefault: false }
-      : { targetDays: DEFAULT_AREA_TARGET_DAYS[area], isDefault: true };
-  }
-  return resolved;
-}
-
-/**
- * Current coverage for all six areas, as of `today`.
+ * Routines, least recently done first.
  *
- * `stretchOnly` marks an area that has been touched but never by anything
- * loaded — the one-bit replacement for the spec's five-way stimulus axis (D8).
- * It is computed over the whole history window passed in, not just the most
- * recent event, so a single stretch does not mask months of loaded work.
+ * This used to rank by how overdue a *body area* was, against a target
+ * interval per area. That worked, but it asked you to choose six intervals
+ * before the ranking meant anything, and then explained itself in terms of
+ * those numbers — "posterior chain is at 1.4× its interval" — which is a
+ * sentence about a model rather than about training. Nobody set the intervals,
+ * so the ranking was measuring against numbers the app had picked for itself.
  *
- * Events dated after `today` are ignored, so the function is safe to call with
- * a window that includes planned future work.
- */
-export function computeAreaCoverage(
-  events: CoverageEvent[],
-  goals: Pick<CoverageGoalRow, "area" | "target_days" | "is_default">[],
-  today: string,
-): AreaCoverage[] {
-  const resolved = resolveGoals(goals);
-
-  return FOCUS_AREAS.map((area) => {
-    const { targetDays, isDefault } = resolved[area];
-    const relevant = events.filter((e) => e.area === area && e.date <= today);
-
-    if (relevant.length === 0) {
-      return {
-        area,
-        targetDays,
-        isDefault,
-        lastCoveredDate: null,
-        daysSince: null,
-        ratio: null,
-        status: "never" as CoverageStatus,
-        stretchOnly: false,
-      };
-    }
-
-    const lastCoveredDate = relevant.reduce((max, e) => (e.date > max ? e.date : max), relevant[0].date);
-    const daysSince = daysBetween(lastCoveredDate, today);
-    const ratio = targetDays > 0 ? Math.round((daysSince / targetDays) * 100) / 100 : null;
-
-    return {
-      area,
-      targetDays,
-      isDefault,
-      lastCoveredDate,
-      daysSince,
-      ratio,
-      status: coverageStatus(ratio),
-      stretchOnly: !relevant.some((e) => e.loaded),
-    };
-  });
-}
-
-/**
- * Rank areas by how overdue they are, stalest first. Areas never covered sort
- * to the top — an untouched area is the most actionable thing on the list.
- * Drives the composer's ordering and the "which routine next" suggestion.
- */
-export function rankByStaleness(coverage: AreaCoverage[]): AreaCoverage[] {
-  return coverage.slice().sort((a, b) => {
-    if (a.ratio === null && b.ratio === null) return 0;
-    if (a.ratio === null) return -1;
-    if (b.ratio === null) return 1;
-    return b.ratio - a.ratio;
-  });
-}
-
-// ── Routine rotation (D8) ───────────────────────────────────────────
-
-export type RankedRoutine<T extends { coverageVector: RoutineCoverage }> = T & {
-  /** Areas this routine covers that are currently due or overdue. */
-  fixesAreas: FocusArea[];
-  /** Staleness of the worst area it addresses; higher means more urgent. */
-  urgency: number;
-};
-
-/**
- * Order the routines by how much of the current backlog each one clears.
+ * Rotating the routines themselves gives the same thing that actually mattered
+ * — you do not repeat one routine while another goes untouched — and explains
+ * itself without a vocabulary: you have not done this one in nine days.
  *
- * This is the default path: rather than composing a session against a grid,
- * the user answers one question with four possible answers. Scoring on the
- * *worst* area a routine touches (not the sum) keeps the answer explainable —
- * "Upper 8, because neck and shoulders is nine days overdue" — instead of
- * producing a number nobody can argue with.
- *
- * An area that has never been covered is treated as maximally urgent, since
- * there is no ratio to compare and it is the most actionable thing available.
+ * What it gives up: nothing notices if an area is missing from every routine
+ * you own. That is a property of your routines, and it is visible where it can
+ * be acted on, in the composer as you build them.
  */
-export function rankRoutines<T extends { coverageVector: RoutineCoverage }>(
+export function rankRoutines<T extends { daysSinceDone: number | null }>(
   routines: T[],
-  coverage: AreaCoverage[],
 ): RankedRoutine<T>[] {
-  const byArea = new Map(coverage.map((c) => [c.area, c]));
-  const NEVER_URGENCY = 99;
-
+  const NEVER = Number.MAX_SAFE_INTEGER;
   return routines
-    .map((routine) => {
-      const areas = Object.keys(routine.coverageVector) as FocusArea[];
-      let urgency = 0;
-      const fixesAreas: FocusArea[] = [];
-
-      for (const area of areas) {
-        const state = byArea.get(area);
-        if (!state) continue;
-        const areaUrgency = state.ratio === null ? NEVER_URGENCY : state.ratio;
-        urgency = Math.max(urgency, areaUrgency);
-
-        const isBehind =
-          state.status === "due" || state.status === "overdue" || state.status === "never";
-        // An area that has only ever been stretched still needs loading, and
-        // this routine can supply it. Counted as something the routine fixes,
-        // but deliberately not as urgency — otherwise "stretched but never
-        // loaded" would need its own target interval, which is the two-axis
-        // complexity the six-area model exists to avoid.
-        const suppliesMissingLoad = state.stretchOnly && Boolean(routine.coverageVector[area]?.loaded);
-
-        if (isBehind || suppliesMissingLoad) fixesAreas.push(area);
-      }
-
-      return { ...routine, fixesAreas, urgency: Math.round(urgency * 100) / 100 };
-    })
-    .sort((a, b) => {
-      if (b.urgency !== a.urgency) return b.urgency - a.urgency;
-      // Ties are the normal case on a fresh account, where every area is
-      // equally "never covered". Break toward the routine that clears the most
-      // backlog, so the first suggestion is the one covering the most ground.
-      return b.fixesAreas.length - a.fixesAreas.length;
-    });
+    .map((routine) => ({ ...routine, daysSinceDone: routine.daysSinceDone }))
+    .sort((a, b) => (b.daysSinceDone ?? NEVER) - (a.daysSinceDone ?? NEVER));
 }

@@ -200,24 +200,6 @@ export function areasOfRegions(regions: readonly BodyRegion[]): FocusArea[] {
  * These are defaults, not prescriptions — fully editable per area, and marked
  * as defaults in the UI until edited.
  */
-/**
- * The default shape, in intervals that land exactly on the cadence buckets.
- *
- * Chosen to be modest rather than aspirational: this works out at about two
- * sessions a week, which is roughly what the riding record suggests is
- * realistic. A default that implies a daily habit turns the home screen into a
- * permanent deficit, which is the failure this whole rotation is meant to
- * avoid. Hips and glutes is the one twice-weekly area — it is the most
- * cycling-specific of the six.
- */
-export const DEFAULT_AREA_TARGET_DAYS: Record<FocusArea, number> = {
-  hips_glutes: 4,
-  posterior_chain: 7,
-  trunk: 7,
-  thoracic: 7,
-  neck_shoulders: 14,
-  extremities: 14,
-};
 
 // ── Exercise bank vocabulary ────────────────────────────────────────
 

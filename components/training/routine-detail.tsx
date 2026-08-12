@@ -12,7 +12,6 @@ import { ChevronDown } from "lucide-react";
 
 import { getRoutineDetail } from "@/app/training/actions";
 import { AREA_LABELS, REGION_LABELS, STIMULUS_LABELS, type FocusArea } from "@/lib/training/taxonomy";
-import { coverageColor } from "@/lib/training/display";
 import type { RoutineCoverage } from "@/lib/training/types";
 import { cn } from "@/lib/utils";
 
@@ -68,9 +67,8 @@ export function RoutineDetail({
                 key={area}
                 className={cn(
                   "rounded-full border px-2 py-0.5 text-[10px]",
-                  loaded ? "border-border" : "border-dashed",
+                  loaded ? "border-border" : "border-dashed text-muted-foreground",
                 )}
-                style={loaded ? undefined : { color: coverageColor("due") }}
               >
                 {AREA_LABELS[area]}
                 {!loaded && " · stretch only"}

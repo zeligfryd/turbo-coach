@@ -36,7 +36,7 @@ function HintBody({ termKey }: { termKey: GlossaryKey }) {
  * Wraps a label so it explains itself. The trigger is a button so it is
  * reachable by keyboard; the dotted underline is the affordance.
  *
- *   <Hint term="staleness">Time since last</Hint>
+ *   <Hint term="session_load">Load</Hint>
  */
 export function Hint({
   term,

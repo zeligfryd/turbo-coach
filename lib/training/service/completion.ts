@@ -10,7 +10,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import { CompletionSourceSchema, FocusAreaSchema } from "../taxonomy";
-import type { CompletionRow, CoverageGoalRow } from "../types";
+import type { CompletionRow } from "../types";
 import { type ServiceResult } from "./blocks";
 
 const ok = <T>(data: T): ServiceResult<T> => ({ success: true, data });
@@ -138,67 +138,4 @@ export async function recordRideCompletion(
 
   if (scheduledError) return fail(scheduledError.message);
   return ok(data as CompletionRow);
-}
-
-// ── Coverage goals ──────────────────────────────────────────────────
-
-/**
- * Override one of the six targets. Rows exist only where the user has
- * overridden a default — absence means "use the default", which is what lets
- * the UI mark untouched targets as defaults without storing anything.
- */
-export async function setAreaGoal(
-  supabase: SupabaseClient,
-  userId: string,
-  area: z.infer<typeof FocusAreaSchema>,
-  targetDays: number,
-): Promise<ServiceResult<CoverageGoalRow>> {
-  const parsed = z
-    .object({ area: FocusAreaSchema, targetDays: z.number().int().min(1).max(60) })
-    .safeParse({ area, targetDays });
-  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Invalid goal");
-
-  const { data, error } = await supabase
-    .from("coverage_goal")
-    .upsert(
-      {
-        user_id: userId,
-        area: parsed.data.area,
-        target_days: parsed.data.targetDays,
-        is_default: false,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id,area" },
-    )
-    .select("*")
-    .single();
-
-  if (error) return fail(error.message);
-  return ok(data as CoverageGoalRow);
-}
-
-/** Reset one target to the default by removing the override. */
-export async function resetAreaGoal(
-  supabase: SupabaseClient,
-  userId: string,
-  area: z.infer<typeof FocusAreaSchema>,
-): Promise<ServiceResult<{ area: string }>> {
-  const { error } = await supabase
-    .from("coverage_goal")
-    .delete()
-    .eq("user_id", userId)
-    .eq("area", area);
-
-  if (error) return fail(error.message);
-  return ok({ area });
-}
-
-/** Reset all six. */
-export async function resetAllAreaGoals(
-  supabase: SupabaseClient,
-  userId: string,
-): Promise<ServiceResult<{ reset: true }>> {
-  const { error } = await supabase.from("coverage_goal").delete().eq("user_id", userId);
-  if (error) return fail(error.message);
-  return ok({ reset: true as const });
 }

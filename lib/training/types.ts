@@ -110,13 +110,6 @@ export type CompletionRow = {
   completed_at: string;
 };
 
-export type CoverageGoalRow = {
-  user_id: string;
-  area: FocusArea;
-  target_days: number;
-  is_default: boolean;
-};
-
 /** Per-area: touched at all, and touched by something loaded (D8). */
 export type RoutineCoverage = Partial<Record<FocusArea, { loaded: boolean }>>;
 
@@ -166,23 +159,6 @@ export type CoverageEvent = {
   /** False when only mobility work touched the area — drives "stretch only". */
   loaded: boolean;
 };
-
-export type AreaCoverage = {
-  area: FocusArea;
-  targetDays: number;
-  isDefault: boolean;
-  /** Null when the area has never been covered. */
-  lastCoveredDate: string | null;
-  daysSince: number | null;
-  /** daysSince / targetDays. Null when never covered. */
-  ratio: number | null;
-  status: CoverageStatus;
-  /** True when the area has been touched, but never by anything loaded. */
-  stretchOnly: boolean;
-};
-
-export const COVERAGE_STATUSES = ["fresh", "due", "overdue", "never"] as const;
-export type CoverageStatus = (typeof COVERAGE_STATUSES)[number];
 
 export type ModalityLoad = {
   modality: Modality;

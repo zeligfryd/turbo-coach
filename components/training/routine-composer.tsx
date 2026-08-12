@@ -14,7 +14,7 @@ import { Hint } from "@/components/training/hint";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { coverageColor, formatMinutes } from "@/lib/training/display";
+import { formatMinutes } from "@/lib/training/display";
 import {
   AREA_LABELS,
   FOCUS_AREAS,
@@ -22,7 +22,6 @@ import {
   STIMULUS_LABELS,
   type FocusArea,
 } from "@/lib/training/taxonomy";
-import type { AreaCoverage, CoverageStatus } from "@/lib/training/types";
 import { createExerciseAction, type BankExercise } from "@/app/training/actions";
 import { ExerciseEditor, type ExerciseDraft } from "@/components/training/exercise-editor";
 import { cn } from "@/lib/utils";
@@ -52,14 +51,12 @@ export type ComposerSeed = {
 
 export function RoutineComposer({
   exercises,
-  coverage,
   seed,
   onSave,
   onCancel,
   onBankChanged,
 }: {
   exercises: BankExercise[];
-  coverage: AreaCoverage[];
   /** Provided when editing an existing routine; absent when composing a new one. */
   seed?: ComposerSeed;
   onSave: (input: { name: string; estDurationMin: number; items: { exerciseId: string }[] }) => Promise<void>;
@@ -95,10 +92,6 @@ export function RoutineComposer({
     return map;
   }, [chosen]);
 
-  const statusByArea = useMemo(
-    () => new Map(coverage.map((c) => [c.area, c.status])),
-    [coverage],
-  );
 
   const toggle = (id: string) =>
     setPicked((current) =>
@@ -148,7 +141,6 @@ export function RoutineComposer({
           <div className="flex flex-wrap gap-1.5">
             {FOCUS_AREAS.map((area) => {
               const isActive = focusAreas.has(area);
-              const status = statusByArea.get(area);
               return (
                 <button
                   key={area}
@@ -170,11 +162,6 @@ export function RoutineComposer({
                       : "border-border text-muted-foreground"
                   )}
                 >
-                  <span
-                    className="mr-1 inline-block h-1.5 w-1.5 rounded-full align-middle"
-                    style={{ backgroundColor: coverageColor(status ?? "never") }}
-                    aria-hidden="true"
-                  />
                   {AREA_LABELS[area]}
                 </button>
               );
@@ -185,7 +172,6 @@ export function RoutineComposer({
         <ul className="max-h-[26rem] divide-y divide-border overflow-y-auto">
           {visible.map((exercise) => {
             const isPicked = picked.includes(exercise.id);
-            const StatusIcon = STATUS_ICON[exercise.areaStatus as CoverageStatus];
             return (
               <li key={exercise.id}>
                 <button
@@ -215,12 +201,11 @@ export function RoutineComposer({
                         : ""}
                     </span>
                   </span>
-                  <span
-                    className="flex shrink-0 items-center gap-1 text-[10px] tabular-nums"
-                    style={{ color: coverageColor(exercise.areaStatus as CoverageStatus) }}
-                  >
-                    <StatusIcon className="h-3 w-3" aria-hidden="true" />
-                    {exercise.areaRatio === null ? "never" : `${exercise.areaRatio.toFixed(1)}×`}
+                  {/* Which area it serves, not how stale that area is. While
+                      composing, what matters is whether the routine is
+                      balanced — not when you last trained something. */}
+                  <span className="shrink-0 text-[10px] text-muted-foreground">
+                    {AREA_LABELS[exercise.area]}
                   </span>
                 </button>
               </li>
@@ -269,7 +254,7 @@ export function RoutineComposer({
             </span>
             <span
               className="text-xs tabular-nums"
-              style={{ color: overTarget ? coverageColor("due") : undefined }}
+              style={{ color: overTarget ? "hsl(var(--coverage-due))" : undefined }}
             >
               ~{formatMinutes(Math.round(totalMinutes))} of {targetMinutes}m
             </span>
@@ -279,7 +264,7 @@ export function RoutineComposer({
               className="block h-full rounded-full transition-[width] duration-200"
               style={{
                 width: `${Math.min(100, (totalMinutes / targetMinutes) * 100)}%`,
-                backgroundColor: overTarget ? coverageColor("due") : "hsl(var(--foreground))",
+                backgroundColor: overTarget ? "hsl(var(--coverage-due))" : "hsl(var(--foreground))",
               }}
             />
           </span>
@@ -330,7 +315,7 @@ export function RoutineComposer({
                     isCovered && !isLoadedArea && "border-dashed"
                   )}
                   style={
-                    isCovered && !isLoadedArea ? { color: coverageColor("due") } : undefined
+                    isCovered && !isLoadedArea ? { color: "hsl(var(--coverage-due))" } : undefined
                   }
                 >
                   {AREA_LABELS[area]}

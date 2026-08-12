@@ -86,6 +86,7 @@ export function RoutinesClient() {
           </p>
         )}
         <RoutineComposer
+          onBankChanged={refresh}
           exercises={exercises}
           coverage={coverage}
           seed={composing.seed}

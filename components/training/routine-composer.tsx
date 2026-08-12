@@ -23,7 +23,8 @@ import {
   type FocusArea,
 } from "@/lib/training/taxonomy";
 import type { AreaCoverage, CoverageStatus } from "@/lib/training/types";
-import type { BankExercise } from "@/app/training/actions";
+import { createExerciseAction, type BankExercise } from "@/app/training/actions";
+import { ExerciseEditor, type ExerciseDraft } from "@/components/training/exercise-editor";
 import { cn } from "@/lib/utils";
 
 const STATUS_ICON = { fresh: Check, due: Clock, overdue: AlertCircle, never: Minus } as const;
@@ -55,6 +56,7 @@ export function RoutineComposer({
   seed,
   onSave,
   onCancel,
+  onBankChanged,
 }: {
   exercises: BankExercise[];
   coverage: AreaCoverage[];
@@ -62,11 +64,14 @@ export function RoutineComposer({
   seed?: ComposerSeed;
   onSave: (input: { name: string; estDurationMin: number; items: { exerciseId: string }[] }) => Promise<void>;
   onCancel: () => void;
+  /** Refetch the bank after one is created here, so the new row appears. */
+  onBankChanged?: () => Promise<void>;
 }) {
   const [name, setName] = useState(seed?.name ?? "");
   const [targetMinutes, setTargetMinutes] = useState(seed?.estDurationMin ?? 12);
   const [focusAreas, setFocusAreas] = useState<Set<FocusArea>>(new Set());
   const [picked, setPicked] = useState<string[]>(seed?.exerciseIds ?? []);
+  const [isCreating, setIsCreating] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const byId = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises]);
@@ -102,15 +107,38 @@ export function RoutineComposer({
 
   const canSave = name.trim().length > 0 && picked.length > 0;
 
+  /**
+   * Noticing a gap while composing used to mean leaving for the Exercises page
+   * and losing the half-built routine. The new exercise is selected as soon as
+   * it exists — wanting it in this routine is the only reason to be here.
+   */
+  const createExercise = async (draft: ExerciseDraft) => {
+    const result = await createExerciseAction(draft);
+    if (!result.success) throw new Error(result.error);
+    await onBankChanged?.();
+    setPicked((current) => [...current, result.data.id]);
+    setIsCreating(false);
+  };
+
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
       {/* ── Bank ── */}
       <div className="rounded-lg border border-border bg-card">
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
           <h3 className="text-sm font-semibold">Exercises</h3>
-          <span className="text-[11px] text-muted-foreground">
-            {visible.length} shown · stalest first
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] text-muted-foreground">
+              {visible.length} shown · stalest first
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsCreating(true)}
+              className="flex min-h-[32px] items-center gap-1 rounded-md border border-border px-2 text-xs font-medium transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+              New
+            </button>
+          </div>
         </div>
 
         <div className="border-b border-border px-4 py-3">
@@ -340,6 +368,15 @@ export function RoutineComposer({
           </Button>
         </div>
       </div>
+
+      {/* The same editor the Exercises page uses, so a movement created here
+          is identical to one created there — no second, lesser form. */}
+      <ExerciseEditor
+        open={isCreating}
+        exercise={null}
+        onClose={() => setIsCreating(false)}
+        onSubmit={createExercise}
+      />
     </div>
   );
 }

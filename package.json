@@ -13,7 +13,7 @@
     "db:stop": "supabase stop",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:eval": "vitest run __tests__/evaluation/",
+    "test:eval": "RUN_EVAL=1 vitest run __tests__/evaluation/",
     "qa": "node scripts/qa.mjs"
   },
   "dependencies": {

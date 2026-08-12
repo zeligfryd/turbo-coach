@@ -732,6 +732,8 @@ export type WeekDay = {
   date: string;
   /** Riding minutes recorded that day. */
   minutes: number;
+  /** Minutes of completed off-bike work that day. */
+  offBikeMinutes: number;
   isToday: boolean;
   isFuture: boolean;
 };
@@ -799,7 +801,7 @@ export async function getTodaySnapshot(): Promise<Result<TodaySnapshot>> {
       getTrainingOverview(),
       supabase
         .from("block")
-        .select("id")
+        .select("id, date, planned_duration_min, completion(actual_duration_min)")
         .eq("user_id", userId)
         .eq("status", "done")
         .gte("date", weekStart)
@@ -813,11 +815,26 @@ export async function getTodaySnapshot(): Promise<Result<TodaySnapshot>> {
       minutesByDate.set(ride.activity_date, (minutesByDate.get(ride.activity_date) ?? 0) + mins);
     }
 
+    // Off-bike work belongs on the same bars. Logging a routine and seeing the
+    // week unchanged reads as the tap not having worked — the count moved, but
+    // the only thing shaped like a record of the day did not.
+    const offBikeByDate = new Map<string, number>();
+    for (const block of (weekBlocksResult.data ?? []) as {
+      date: string;
+      planned_duration_min: number | null;
+      completion: { actual_duration_min: number | null }[] | null;
+    }[]) {
+      const actual = block.completion?.[0]?.actual_duration_min;
+      const mins = actual ?? block.planned_duration_min ?? 0;
+      offBikeByDate.set(block.date, (offBikeByDate.get(block.date) ?? 0) + mins);
+    }
+
     const week: WeekDay[] = Array.from({ length: 7 }, (_, index) => {
       const date = addDaysISO(weekStart, index);
       return {
         date,
         minutes: minutesByDate.get(date) ?? 0,
+        offBikeMinutes: offBikeByDate.get(date) ?? 0,
         isToday: date === today,
         isFuture: date > today,
       };

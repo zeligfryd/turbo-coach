@@ -276,7 +276,9 @@ export function TodayClient() {
         </section>
       ) : null}
 
-      {snapshot && <WeekStrip snapshot={snapshot} />}
+      {snapshot && (
+        <WeekStrip snapshot={snapshot} coverage={overview?.coverage ?? []} routines={routines} />
+      )}
     </div>
   );
 }

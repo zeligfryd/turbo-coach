@@ -1,6 +1,7 @@
 import { formatHoursFromSeconds, getWorkoutMetrics } from "./utils";
 import type { ScheduledWorkout, CalendarActivity, WeekLoad } from "./types";
 import type { CalendarWellness } from "@/app/calendar/actions";
+import { ApplyWeekDialog } from "./apply-week-dialog";
 import { Hint } from "@/components/training/hint";
 import { modalityColor } from "@/lib/training/display";
 import { MODALITY_LABELS } from "@/lib/training/taxonomy";
@@ -18,6 +19,9 @@ interface CalendarWeekSummaryProps {
   weekActivities?: CalendarActivity[];
   weekLoad?: WeekLoad | null;
   endOfWeekWellness?: CalendarWellness | null;
+  /** Monday of this row, for applying a saved week. */
+  weekStart?: string;
+  onWeekApplied?: () => void;
 }
 
 export function CalendarWeekSummaryRow({
@@ -25,6 +29,8 @@ export function CalendarWeekSummaryRow({
   weekActivities = [],
   weekLoad = null,
   endOfWeekWellness,
+  weekStart,
+  onWeekApplied,
 }: CalendarWeekSummaryProps) {
   const planned = weekWorkouts.reduce(
     (acc, item) => {
@@ -49,6 +55,7 @@ export function CalendarWeekSummaryRow({
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md bg-muted/40 px-3 py-1.5 text-[11px]">
       <span className="text-muted-foreground">Week</span>
+      {weekStart && <ApplyWeekDialog weekStart={weekStart} onApplied={onWeekApplied} />}
       <span>
         <span className="text-muted-foreground">Planned </span>
         <span className="font-medium tabular-nums">

@@ -17,6 +17,8 @@ interface CalendarAgendaProps {
   wellnessByDate: Record<string, CalendarWellness>;
   weekLoads: Record<string, WeekLoad>;
   handlers: CalendarHandlers;
+  /** Refetch after a saved week is dropped onto the calendar. */
+  onWeekApplied?: () => void;
 }
 
 function formatWeekRangeLabel(week: Date[]) {
@@ -33,6 +35,7 @@ export function CalendarAgenda({
   wellnessByDate,
   weekLoads,
   handlers,
+  onWeekApplied,
 }: CalendarAgendaProps) {
   return (
     <section className="space-y-4">
@@ -72,6 +75,8 @@ export function CalendarAgenda({
             </div>
 
             <CalendarAgendaWeekSummary
+              weekStart={weekStartKey}
+              onWeekApplied={onWeekApplied}
               weekWorkouts={weekWorkouts}
               weekActivities={weekActivities}
               weekLoad={weekLoads[weekStartKey] ?? null}

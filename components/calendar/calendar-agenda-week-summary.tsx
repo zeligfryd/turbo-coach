@@ -1,3 +1,4 @@
+import { ApplyWeekDialog } from "./apply-week-dialog";
 import { formatHoursFromSeconds, getWorkoutMetrics } from "./utils";
 import type { ScheduledWorkout, CalendarActivity, WeekLoad } from "./types";
 import { modalityColor } from "@/lib/training/display";
@@ -17,9 +18,12 @@ interface CalendarAgendaWeekSummaryProps {
   weekActivities?: CalendarActivity[];
   weekLoad?: WeekLoad | null;
   endOfWeekWellness?: CalendarWellness | null;
+  /** Monday of this row, for applying a saved week. */
+  weekStart?: string;
+  onWeekApplied?: () => void;
 }
 
-export function CalendarAgendaWeekSummary({ weekWorkouts, weekActivities = [], weekLoad = null, endOfWeekWellness }: CalendarAgendaWeekSummaryProps) {
+export function CalendarAgendaWeekSummary({ weekWorkouts, weekActivities = [], weekLoad = null, endOfWeekWellness, weekStart, onWeekApplied }: CalendarAgendaWeekSummaryProps) {
   const planned = weekWorkouts.reduce(
     (acc, item) => {
       const metrics = getWorkoutMetrics(item.workout);
@@ -45,6 +49,13 @@ export function CalendarAgendaWeekSummary({ weekWorkouts, weekActivities = [], w
 
   return (
     <div className="rounded-lg bg-muted/40 px-3 py-2 text-xs flex flex-col gap-1">
+      {/* The phone layout needs this as much as the grid does — arguably more,
+          since filling a week by hand on a phone is the worst version of it. */}
+      {weekStart && (
+        <div className="flex justify-end">
+          <ApplyWeekDialog weekStart={weekStart} onApplied={onWeekApplied} />
+        </div>
+      )}
       {weekLoad && weekLoad.totalLoad > 0 && (
         <div className="flex items-center justify-between gap-2 pb-1 mb-1 border-b border-border/50">
           <span className="text-muted-foreground">Session load</span>

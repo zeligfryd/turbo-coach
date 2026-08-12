@@ -38,6 +38,8 @@ interface CalendarGridProps {
   onRescheduleWorkout?: (scheduledWorkoutId: string, newDate: string) => void;
   onRescheduleRace?: (raceId: string, newDate: string) => void;
   onRescheduleBlock?: (blockId: string, newDate: string) => void;
+  /** Refetch after a saved week is dropped onto the calendar. */
+  onWeekApplied?: () => void;
 }
 
 const weekDayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -51,6 +53,7 @@ export function CalendarGrid({
   onRescheduleWorkout,
   onRescheduleRace,
   onRescheduleBlock,
+  onWeekApplied,
 }: CalendarGridProps) {
   const [activeItem, setActiveItem] = useState<DragItem | null>(null);
 
@@ -153,6 +156,8 @@ export function CalendarGrid({
                   weekActivities={weekActivities}
                   weekLoad={weekLoads[weekStartKey] ?? null}
                   endOfWeekWellness={wellnessByDate[formatDateKey(week[week.length - 1])] ?? null}
+                  weekStart={weekStartKey}
+                  onWeekApplied={onWeekApplied}
                 />
               </div>
             );

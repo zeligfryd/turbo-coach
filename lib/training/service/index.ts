@@ -45,3 +45,4 @@ export {
   ExerciseInput,
   RoutineInput,
 } from "./exercises";
+export * from "./week-templates";

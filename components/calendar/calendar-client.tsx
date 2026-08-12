@@ -600,6 +600,7 @@ export function CalendarClient() {
         )}
         <div className="hidden md:block">
           <CalendarGrid
+              onWeekApplied={fetchScheduled}
             weeks={weeks}
             contentByDate={contentByDate}
             wellnessByDate={wellnessByDate}
@@ -612,6 +613,7 @@ export function CalendarClient() {
         </div>
         <div className="md:hidden">
           <CalendarAgenda
+              onWeekApplied={fetchScheduled}
             weeks={weeks}
             contentByDate={contentByDate}
             wellnessByDate={wellnessByDate}

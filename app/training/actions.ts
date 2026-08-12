@@ -860,3 +860,71 @@ export async function getTodaySnapshot(): Promise<Result<TodaySnapshot>> {
     };
   });
 }
+
+// ── Week templates ──────────────────────────────────────────────────
+
+export async function getWeekTemplates(): Promise<Result<service.WeekTemplate[]>> {
+  return withUser(async (supabase, userId) => {
+    const res = await service.listWeekTemplates(supabase, userId);
+    return res.success
+      ? { success: true as const, data: res.data }
+      : { success: false as const, error: res.error };
+  });
+}
+
+export async function createWeekTemplateAction(input: service.WeekTemplateInput) {
+  const result = await withUser(async (supabase, userId) => {
+    const res = await service.createWeekTemplate(supabase, userId, input);
+    return res.success
+      ? { success: true as const, data: res.data }
+      : { success: false as const, error: res.error };
+  });
+  if (result.success) revalidateTraining();
+  return result;
+}
+
+export async function updateWeekTemplateAction(
+  templateId: string,
+  input: service.WeekTemplateInput,
+) {
+  const result = await withUser(async (supabase, userId) => {
+    const res = await service.updateWeekTemplate(supabase, userId, templateId, input);
+    return res.success
+      ? { success: true as const, data: res.data }
+      : { success: false as const, error: res.error };
+  });
+  if (result.success) revalidateTraining();
+  return result;
+}
+
+export async function deleteWeekTemplateAction(templateId: string) {
+  const result = await withUser(async (supabase, userId) => {
+    const res = await service.deleteWeekTemplate(supabase, userId, templateId);
+    return res.success
+      ? { success: true as const, data: null }
+      : { success: false as const, error: res.error };
+  });
+  if (result.success) revalidateTraining();
+  return result;
+}
+
+export async function applyWeekTemplateAction(
+  templateId: string,
+  weekStartDate: string,
+  repeatWeeks = 1,
+) {
+  const result = await withUser(async (supabase, userId) => {
+    const res = await service.applyWeekTemplate(
+      supabase,
+      userId,
+      templateId,
+      weekStartDate,
+      repeatWeeks,
+    );
+    return res.success
+      ? { success: true as const, data: res.data }
+      : { success: false as const, error: res.error };
+  });
+  if (result.success) revalidateTraining();
+  return result;
+}

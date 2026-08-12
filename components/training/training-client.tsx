@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { WeekShape } from "@/components/training/week-shape";
 import { TemplateManager } from "@/components/training/template-manager";
+import { WeekTemplateEditor } from "@/components/training/week-template-editor";
 import {
   getTrainingOverview,
   resetAllAreaGoalsAction,
@@ -103,6 +104,10 @@ export function TrainingClient() {
           onSetTarget={handleSetTarget}
           onResetAll={handleResetAll}
         />
+      </section>
+
+      <section>
+        <WeekTemplateEditor />
       </section>
 
       <section>

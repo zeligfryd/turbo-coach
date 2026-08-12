@@ -276,7 +276,7 @@ export async function scheduleRoutine(
 ): Promise<ServiceResult<BlockRow>> {
   const { data: routine, error } = await supabase
     .from("routine")
-    .select("id, name, est_duration_min, is_preset, user_id")
+    .select("id, name, est_duration_min, is_preset, user_id, coverage_vector")
     .eq("id", routineId)
     .single();
 
@@ -293,6 +293,15 @@ export async function scheduleRoutine(
     plannedDurationMin: routine.est_duration_min,
     plannedRpe: 3,
     routineId,
+    // Snapshot the routine's areas onto the block. Coverage still reads the
+    // routine's vector while it exists — that knows loaded from stretch, which
+    // tags cannot — but `routine_id` is `on delete set null`, so without this
+    // deleting a routine silently erased the coverage history of every session
+    // ever done from it. It is also what the scheduling dialog shows you, and
+    // that promise should survive the save.
+    areaTags: Object.keys(
+      (routine.coverage_vector ?? {}) as Record<string, unknown>,
+    ) as z.infer<typeof FocusAreaSchema>[],
   });
 }
 

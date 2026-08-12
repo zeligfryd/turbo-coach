@@ -37,6 +37,7 @@ import {
   type DayPart,
   type FocusArea,
 } from "@/lib/training/taxonomy";
+import type { RoutineOption } from "@/app/training/actions";
 import type { BlockTemplateRow } from "@/lib/training/types";
 import { formatMinutes } from "@/lib/training/display";
 import { cn } from "@/lib/utils";
@@ -77,7 +78,7 @@ export function AddBlockDialog({
   open: boolean;
   dateLabel: string | null;
   templates?: BlockTemplateRow[];
-  routines?: { id: string; name: string; estDurationMin: number | null }[];
+  routines?: RoutineOption[];
   onClose: () => void;
   onSubmit: (draft: NewBlockDraft) => Promise<void> | void;
 }) {
@@ -108,13 +109,17 @@ export function AddBlockDialog({
   }, [open]);
 
   /** Picking a routine fills the form and marks the block as routine-backed. */
-  function applyRoutine(routine: { id: string; name: string; estDurationMin: number | null }) {
+  function applyRoutine(routine: RoutineOption) {
     setRoutineId(routine.id);
     setModality("prehab");
     setName(routine.name);
     setDuration(routine.estDurationMin ? String(routine.estDurationMin) : "");
     setRpe("3");
-    setAreaTags([]);
+    // The routine already knows what it covers, so say so rather than making
+    // you retype it. Stored on the block as well as inferred from the routine:
+    // routine_id is `on delete set null`, so without a snapshot a deleted
+    // routine would silently take the block's coverage history with it.
+    setAreaTags(routine.areas);
     setSaveAsTemplate(false);
   }
 

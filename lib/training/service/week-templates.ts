@@ -67,7 +67,7 @@ type SlotRow = {
   duration_min: number | null;
   area_tags: string[] | null;
   position: number;
-  routine: { name: string; est_duration_min: number | null } | null;
+  routine: { name: string; est_duration_min: number | null; coverage_vector: Record<string, unknown> | null } | null;
 };
 
 /**
@@ -84,12 +84,17 @@ function toSlot(row: SlotRow): WeekTemplateSlot {
     name: row.routine?.name ?? row.name ?? "Session",
     modality: row.modality ?? "prehab",
     durationMin: row.routine?.est_duration_min ?? row.duration_min,
-    areaTags: row.area_tags ?? [],
+    // A routine's own coverage, so a block created from a week carries the
+    // same areas as one added by hand. Without this a whole applied week
+    // wrote blocks with no areas on them.
+    areaTags: row.routine
+      ? Object.keys(row.routine.coverage_vector ?? {})
+      : (row.area_tags ?? []),
   };
 }
 
 const SLOT_SELECT =
-  "id, weekday, day_part, routine_id, modality, name, duration_min, area_tags, position, routine(name, est_duration_min)";
+  "id, weekday, day_part, routine_id, modality, name, duration_min, area_tags, position, routine(name, est_duration_min, coverage_vector)";
 
 export async function listWeekTemplates(
   supabase: SupabaseClient,

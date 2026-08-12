@@ -550,14 +550,20 @@ export async function restoreExerciseAction(exerciseId: string) {
   return result;
 }
 
-export type RoutineOption = { id: string; name: string; estDurationMin: number | null };
+export type RoutineOption = {
+  id: string;
+  name: string;
+  estDurationMin: number | null;
+  /** The areas the routine covers, so scheduling it can say so up front. */
+  areas: FocusArea[];
+};
 
 /** Just enough to populate a picker. */
 export async function getRoutineOptions(): Promise<Result<RoutineOption[]>> {
   return withUser(async (supabase) => {
     const { data, error } = await supabase
       .from("routine")
-      .select("id, name, est_duration_min")
+      .select("id, name, est_duration_min, coverage_vector")
       .is("archived_at", null)
       .order("est_duration_min");
     if (error) return { success: false, error: error.message };
@@ -567,6 +573,7 @@ export async function getRoutineOptions(): Promise<Result<RoutineOption[]>> {
         id: row.id as string,
         name: row.name as string,
         estDurationMin: row.est_duration_min as number | null,
+        areas: Object.keys((row.coverage_vector ?? {}) as RoutineCoverage) as FocusArea[],
       })),
     };
   });

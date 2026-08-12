@@ -31,6 +31,7 @@ import {
   scheduleRoutineAction,
   getTrainingWindow,
   scheduleBlockAction,
+  type RoutineOption,
   rescheduleBlockAction,
   deleteBlockAction,
   acceptBlockAction,
@@ -78,7 +79,7 @@ export function CalendarClient() {
   const [blockFormDate, setBlockFormDate] = useState<string | null>(null);
   const [blockTemplates, setBlockTemplates] = useState<BlockTemplateRow[]>([]);
   const [routineOptions, setRoutineOptions] = useState<
-    { id: string; name: string; estDurationMin: number | null }[]
+    RoutineOption[]
   >([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);

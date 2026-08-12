@@ -206,3 +206,48 @@ describe("toSlotRows", () => {
     expect(rows.map((r) => r.position)).toEqual([0, 1, 0]);
   });
 });
+
+describe("routine slots carry the routine's areas", () => {
+  it("puts the routine's coverage on the block it creates", async () => {
+    // Without this, a whole applied week wrote blocks with no areas. Coverage
+    // still resolved through routine_id, but routine_id is `on delete set
+    // null` — deleting a routine would have taken the history with it.
+    const slot = {
+      id: "s1",
+      weekday: 0,
+      day_part: "am",
+      routine_id: "r1",
+      modality: null,
+      name: null,
+      duration_min: null,
+      area_tags: [],
+      position: 0,
+      routine: {
+        name: "Post-ride 10",
+        est_duration_min: 10,
+        coverage_vector: { hips_glutes: { loaded: true }, thoracic: { loaded: false } },
+      },
+    };
+    const { client, inserted } = fakeSupabase({ slots: [slot] });
+    await applyWeekTemplate(client, "u1", "wt1", "2026-08-10");
+    expect(inserted[0].area_tags).toEqual(["hips_glutes", "thoracic"]);
+  });
+
+  it("leaves a plain session's own tags alone", async () => {
+    const slot = {
+      id: "s2",
+      weekday: 1,
+      day_part: "pm",
+      routine_id: null,
+      modality: "yoga",
+      name: "Yoga",
+      duration_min: 30,
+      area_tags: ["trunk"],
+      position: 0,
+      routine: null,
+    };
+    const { client, inserted } = fakeSupabase({ slots: [slot] });
+    await applyWeekTemplate(client, "u1", "wt1", "2026-08-10");
+    expect(inserted[0].area_tags).toEqual(["trunk"]);
+  });
+});

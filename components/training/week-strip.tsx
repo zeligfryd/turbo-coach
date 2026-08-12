@@ -39,7 +39,7 @@ function formWord(tsb: number): string {
 }
 
 export function WeekStrip({ snapshot }: { snapshot: TodaySnapshot }) {
-  const { week, weekMinutes, weekRides, form, offBike30d, missed, offBikeWeek } = snapshot;
+  const { week, weekMinutes, weekRides, form, offBike30d, missed } = snapshot;
   const offBikeMinutes = week.reduce((sum, day) => sum + day.offBikeMinutes, 0);
   const peak = ridingPeak(week);
 
@@ -128,42 +128,6 @@ export function WeekStrip({ snapshot }: { snapshot: TodaySnapshot }) {
         </div>
       </div>
 
-      {/* Only shown when you have actually scheduled something. Reporting
-          progress against a target nobody set is what made the old line noise. */}
-      {offBikeWeek && (
-        <div className="mt-3 flex items-center gap-2 border-t border-border pt-3 text-xs">
-          {/* A pip per session while they still fit. Beyond that they were
-              being capped at seven while the text said nine, which is a chart
-              that disagrees with its own label — a bar scales instead. */}
-          {offBikeWeek.scheduled <= 7 ? (
-            <span className="flex gap-1" aria-hidden="true">
-              {Array.from({ length: offBikeWeek.scheduled }, (_, index) => (
-                <span
-                  key={index}
-                  className={
-                    index < offBikeWeek.done
-                      ? "h-2 w-2 rounded-full bg-primary"
-                      : "h-2 w-2 rounded-full border border-border"
-                  }
-                />
-              ))}
-            </span>
-          ) : (
-            <span className="h-1.5 w-16 overflow-hidden rounded-full bg-secondary" aria-hidden="true">
-              <span
-                className="block h-full rounded-full bg-primary"
-                style={{ width: `${Math.min(100, (offBikeWeek.done / offBikeWeek.scheduled) * 100)}%` }}
-              />
-            </span>
-          )}
-          <span className="text-muted-foreground">
-            <span className="font-semibold tabular-nums text-foreground">
-              {offBikeWeek.done} of {offBikeWeek.scheduled}
-            </span>{" "}
-            off the bike
-          </span>
-        </div>
-      )}
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border pt-3 text-xs text-muted-foreground">
         {form != null && (

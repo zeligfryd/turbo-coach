@@ -32,6 +32,7 @@ import type { PlannedItem } from "@/lib/training/types";
 import { cn } from "@/lib/utils";
 
 import { RpePrompt } from "./rpe-prompt";
+import { TrainingRings } from "./training-rings";
 import { WeekStrip } from "./week-strip";
 
 export function TodayClient() {
@@ -247,9 +248,9 @@ export function TodayClient() {
         </section>
       ) : null}
 
-      {snapshot && (
-        <WeekStrip snapshot={snapshot} />
-      )}
+      {snapshot && <TrainingRings today={snapshot.todayGoal} week={snapshot.weekGoal} />}
+
+      {snapshot && <WeekStrip snapshot={snapshot} />}
     </div>
   );
 }

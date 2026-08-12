@@ -662,6 +662,8 @@ export async function scheduleFromTemplateAction(
 
 // ── Today snapshot ──────────────────────────────────────────────────
 
+export type Goal = { done: number; total: number };
+
 export type WeekDay = {
   date: string;
   /** Riding minutes recorded that day. */
@@ -683,11 +685,13 @@ export type TodaySnapshot = {
   /** Planned sessions whose day has passed with nothing to show for them. */
   missed: number;
   /**
-   * Off-bike sessions this week: how many are on the calendar and how many are
-   * done. Null when nothing is scheduled — an expectation you never set is not
-   * worth reporting against.
+   * What is on the calendar and how much of it is done, for today and for the
+   * week. Rides and off-bike sessions together, because both are the training.
+   * Null when nothing is scheduled — an expectation you never set is not worth
+   * reporting against.
    */
-  offBikeWeek: { done: number; scheduled: number } | null;
+  todayGoal: Goal | null;
+  weekGoal: Goal | null;
 };
 
 /**
@@ -704,8 +708,15 @@ export async function getTodaySnapshot(): Promise<Result<TodaySnapshot>> {
     const weekEnd = addDaysISO(weekStart, 6);
     const monthAgo = addDaysISO(today, -30);
 
-    const [ridesResult, wellnessResult, blocksResult, plannedResult, overviewResult, weekBlocksResult] =
-      await Promise.all([
+    const [
+      ridesResult,
+      wellnessResult,
+      blocksResult,
+      plannedResult,
+      weekWorkoutsResult,
+      overviewResult,
+      weekBlocksResult,
+    ] = await Promise.all([
       supabase
         .from("activities")
         .select("activity_date, moving_time")
@@ -732,6 +743,12 @@ export async function getTodaySnapshot(): Promise<Result<TodaySnapshot>> {
         .eq("user_id", userId)
         .eq("status", "planned")
         .lt("scheduled_date", today),
+      supabase
+        .from("scheduled_workouts")
+        .select("scheduled_date, status")
+        .eq("user_id", userId)
+        .gte("scheduled_date", weekStart)
+        .lte("scheduled_date", weekEnd),
       getTrainingOverview(),
       supabase
         .from("block")
@@ -776,17 +793,27 @@ export async function getTodaySnapshot(): Promise<Result<TodaySnapshot>> {
       };
     });
 
-    // The week's target is what you put on the calendar, not what a formula
-    // works out from six intervals nobody chose. Scheduling four sessions makes
-    // "2 of 4" a fact; scheduling none means there is nothing to report.
-    const weekBlocks = (weekBlocksResult.data ?? []) as { status: string }[];
-    const offBikeWeek =
-      weekBlocks.length > 0
-        ? {
-            done: weekBlocks.filter((b) => b.status === "done" || b.status === "partial").length,
-            scheduled: weekBlocks.length,
-          }
+    // What is on the calendar, not what a formula works out. Scheduling four
+    // sessions makes "2 of 4" a fact; scheduling none means nothing to report.
+    const isDone = (status: string) => status === "done" || status === "partial";
+
+    const sessions = [
+      ...((weekBlocksResult.data ?? []) as { date: string; status: string }[]).map((b) => ({
+        date: b.date,
+        done: isDone(b.status),
+      })),
+      ...((weekWorkoutsResult.data ?? []) as { scheduled_date: string; status: string }[]).map(
+        (w) => ({ date: w.scheduled_date, done: isDone(w.status) }),
+      ),
+    ];
+
+    const tally = (rows: { done: boolean }[]): Goal | null =>
+      rows.length > 0
+        ? { done: rows.filter((r) => r.done).length, total: rows.length }
         : null;
+
+    const todayGoal = tally(sessions.filter((s) => s.date === today));
+    const weekGoal = tally(sessions);
 
     return {
       success: true as const,
@@ -797,7 +824,8 @@ export async function getTodaySnapshot(): Promise<Result<TodaySnapshot>> {
         form: wellnessResult.data?.[0]?.tsb ?? null,
         offBike30d: blocksResult.data?.length ?? 0,
         missed: plannedResult.data?.length ?? 0,
-        offBikeWeek,
+        todayGoal,
+        weekGoal,
       },
     };
   });

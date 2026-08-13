@@ -24,6 +24,7 @@ export {
 export {
   clearBlockCompletion,
   recordBlockCompletion,
+  clearRideCompletion,
   recordRideCompletion,
   RecordCompletionInput,
 } from "./completion";

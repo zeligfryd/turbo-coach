@@ -139,3 +139,30 @@ export async function recordRideCompletion(
   if (scheduledError) return fail(scheduledError.message);
   return ok(data as CompletionRow);
 }
+
+/**
+ * Untick a ride. Removes the completion and returns the scheduled workout to
+ * planned, so a mis-tap is one tap to undo rather than something to go and fix
+ * in the calendar.
+ */
+export async function clearRideCompletion(
+  supabase: SupabaseClient,
+  userId: string,
+  scheduledWorkoutId: string,
+): Promise<ServiceResult<null>> {
+  const { error } = await supabase
+    .from("completion")
+    .delete()
+    .eq("user_id", userId)
+    .eq("scheduled_workout_id", scheduledWorkoutId);
+  if (error) return fail(error.message);
+
+  const { error: scheduledError } = await supabase
+    .from("scheduled_workouts")
+    .update({ status: "planned" })
+    .eq("id", scheduledWorkoutId)
+    .eq("user_id", userId);
+  if (scheduledError) return fail(scheduledError.message);
+
+  return ok(null);
+}

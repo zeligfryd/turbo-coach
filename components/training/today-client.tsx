@@ -18,20 +18,25 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import { Check, ChevronDown, Undo2 } from "lucide-react";
 
 import {
+  clearCompletionAction,
+  clearRideCompletionAction,
   getTodaySnapshot,
   getTrainingOverview,
   getTrainingWindow,
   logRoutineNowAction,
   recordCompletionAction,
+  recordRideCompletionAction,
   undoRoutineTodayAction,
   type TodaySnapshot,
   type TrainingOverview,
 } from "@/app/training/actions";
 import { MODALITY_ICONS, formatMinutes, modalityColor } from "@/lib/training/display";
+import { isCompleted } from "@/lib/training/taxonomy";
 import type { PlannedItem } from "@/lib/training/types";
 import { cn } from "@/lib/utils";
 
 import { RpePrompt } from "./rpe-prompt";
+import { TodaySessions, isSyncedRide } from "./today-sessions";
 import { TrainingRings } from "./training-rings";
 import { WeekStrip } from "./week-strip";
 
@@ -68,6 +73,28 @@ export function TodayClient() {
   }, [refresh]);
 
   const rides = useMemo(() => items.filter((item) => !item.editableHere), [items]);
+
+  // Anything you put on today, in the order you would work through it. Rides
+  // that have already synced are facts rather than plans, so they are listed
+  // but never counted as something still to decide about.
+  const scheduledToday = useMemo(
+    () => items.filter((item) => !isSyncedRide(item)),
+    [items],
+  );
+  const syncedToday = useMemo(() => items.filter(isSyncedRide), [items]);
+  const hasPlan = scheduledToday.length > 0;
+
+  const toggleSession = async (item: PlannedItem, done: boolean) => {
+    if (item.source === "block") {
+      if (done) await recordCompletionAction(item.id, { status: "done" });
+      else await clearCompletionAction(item.id);
+    } else if (done) {
+      await recordRideCompletionAction(item.id, { status: "done" });
+    } else {
+      await clearRideCompletionAction(item.id);
+    }
+    await refresh();
+  };
 
   // The recommendation: the routine you last acted on if there is one, so the
   // card never moves under your hand; otherwise the stalest.
@@ -119,12 +146,14 @@ export function TodayClient() {
   const headline =
     rides.length === 0 ? "Rest day" : rides.length === 1 ? rides[0].name : `${rides.length} rides`;
 
-  const subhead =
-    rides.length > 0
-      ? [formatMinutes(rides[0].plannedDurationMin), rides[0].plannedTss ? `TSS ${rides[0].plannedTss}` : null]
-          .filter(Boolean)
-          .join(" · ")
-      : "Nothing on the bike today.";
+  // Duration and TSS live on the session rows now; repeating them here just
+  // said the same thing twice. The subhead counts the day instead.
+  const remaining = scheduledToday.filter((item) => !isCompleted(item.status)).length;
+  const subhead = hasPlan
+    ? remaining === 0
+      ? `${scheduledToday.length} of ${scheduledToday.length} done`
+      : `${remaining} of ${scheduledToday.length} left today`
+    : "Nothing on the bike today.";
 
   return (
     <div className="mx-auto max-w-2xl space-y-7">
@@ -134,24 +163,13 @@ export function TodayClient() {
         <p className="mt-0.5 text-sm text-muted-foreground">{subhead}</p>
       </header>
 
-      {/* Rides are context, not a task: they are recorded by the sync, and
-          reconciliation settles the plan against them without being asked. */}
-      {rides.length > 1 &&
-        rides.map((ride) => {
-          const Icon = MODALITY_ICONS.bike;
-          return (
-            <div
-              key={ride.id}
-              className="flex items-center gap-2.5 rounded-lg border border-border bg-card px-4 py-3"
-            >
-              <Icon className="h-4 w-4 shrink-0" style={{ color: modalityColor("bike") }} aria-hidden="true" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold leading-tight">{ride.name}</p>
-                <p className="text-xs text-muted-foreground">{formatMinutes(ride.plannedDurationMin)}</p>
-              </div>
-            </div>
-          );
-        })}
+      {hasPlan && (
+        <TodaySessions items={[...scheduledToday, ...syncedToday]} onToggle={toggleSession} />
+      )}
+
+      {!hasPlan && syncedToday.length > 0 && (
+        <TodaySessions items={syncedToday} onToggle={toggleSession} />
+      )}
 
       {/* One recommendation, one action. */}
       {justLogged ? (
@@ -162,7 +180,7 @@ export function TodayClient() {
           onDismiss={() => setJustLogged(null)}
           disabled={pending}
         />
-      ) : suggestion ? (
+      ) : !hasPlan && suggestion ? (
         <section className="rounded-xl border border-border bg-card p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">

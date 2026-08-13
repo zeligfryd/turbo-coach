@@ -605,6 +605,35 @@ export async function recordCompletionAction(
   return result;
 }
 
+/** Tick or untick a ride that is on the calendar. */
+export async function recordRideCompletionAction(
+  scheduledWorkoutId: string,
+  input: { status: "done" | "partial" | "skipped"; srpe?: number },
+) {
+  const result = await withUser(async (supabase, userId) => {
+    const res = await service.recordRideCompletion(supabase, userId, scheduledWorkoutId, {
+      source: "manual",
+      ...input,
+    });
+    return res.success
+      ? { success: true as const, data: res.data }
+      : { success: false as const, error: res.error };
+  });
+  if (result.success) revalidateTraining();
+  return result;
+}
+
+export async function clearRideCompletionAction(scheduledWorkoutId: string) {
+  const result = await withUser(async (supabase, userId) => {
+    const res = await service.clearRideCompletion(supabase, userId, scheduledWorkoutId);
+    return res.success
+      ? { success: true as const, data: null }
+      : { success: false as const, error: res.error };
+  });
+  if (result.success) revalidateTraining();
+  return result;
+}
+
 export async function clearCompletionAction(blockId: string) {
   const result = await withUser(async (supabase, userId) => {
     const res = await service.clearBlockCompletion(supabase, userId, blockId);

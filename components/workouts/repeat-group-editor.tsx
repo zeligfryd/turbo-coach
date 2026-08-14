@@ -8,6 +8,8 @@ import { useState } from "react";
 import type { HTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 import { IntervalEditor, type BuilderInterval } from "./interval-editor";
+import { inferRoles } from "@/lib/workouts/roles";
+import type { BuilderItem } from "@/lib/workouts/types";
 
 export type RepeatGroupData = {
   count: number;
@@ -58,6 +60,17 @@ export function RepeatGroupEditor({
   };
 
   const totalIntervals = group.count * group.intervals.length;
+
+  /**
+   * Roles within the group, judged against the group's own mean.
+   *
+   * This is where the work almost always is, and where getting it wrong costs
+   * most — an operator that treats a rest valley as work turns a session into
+   * a block of unbroken threshold.
+   */
+  const roles = inferRoles([
+    { type: "repeat", data: { count: group.count, intervals: group.intervals } },
+  ] as BuilderItem[])[0];
   const countError = parseInt(countInput, 10) < 1 || parseInt(countInput, 10) > 999 || isNaN(parseInt(countInput, 10));
 
   // Mobile: Compact view summary
@@ -153,6 +166,8 @@ export function RepeatGroupEditor({
                     onDuplicate={() => onDuplicateInterval(index, intervalIndex)}
                     dragHandleProps={intervalDragHandleProps?.(intervalIndex)}
                     isNested={true}
+                    role={roles[intervalIndex]}
+                    roleInferred={!interval.role}
                   />
                 ))}
               </div>

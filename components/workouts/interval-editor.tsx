@@ -7,11 +7,21 @@ import { Label } from "@/components/ui/label";
 import { useState } from "react";
 import type { HTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
+import type { IntervalRole } from "@/lib/workouts/types";
+import { IntervalRoleControl, RoleDot, RoleMenu } from "./interval-role-control";
 
 export type BuilderInterval = {
   durationSeconds: number;
   intensityPercentStart?: number;
   intensityPercentEnd?: number;
+  /**
+   * What the interval is for. Absent until you say so, at which point the
+   * inference stops applying to it — see lib/workouts/roles.
+   */
+  role?: IntervalRole;
+  name?: string;
+  cadenceRpmMin?: number;
+  cadenceRpmMax?: number;
 };
 
 type IntervalType = "constant" | "ramp" | "freeRide";
@@ -24,6 +34,12 @@ interface IntervalEditorProps {
   onDuplicate: (index: number) => void;
   dragHandleProps?: HTMLAttributes<HTMLElement>;
   isNested?: boolean; // When true, apply nested styling
+  /**
+   * Inferred by the parent, which is the only place that can see the whole
+   * workout — a role depends on the intervals around it, not just this one.
+   */
+  role?: IntervalRole;
+  roleInferred?: boolean;
 }
 
 function formatSecondsToMMSS(seconds: number): string {
@@ -64,8 +80,13 @@ export function IntervalEditor({
   onDuplicate,
   dragHandleProps,
   isNested = false,
+  role,
+  roleInferred = true,
 }: IntervalEditorProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  // An explicit role on the interval always wins over what the parent inferred.
+  const effectiveRole: IntervalRole = interval.role ?? role ?? "work";
+  const isInferred = !interval.role && roleInferred;
   const [durationInput, setDurationInput] = useState(formatSecondsToMMSS(interval.durationSeconds));
   const intervalType = getIntervalType(interval);
 
@@ -148,7 +169,8 @@ export function IntervalEditor({
           </div>
 
           {/* Index */}
-          <span className="text-sm font-medium text-muted-foreground w-5">
+          <span className="flex items-center gap-1.5 w-9 text-sm font-medium text-muted-foreground">
+            <RoleDot role={effectiveRole} inferred={isInferred} />
             {index + 1}.
           </span>
 
@@ -196,6 +218,13 @@ export function IntervalEditor({
                 className={cn("h-8 text-sm", durationError && "border-destructive")}
               />
             </div>
+
+            {/* What this interval is for — see interval-role-control. */}
+            <IntervalRoleControl
+              role={effectiveRole}
+              inferred={isInferred}
+              onChange={(next) => onUpdate(index, { role: next })}
+            />
 
             {/* Interval Type Selector */}
             <div>
@@ -304,8 +333,13 @@ export function IntervalEditor({
           <GripVertical className="w-4 h-4" />
         </div>
 
-        {/* Index */}
-        <span className="text-sm font-medium text-muted-foreground w-5">
+        {/* Index, with the role as a clickable dot. */}
+        <span className="flex items-center gap-0.5 w-12 text-sm font-medium text-muted-foreground">
+          <RoleMenu
+            role={effectiveRole}
+            inferred={isInferred}
+            onChange={(next) => onUpdate(index, { role: next })}
+          />
           {index + 1}.
         </span>
 

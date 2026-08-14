@@ -18,6 +18,8 @@ import { WorkoutMetadata } from "@/components/workouts/workout-metadata";
 import { ProtocolLibraryBrowser } from "@/components/workouts/protocol-library-browser";
 import { ProtocolParameterForm } from "@/components/workouts/protocol-parameter-form";
 import { IntervalEditor, type BuilderInterval } from "@/components/workouts/interval-editor";
+import { inferRoles } from "@/lib/workouts/roles";
+import type { IntervalRole } from "@/lib/workouts/types";
 import { RepeatGroupEditor, type RepeatGroupData } from "@/components/workouts/repeat-group-editor";
 import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
@@ -327,12 +329,14 @@ function SortableIntervalEditor({
   onUpdate,
   onDelete,
   onDuplicate,
+  role,
 }: {
   interval: BuilderInterval;
   index: number;
   onUpdate: (index: number, interval: Partial<BuilderInterval>) => void;
   onDelete: (index: number) => void;
   onDuplicate: (index: number) => void;
+  role?: IntervalRole;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `item-${index}`,
@@ -353,6 +357,8 @@ function SortableIntervalEditor({
         onDelete={onDelete}
         onDuplicate={onDuplicate}
         dragHandleProps={{ ...attributes, ...listeners }}
+        role={role}
+        roleInferred={!interval.role}
       />
     </div>
   );
@@ -423,6 +429,18 @@ function WorkoutBuilderContent() {
     items: [],
     mode,
   });
+
+  /**
+   * Roles for the whole workout, recomputed as it changes.
+   *
+   * Inference needs the surrounding intervals — the same ramp opens a session
+   * as a warm-up and closes it as a cool-down — so it cannot live in the row
+   * editor, which only ever sees one interval.
+   */
+  const inferredRoles = React.useMemo(
+    () => inferRoles(state.items as unknown as BuilderItem[]),
+    [state.items],
+  );
 
   const [isSaving, setIsSaving] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -712,6 +730,11 @@ function WorkoutBuilderContent() {
               durationSeconds: item.data.durationSeconds,
               intensityPercentStart: item.data.intensityPercentStart,
               intensityPercentEnd: item.data.intensityPercentEnd,
+              // Serialisation picks fields explicitly, so anything not named
+              // here is dropped on save. A role set in the editor and then
+              // silently lost would leave the progression operators acting on
+              // the inference the user had just corrected.
+              role: item.data.role,
             },
           };
         } else {
@@ -724,6 +747,7 @@ function WorkoutBuilderContent() {
                 durationSeconds: interval.durationSeconds,
                 intensityPercentStart: interval.intensityPercentStart,
                 intensityPercentEnd: interval.intensityPercentEnd,
+                role: interval.role,
               })),
             },
           };
@@ -1037,6 +1061,7 @@ function WorkoutBuilderContent() {
                           key={`item-${index}`}
                           interval={item.data}
                           index={index}
+                          role={inferredRoles[index]?.[0]}
                           onUpdate={(i, data) =>
                             dispatch({ type: "UPDATE_INTERVAL", index: i, interval: data })
                           }

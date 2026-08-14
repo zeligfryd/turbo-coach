@@ -34,19 +34,22 @@ import { PlanBlocks } from "./plan-blocks";
 import { PlanCoachChat } from "./plan-coach-chat";
 import { PlanAdaptationLog } from "./plan-adaptation-log";
 import { ActivatePlanDialog } from "./activate-plan-dialog";
+import { ManualComposer } from "./manual-composer";
 
-type Tab = "overview" | "calendar" | "blocks" | "history";
+type Tab = "overview" | "compose" | "calendar" | "blocks" | "history";
 
 export function PlanEditorShell({
   plan,
   archetypes,
   adaptations,
   initialCoachMessages,
+  workoutsById = {},
 }: {
   plan: PlanWithTree;
   archetypes: ArchetypeOption[];
   adaptations: PlanAdaptation[];
   initialCoachMessages?: UIMessage[];
+  workoutsById?: Record<string, { name: string; durationMin: number | null }>;
 }) {
   const [tab, setTab] = useState<Tab>("overview");
   const router = useRouter();
@@ -143,6 +146,9 @@ export function PlanEditorShell({
         <TabButton active={tab === "overview"} onClick={() => setTab("overview")} icon={<ListTree className="h-4 w-4" />}>
           Overview
         </TabButton>
+        <TabButton active={tab === "compose"} onClick={() => setTab("compose")} icon={<LayoutGrid className="h-4 w-4" />}>
+          Compose
+        </TabButton>
         <TabButton active={tab === "calendar"} onClick={() => setTab("calendar")} icon={<Calendar className="h-4 w-4" />}>
           Calendar
         </TabButton>
@@ -165,6 +171,7 @@ export function PlanEditorShell({
       <div hidden={tab !== "overview"}>
         <OverviewPane plan={plan} initialCoachMessages={initialCoachMessages} />
       </div>
+      {tab === "compose" && <ManualComposer plan={plan} workoutsById={workoutsById} />}
       {tab === "calendar" && <CalendarPane plan={plan} archetypes={archetypes} />}
       {tab === "blocks" && <PlanBlocks plan={plan} />}
       {tab === "history" && <PlanAdaptationLog adaptations={adaptations} />}

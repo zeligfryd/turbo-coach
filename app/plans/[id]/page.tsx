@@ -6,6 +6,7 @@ import {
   listArchetypes,
   listPlanAdaptations,
 } from "../actions";
+import { getPlanWorkoutNames } from "../composer-actions";
 import { PlanEditorShell } from "@/components/plans/plan-editor-shell";
 
 interface PageProps {
@@ -14,12 +15,13 @@ interface PageProps {
 
 export default async function PlanPage({ params }: PageProps) {
   const { id } = await params;
-  const [planResult, archetypeResult, adaptationsResult, conversationResult] =
+  const [planResult, archetypeResult, adaptationsResult, conversationResult, workoutNames] =
     await Promise.all([
       getPlan(id),
       listArchetypes(),
       listPlanAdaptations(id),
       getPlanCoachConversation(id),
+      getPlanWorkoutNames(id),
     ]);
 
   if (!planResult.success || !planResult.plan) {
@@ -34,6 +36,7 @@ export default async function PlanPage({ params }: PageProps) {
       initialCoachMessages={
         (conversationResult.success ? conversationResult.messages : []) as UIMessage[]
       }
+      workoutsById={workoutNames.workouts}
     />
   );
 }

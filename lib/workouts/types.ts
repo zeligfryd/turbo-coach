@@ -1,7 +1,27 @@
 import { z } from "zod";
 
+/**
+ * What an interval is for.
+ *
+ * Nothing in the schema used to say which intervals were the hard part — an
+ * interval was a name, a duration and an intensity, and the names are free text
+ * ("Under", "Over", "Warm-up"). Progression operators act on the work only, so
+ * without this "+2 minutes to each work interval" would lengthen your warm-up
+ * and "+5% intensity" would raise the recovery valleys until there were none.
+ *
+ * Optional on purpose. 104 workouts predate it, and rewriting their intervals
+ * in a migration would bake in whatever the heuristic got wrong. Instead it is
+ * inferred at read time by `inferRoles`, and an explicit role always wins — so
+ * correcting one in the builder is a real answer, not a guess that might be
+ * re-guessed later.
+ */
+export const INTERVAL_ROLES = ["work", "recovery", "warmup", "cooldown"] as const;
+export const IntervalRoleSchema = z.enum(INTERVAL_ROLES);
+export type IntervalRole = z.infer<typeof IntervalRoleSchema>;
+
 // Zod schema for workout intervals with ramp and free ride support
 export const WorkoutIntervalSchema = z.object({
+  role: IntervalRoleSchema.optional(),
   name: z.string().optional(), // Optional for backward compatibility
   durationSeconds: z.number().positive(),
   intensityPercentStart: z.number().min(0).optional(),

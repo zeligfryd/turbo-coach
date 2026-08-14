@@ -34,6 +34,7 @@ function makeItem(overrides: {
     target_tiz_min: overrides.target_tiz_min ?? null,
     notes: overrides.notes ?? null,
     scheduled_workout_id: null,
+        workout_id: null,
     created_at: ts,
     updated_at: ts,
   };
@@ -247,8 +248,7 @@ describe("resolveEntries", () => {
         archetype: "endurance_tempo",
         targetDurationMin: 95,
         targetTizMin: null,
-        notes: null,
-      },
+        notes: null, workoutId: null },
     ];
     const [r] = resolveEntries(entries, candidates);
     expect(r.workoutId).toBe("w-90");
@@ -266,8 +266,7 @@ describe("resolveEntries", () => {
         archetype: null,
         targetDurationMin: 45,
         targetTizMin: null,
-        notes: null,
-      },
+        notes: null, workoutId: null },
     ];
     const [r] = resolveEntries(entries, candidates);
     expect(r.workoutId).toBeNull();
@@ -286,8 +285,7 @@ describe("resolveEntries", () => {
         archetype: null,
         targetDurationMin: 60,
         targetTizMin: null,
-        notes: null,
-      },
+        notes: null, workoutId: null },
       {
         itemId: "no-duration",
         weekNumber: 1,
@@ -297,8 +295,7 @@ describe("resolveEntries", () => {
         archetype: "endurance_tempo",
         targetDurationMin: null,
         targetTizMin: null,
-        notes: null,
-      },
+        notes: null, workoutId: null },
     ];
     const [a, b] = resolveEntries(entries, candidates);
     expect(a.unresolvedReason).toMatch(/No archetype/);
@@ -316,8 +313,7 @@ describe("resolveEntries", () => {
         archetype: "vo2_short",
         targetDurationMin: 60,
         targetTizMin: null,
-        notes: null,
-      },
+        notes: null, workoutId: null },
     ];
     const [r] = resolveEntries(entries, candidates);
     expect(r.unresolved).toBe(true);

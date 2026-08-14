@@ -74,6 +74,8 @@ export type PlanDayItem = {
   archetype: string | null;
   target_duration_min: number | null;
   target_tiz_min: number | null;
+  /** Exact workout, when the item was composed by hand rather than prescribed. */
+  workout_id: string | null;
   notes: string | null;
   scheduled_workout_id: string | null;
   created_at: string;

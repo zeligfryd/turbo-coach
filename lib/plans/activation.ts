@@ -12,6 +12,8 @@ export type ScheduledEntry = {
   targetDurationMin: number | null;
   targetTizMin: number | null;
   notes: string | null;
+  /** Set when the item names an exact workout, as the manual composer does. */
+  workoutId: string | null;
 };
 
 export type ResolvedEntry = ScheduledEntry & {
@@ -68,6 +70,7 @@ export function computeSchedule(
             archetype: item.archetype,
             targetDurationMin: item.target_duration_min,
             targetTizMin: item.target_tiz_min,
+            workoutId: item.workout_id ?? null,
             notes: item.notes,
           });
         }
@@ -87,7 +90,24 @@ export function resolveEntries(
   entries: ScheduledEntry[],
   candidates: Workout[],
 ): ResolvedEntry[] {
+  const byId = new Map(candidates.map((workout) => [workout.id, workout]));
+
   return entries.map((entry) => {
+    // An item that names a workout is already resolved. Running it through the
+    // matcher would swap a workout you chose for whichever one currently scores
+    // best against its archetype — and a derived workout has no archetype to
+    // match on at all.
+    if (entry.workoutId) {
+      const named = byId.get(entry.workoutId);
+      return {
+        ...entry,
+        workoutId: entry.workoutId,
+        workoutName: named?.name ?? null,
+        unresolved: false,
+        unresolvedReason: null,
+      };
+    }
+
     if (entry.kind !== "cycling") {
       return {
         ...entry,

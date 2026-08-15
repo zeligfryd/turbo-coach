@@ -21,6 +21,7 @@ import { Plus, Sparkles, Trash2 } from "lucide-react";
 import {
   appendPlanWeek,
   createDerivedWorkout,
+  getWorkoutForPreview,
   movePlanItem,
   removeDayItem,
   setDayWorkout,
@@ -30,6 +31,9 @@ import { flattenPlanWeeks } from "@/lib/plans/flatten";
 import type { PlanWithTree } from "@/lib/plans/types";
 import type { VariationOps } from "@/lib/workouts/variation";
 import { cn } from "@/lib/utils";
+
+import { WorkoutDetailModal } from "@/components/workouts/workout-detail-modal";
+import type { Workout } from "@/lib/workouts/types";
 
 import { DeriveDialog } from "./derive-dialog";
 import { WorkoutPickerDialog } from "./workout-picker-dialog";
@@ -41,10 +45,13 @@ type Slot = { weekId: string; weekNumber: number; dayOfWeek: number };
 export function ManualComposer({
   plan,
   workoutsById,
+  userFtp = null,
 }: {
   plan: PlanWithTree;
   /** Names for the workouts the plan references, resolved on the server. */
   workoutsById: Record<string, { name: string; durationMin: number | null }>;
+  /** So the preview shows watts rather than percentages alone. */
+  userFtp?: number | null;
 }) {
   const router = useRouter();
   const weeks = useMemo(() => flattenPlanWeeks(plan), [plan]);
@@ -53,6 +60,12 @@ export function ManualComposer({
     (Slot & { sourceWorkoutId: string; sourceName: string }) | null
   >(null);
   const [dragging, setDragging] = useState<{ itemId: string } | null>(null);
+  // The day waiting for a source. While set, the grid is in picking mode and
+  // every filled day is a candidate.
+  const [derivingInto, setDerivingInto] = useState<Slot | null>(null);
+  // The workout being looked at. Reuses the library's detail modal — chart,
+  // zones and metrics — rather than a second, thinner preview.
+  const [previewing, setPreviewing] = useState<Workout | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -65,14 +78,15 @@ export function ManualComposer({
 
   const label = (slot: Slot) => `Week ${slot.weekNumber} · ${DOW[slot.dayOfWeek]}`;
 
-  /** The same weekday, one week up — the chain a derivation follows. */
-  const parentOf = (weekNumber: number, dayOfWeek: number) => {
-    const above = weeks.find((w) => w.weekNumber === weekNumber - 1);
-    const day = above?.days.find((d) => d.dayOfWeek === dayOfWeek);
-    const item = day?.items.find((i) => i.workout_id);
-    if (!item?.workout_id) return null;
-    return { workoutId: item.workout_id, name: workoutsById[item.workout_id]?.name ?? "Workout" };
-  };
+  /**
+   * Whether the plan has anything to derive from at all.
+   *
+   * Derivation used to be offered only where the same weekday one week up
+   * happened to hold a workout, which is one common progression and not the
+   * only one — a Thursday VO2 session might follow last block's Tuesday, or a
+   * workout three weeks back. The source is now picked explicitly.
+   */
+  const hasAnySource = weeks.some((w) => w.days.some((d) => d.items.some((i) => i.workout_id)));
 
   if (weeks.length === 0) {
     return (
@@ -90,6 +104,22 @@ export function ManualComposer({
         <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
           {error}
         </p>
+      )}
+
+      {derivingInto && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-xs">
+          <span>
+            Click the workout to derive{" "}
+            <span className="font-semibold">{label(derivingInto)}</span> from — any day, any week.
+          </span>
+          <button
+            type="button"
+            onClick={() => setDerivingInto(null)}
+            className="rounded px-2 py-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            Cancel
+          </button>
+        </div>
       )}
 
       <div className="overflow-x-auto">
@@ -122,8 +152,10 @@ export function ManualComposer({
                     {!/recovery|build/i.test(week.block.name) && (
                       <>{isRecovery ? "recovery" : "work"} · </>
                     )}
+                    {/* Coerced: a smallint can arrive as a string over the
+                        wire, and "1" === 1 is false, which rendered "1 weeks". */}
                     {week.block.duration_weeks}{" "}
-                    {week.block.duration_weeks === 1 ? "week" : "weeks"}
+                    {Number(week.block.duration_weeks) === 1 ? "week" : "weeks"}
                   </p>
                 )}
 
@@ -141,7 +173,17 @@ export function ManualComposer({
                       weekNumber: week.weekNumber,
                       dayOfWeek,
                     };
-                    const parent = parentOf(week.weekNumber, dayOfWeek);
+                    // While a target is waiting for a source, every filled day
+                    // becomes a candidate — including days in other blocks and
+                    // weeks below.
+                    const isSourceCandidate =
+                      derivingInto !== null &&
+                      Boolean(item?.workout_id) &&
+                      !(derivingInto.weekNumber === week.weekNumber &&
+                        derivingInto.dayOfWeek === dayOfWeek);
+                    const isAwaitingSource =
+                      derivingInto?.weekNumber === week.weekNumber &&
+                      derivingInto?.dayOfWeek === dayOfWeek;
 
                     return (
                       <div
@@ -160,11 +202,26 @@ export function ManualComposer({
                           setDragging(null);
                         }}
                         className={cn(
-                          "min-h-[64px] rounded-md border p-1.5 text-[11px]",
+                          "min-h-[64px] rounded-md border p-1.5 text-[11px] transition-colors",
                           item ? "border-border bg-card" : "border-dashed border-border/50",
                           isRecovery && item && "border-l-2 border-l-emerald-500/60",
                           !isRecovery && item && "border-l-2 border-l-primary/60",
+                          isSourceCandidate && "cursor-pointer ring-2 ring-primary/50 hover:ring-primary",
+                          isAwaitingSource && "ring-2 ring-dashed ring-primary",
+                          derivingInto && !isSourceCandidate && !isAwaitingSource && "opacity-40",
                         )}
+                        onClick={
+                          isSourceCandidate && item?.workout_id
+                            ? () => {
+                                setDeriving({
+                                  ...derivingInto!,
+                                  sourceWorkoutId: item.workout_id!,
+                                  sourceName: workoutsById[item.workout_id!]?.name ?? "Workout",
+                                });
+                                setDerivingInto(null);
+                              }
+                            : undefined
+                        }
                       >
                         {item && workout ? (
                           <div
@@ -173,7 +230,17 @@ export function ManualComposer({
                             onDragEnd={() => setDragging(null)}
                             className="cursor-grab active:cursor-grabbing"
                           >
-                            <p className="line-clamp-2 font-medium leading-tight">{workout.name}</p>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!item.workout_id) return;
+                                const result = await getWorkoutForPreview(item.workout_id);
+                                if (result.success) setPreviewing(result.workout as Workout);
+                              }}
+                              className="line-clamp-2 text-left font-medium leading-tight hover:underline"
+                            >
+                              {workout.name}
+                            </button>
                             {workout.durationMin && (
                               <p className="mt-0.5 text-[10px] tabular-nums text-muted-foreground">
                                 {workout.durationMin}m
@@ -200,25 +267,22 @@ export function ManualComposer({
                             >
                               <Plus className="h-3.5 w-3.5" />
                             </button>
-                            {parent && (
-                              // Only offered where there is something above to
-                              // derive from — the first week of a plan has no
-                              // parent, and neither does an empty day.
+                            {hasAnySource && !derivingInto && (
                               <button
                                 type="button"
-                                disabled={pending}
-                                onClick={() =>
-                                  setDeriving({
-                                    ...slot,
-                                    sourceWorkoutId: parent.workoutId,
-                                    sourceName: parent.name,
-                                  })
-                                }
+                                disabled={pending || !week.weekId}
+                                onClick={() => setDerivingInto(slot)}
+                                aria-label={`Derive a workout for ${label(slot)}`}
                                 className="flex items-center justify-center gap-1 rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground"
                               >
                                 <Sparkles className="h-3 w-3" />
                                 derive
                               </button>
+                            )}
+                            {isAwaitingSource && (
+                              <span className="px-1 text-center text-[10px] leading-tight text-primary">
+                                pick a source
+                              </span>
                             )}
                           </div>
                         )}
@@ -259,6 +323,25 @@ export function ManualComposer({
             }),
           );
         }}
+        onCreated={async (workoutId: string) => {
+          if (!picking) return;
+          const slot = picking;
+          setPicking(null);
+          run(() =>
+            setDayWorkout({
+              weekId: slot.weekId,
+              dayOfWeek: slot.dayOfWeek,
+              workoutId,
+              planId: plan.id,
+            }),
+          );
+        }}
+      />
+
+      <WorkoutDetailModal
+        workout={previewing}
+        onClose={() => setPreviewing(null)}
+        userFtp={userFtp}
       />
 
       {deriving && (

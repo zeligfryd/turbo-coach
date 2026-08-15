@@ -82,8 +82,10 @@ export async function scaffoldManualPlan(params: {
         orderIndex++;
         if (kind === "recovery") cycle++;
       }
-      // A pattern of "all work, no recovery" would otherwise spin here.
+      // A pattern of "all work, no recovery" would otherwise spin here. The
+      // cycle advances too, or every block ends up called "Build 1".
       if (recoveryWeeks <= 0 && remaining > 0) {
+        cycle++;
         const { data: block, error } = await supabase
           .from("plan_blocks")
           .insert({
@@ -498,5 +500,21 @@ export async function getPlanWorkoutNames(planId: string) {
     return { success: true as const, workouts };
   } catch (error) {
     return { success: false as const, error: errMsg(error), workouts: {} };
+  }
+}
+
+/** The full workout behind a plan item, for the detail modal. */
+export async function getWorkoutForPreview(workoutId: string) {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("workouts")
+      .select("*")
+      .eq("id", workoutId)
+      .single();
+    if (error) return { success: false as const, error: error.message, workout: null };
+    return { success: true as const, workout: data };
+  } catch (error) {
+    return { success: false as const, error: errMsg(error), workout: null };
   }
 }

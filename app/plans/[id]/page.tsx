@@ -6,6 +6,7 @@ import {
   listArchetypes,
   listPlanAdaptations,
 } from "../actions";
+import { createClient } from "@/lib/supabase/server";
 import { getPlanWorkoutNames } from "../composer-actions";
 import { PlanEditorShell } from "@/components/plans/plan-editor-shell";
 
@@ -28,6 +29,15 @@ export default async function PlanPage({ params }: PageProps) {
     redirect("/plans");
   }
 
+  // The workout preview shows watts, which needs the rider's FTP.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: profile } = user
+    ? await supabase.from("users").select("ftp").eq("id", user.id).single()
+    : { data: null };
+
   return (
     <PlanEditorShell
       plan={planResult.plan}
@@ -37,6 +47,7 @@ export default async function PlanPage({ params }: PageProps) {
         (conversationResult.success ? conversationResult.messages : []) as UIMessage[]
       }
       workoutsById={workoutNames.workouts}
+      userFtp={(profile?.ftp as number | null) ?? null}
     />
   );
 }

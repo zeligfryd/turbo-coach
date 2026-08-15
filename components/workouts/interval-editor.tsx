@@ -333,15 +333,15 @@ export function IntervalEditor({
           <GripVertical className="w-4 h-4" />
         </div>
 
-        {/* Index, with the role as a clickable dot. */}
-        <span className="flex items-center gap-0.5 w-12 text-sm font-medium text-muted-foreground">
-          <RoleMenu
-            role={effectiveRole}
-            inferred={isInferred}
-            onChange={(next) => onUpdate(index, { role: next })}
-          />
-          {index + 1}.
-        </span>
+        {/* Index */}
+        <span className="w-5 text-sm font-medium text-muted-foreground">{index + 1}.</span>
+
+        {/* What this interval is for. Dashed while inferred, solid once set. */}
+        <RoleMenu
+          role={effectiveRole}
+          inferred={isInferred}
+          onChange={(next) => onUpdate(index, { role: next })}
+        />
 
         {/* Duration Input */}
         <Input

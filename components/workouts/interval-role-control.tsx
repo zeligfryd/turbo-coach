@@ -116,12 +116,13 @@ export function IntervalRoleControl({
 }
 
 /**
- * The dot, as the control.
+ * The role, as a labelled chip.
  *
- * The desktop row is already a single line of duration, type, power and
- * cadence; a four-button group would push it wider still. The dot is the role
- * indicator anyway, so clicking it to change the role costs no width and needs
- * no explaining.
+ * This started as a bare dot to save width on a row that already carries
+ * duration, type, power and cadence. Nobody found it — an 8px circle with no
+ * label does not read as a control, and the whole point of the feature is that
+ * a wrong role should be noticed and corrected. A chip costs about sixty pixels
+ * and says what it is.
  */
 export function RoleMenu({
   role,
@@ -138,9 +139,17 @@ export function RoleMenu({
         <button
           type="button"
           aria-label={`Role: ${ROLE_LABELS[role]}${inferred ? " (inferred)" : ""}. Change it.`}
-          className="flex h-6 w-6 items-center justify-center rounded hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          title={inferred ? "Inferred — click to confirm or change" : "Click to change"}
+          className={cn(
+            "flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2 text-xs transition-colors",
+            "hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            inferred
+              ? "border-dashed border-border text-muted-foreground"
+              : "border-border font-medium text-foreground",
+          )}
         >
           <RoleDot role={role} inferred={inferred} />
+          {ROLE_LABELS[role]}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-40">

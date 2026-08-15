@@ -3,14 +3,13 @@
 /**
  * Choosing what goes on a day: search the library, or build something new.
  *
- * "Create a new workout" opens the existing builder in a new tab rather than
- * reimplementing it in an overlay. The builder is a large, well-tested surface
- * with ramps, repeat groups and interval roles; a cut-down copy inside a dialog
- * would be a second, worse editor to maintain.
+ * Creating opens the real builder in an overlay — the same component the
+ * /workouts/builder route renders, not a cut-down copy. It reports the workout
+ * it saved, which goes straight onto the day you were filling, so composing a
+ * plan never sends you somewhere else and back.
  */
 
 import { useEffect, useState, useTransition } from "react";
-import Link from "next/link";
 import { Plus, Search } from "lucide-react";
 
 import {
@@ -20,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { WorkoutBuilder } from "@/components/workouts/workout-builder";
 import { listComposerWorkouts, type WorkoutOption } from "@/app/plans/composer-actions";
 import { cn } from "@/lib/utils";
 
@@ -28,13 +28,17 @@ export function WorkoutPickerDialog({
   dayLabel,
   onClose,
   onPick,
+  onCreated,
 }: {
   open: boolean;
   dayLabel: string;
   onClose: () => void;
   onPick: (workout: WorkoutOption) => Promise<void>;
+  /** A workout built here goes straight onto the day being filled. */
+  onCreated: (workoutId: string) => Promise<void>;
 }) {
   const [search, setSearch] = useState("");
+  const [building, setBuilding] = useState(false);
   const [workouts, setWorkouts] = useState<WorkoutOption[]>([]);
   const [pending, startTransition] = useTransition();
 
@@ -106,15 +110,38 @@ export function WorkoutPickerDialog({
           ))}
         </ul>
 
-        <Link
-          href="/workouts/builder"
-          target="_blank"
+        <button
+          type="button"
+          onClick={() => setBuilding(true)}
           className="flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-border text-sm font-medium transition-colors hover:bg-accent"
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
           Create a new workout
-        </Link>
+        </button>
       </DialogContent>
+
+      {/*
+        The real builder, in an overlay. Rendered as a sibling dialog rather
+        than nested inside the picker so it gets the full width it needs —
+        interval rows are duration, type, power and cadence on one line.
+      */}
+      <Dialog open={building} onOpenChange={(next) => !next && setBuilding(false)}>
+        <DialogContent className="max-h-[92vh] w-[96vw] max-w-5xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>New workout</DialogTitle>
+            <DialogDescription>It will be added to {dayLabel} when you save.</DialogDescription>
+          </DialogHeader>
+          <WorkoutBuilder
+            embedded
+            mode="create"
+            onCancel={() => setBuilding(false)}
+            onSaved={async (workoutId) => {
+              setBuilding(false);
+              await onCreated(workoutId);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

@@ -44,12 +44,14 @@ export function PlanEditorShell({
   adaptations,
   initialCoachMessages,
   workoutsById = {},
+  userFtp = null,
 }: {
   plan: PlanWithTree;
   archetypes: ArchetypeOption[];
   adaptations: PlanAdaptation[];
   initialCoachMessages?: UIMessage[];
   workoutsById?: Record<string, { name: string; durationMin: number | null }>;
+  userFtp?: number | null;
 }) {
   const [tab, setTab] = useState<Tab>("overview");
   const router = useRouter();
@@ -171,7 +173,7 @@ export function PlanEditorShell({
       <div hidden={tab !== "overview"}>
         <OverviewPane plan={plan} initialCoachMessages={initialCoachMessages} />
       </div>
-      {tab === "compose" && <ManualComposer plan={plan} workoutsById={workoutsById} />}
+      {tab === "compose" && <ManualComposer plan={plan} workoutsById={workoutsById} userFtp={userFtp} />}
       {tab === "calendar" && <CalendarPane plan={plan} archetypes={archetypes} />}
       {tab === "blocks" && <PlanBlocks plan={plan} />}
       {tab === "history" && <PlanAdaptationLog adaptations={adaptations} />}
